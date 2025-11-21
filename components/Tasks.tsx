@@ -11,11 +11,12 @@ interface TasksProps {
   onUpdateStatus: (taskId: string, newStatus: TaskStatus) => void;
   onAddTask: (task: Task) => void;
   onUpdateTask: (task: Task) => void;
+  onDeleteTask: (taskId: string) => void;
 }
 
 type ViewMode = 'board' | 'calendar';
 
-const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus, onAddTask, onUpdateTask }) => {
+const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus, onAddTask, onUpdateTask, onDeleteTask }) => {
   const [viewMode, setViewMode] = useState<ViewMode>('board');
   const [showModal, setShowModal] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
@@ -38,9 +39,12 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
     price: 0
   });
 
+  // Helper: Check if user can delete
+  const canDelete = (user: User) => user.role === UserRole.ADMIN || user.role === UserRole.PROJECT_MANAGER;
+
   // Filter tasks based on role
   // ADMIN sees ALL tasks. MEMBERS see ONLY their assigned tasks.
-  const visibleTasks = currentUser.role === UserRole.ADMIN 
+  const visibleTasks = currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.PROJECT_MANAGER
     ? tasks 
     : tasks.filter(t => t.assigneeId === currentUser.id);
 
@@ -133,6 +137,13 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
     setTaskComment('');
   };
 
+  const handleDeleteClick = (taskId: string) => {
+      if (window.confirm("Êtes-vous sûr de vouloir supprimer cette tâche définitivement ?")) {
+          onDeleteTask(taskId);
+          setSelectedTask(null);
+      }
+  };
+
   const handleFileUpload = () => {
      // Simulate upload
      const fakeFiles = ['brief_v2.pdf', 'assets_graphiques.zip'];
@@ -189,8 +200,19 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                       <div 
                         key={task.id} 
                         onClick={() => setSelectedTask(task)}
-                        className="bg-white p-4 rounded-lg shadow-sm border border-slate-200 hover:border-primary hover:shadow-md transition-all duration-200 cursor-pointer group transform hover:-translate-y-1"
+                        className="bg-white p-4 rounded-lg shadow-sm border border-slate-200 hover:border-primary hover:shadow-md transition-all duration-200 cursor-pointer group transform hover:-translate-y-1 relative"
                       >
+                          {/* Quick Delete Button (Visible on Hover) - Admin & PM Only */}
+                          {canDelete(currentUser) && (
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); handleDeleteClick(task.id); }}
+                                className="absolute top-2 right-2 p-1.5 bg-white text-slate-300 hover:text-urgent hover:bg-red-50 rounded shadow-sm border border-slate-100 opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                                title="Supprimer"
+                              >
+                                  <Trash2 size={14} />
+                              </button>
+                          )}
+
                           <div className="flex justify-between items-start mb-2">
                               <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${getTypeColor(task.type)}`}>{task.type}</span>
                               {task.priority === 'high' && <AlertCircle size={14} className="text-urgent" />}
@@ -251,7 +273,7 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                     <span className="hidden sm:inline">Calendrier</span>
                 </button>
             </div>
-            {currentUser.role === UserRole.ADMIN && (
+            {(currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.PROJECT_MANAGER) && (
                 <button 
                     onClick={() => setShowModal(true)}
                     className="bg-primary hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg font-medium flex items-center space-x-2 shadow-md shadow-primary/20 transition-all transform hover:scale-105"
@@ -341,7 +363,7 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                                          <span className={`text-sm font-semibold w-7 h-7 flex items-center justify-center rounded-full ${isToday ? 'bg-primary text-white shadow-md' : 'text-slate-700'}`}>
                                              {day}
                                          </span>
-                                         {currentUser.role === UserRole.ADMIN && (
+                                         {(currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.PROJECT_MANAGER) && (
                                             <button 
                                                 onClick={() => {
                                                     setNewTask({...newTask, dueDate: dateStr});
@@ -567,7 +589,7 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
               <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl h-[80vh] overflow-hidden flex flex-col md:flex-row animate-in fade-in zoom-in-95 duration-200">
                   {/* Left: Task Details */}
-                  <div className="flex-1 p-6 overflow-y-auto border-b md:border-b-0 md:border-r border-slate-200">
+                  <div className="flex-1 p-6 overflow-y-auto border-b md:border-b-0 md:border-r border-slate-200 relative">
                        <div className="flex justify-between items-start mb-4">
                            <span className={`text-xs font-bold px-2 py-1 rounded uppercase ${getTypeColor(selectedTask.type)}`}>{selectedTask.type}</span>
                            <button onClick={() => setSelectedTask(null)} className="text-slate-400 hover:text-slate-600 md:hidden"><X size={24}/></button>
@@ -637,6 +659,19 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                                ))}
                            </div>
                        </div>
+
+                       {/* DELETE BUTTON - Admin & PM Only */}
+                       {canDelete(currentUser) && (
+                           <div className="mt-8 pt-6 border-t border-slate-100">
+                               <button 
+                                onClick={() => handleDeleteClick(selectedTask.id)}
+                                className="text-red-500 hover:text-red-700 text-sm font-medium flex items-center transition-colors hover:bg-red-50 px-3 py-2 rounded-lg -ml-3"
+                               >
+                                   <Trash2 size={16} className="mr-2" />
+                                   Supprimer la tâche
+                               </button>
+                           </div>
+                       )}
                   </div>
 
                   {/* Right: Chat & Activity */}

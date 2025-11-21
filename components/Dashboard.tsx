@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { TrendingUp, CheckCircle, AlertCircle, Sparkles, PlusCircle, Calendar, MessageCircle, Clock, DollarSign, Info, Bell } from 'lucide-react';
+import { TrendingUp, CheckCircle, AlertCircle, Sparkles, PlusCircle, Calendar, MessageCircle, Clock, DollarSign, Info, Bell, Trash2 } from 'lucide-react';
 import { generateMarketingInsight } from '../services/geminiService';
 import { Task, User, ViewState, TaskStatus, UserRole, Message, ToastNotification } from '../types';
 
@@ -10,9 +10,10 @@ interface DashboardProps {
   messages: Message[];
   notifications: ToastNotification[];
   onNavigate: (view: ViewState) => void;
+  onDeleteTask: (taskId: string) => void;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks, messages, notifications, onNavigate }) => {
+const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks, messages, notifications, onNavigate, onDeleteTask }) => {
   const [aiInsight, setAiInsight] = useState<string>("");
   const [loadingAi, setLoadingAi] = useState(false);
 
@@ -35,9 +36,6 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks, messages, not
 
   // Dynamic Message Count (e.g., messages from the last 24 hours)
   const recentMessages = messages.filter(m => {
-      // Simple logic: check if message is from "Today" based on string parsing or if needed, use a real date object comparison if timestamp was ISO
-      // For now, assuming timestamp is localized string, we just show total count or random simulation if strict date unavailable.
-      // BETTER: Just show total message count for now as "Activity".
       return true; 
   }).length;
 
@@ -64,7 +62,14 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks, messages, not
     setLoadingAi(false);
   };
 
-  const isAdmin = currentUser.role === UserRole.ADMIN;
+  const handleDelete = (taskId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if(window.confirm("Voulez-vous vraiment supprimer cette tâche ?")) {
+        onDeleteTask(taskId);
+    }
+  };
+
+  const isAdminOrPM = currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.PROJECT_MANAGER;
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto relative">
@@ -128,7 +133,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks, messages, not
 
       {/* Main KPI Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {isAdmin && (
+        {isAdminOrPM && (
             <>
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 relative group">
                   <div className="flex justify-between items-start mb-4">
@@ -178,9 +183,9 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks, messages, not
             </>
         )}
 
-        <div className={`bg-white p-6 rounded-xl shadow-sm border border-slate-200 ${!isAdmin ? 'md:col-span-3' : ''}`}>
+        <div className={`bg-white p-6 rounded-xl shadow-sm border border-slate-200 ${!isAdminOrPM ? 'md:col-span-3' : ''}`}>
           <div className="flex justify-between items-start mb-4">
-            <p className="text-sm font-medium text-slate-500">Productivité {isAdmin ? 'Globale' : 'Personnelle'}</p>
+            <p className="text-sm font-medium text-slate-500">Productivité {isAdminOrPM ? 'Globale' : 'Personnelle'}</p>
             <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${completionRate > 50 ? 'bg-blue-50 text-primary' : 'bg-orange-50 text-orange-600'}`}>
               {completionRate}% COMPLÉTÉ
             </span>
@@ -231,14 +236,25 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks, messages, not
                          }`}>
                            {isUrgent ? 'Urgent' : task.dueDate}
                          </span>
-                         {isAdmin && task.price && (
+                         {isAdminOrPM && task.price && (
                              <span className="text-xs font-mono text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100">
                                  {task.price} DA
                              </span>
                          )}
-                         <button className="text-slate-300 hover:text-success transition-colors">
-                            <CheckCircle size={18} />
-                         </button>
+                         <div className="flex items-center space-x-2">
+                             {isAdminOrPM && (
+                                 <button 
+                                    onClick={(e) => handleDelete(task.id, e)} 
+                                    className="text-slate-300 hover:text-urgent transition-colors p-1"
+                                    title="Supprimer"
+                                 >
+                                    <Trash2 size={16} />
+                                 </button>
+                             )}
+                             <button className="text-slate-300 hover:text-success transition-colors p-1">
+                                <CheckCircle size={18} />
+                             </button>
+                         </div>
                       </div>
                     </div>
                    );

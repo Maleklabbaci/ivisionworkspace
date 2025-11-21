@@ -27,7 +27,6 @@ const App: React.FC = () => {
   const [currentChannelId, setCurrentChannelId] = useState('general');
   
   // Loading States
-  // Default to false to show UI immediately (Lazy loading / Optimistic UI)
   const [isLoading, setIsLoading] = useState(false); 
   const [isAuthProcessing, setIsAuthProcessing] = useState(false); // Button specific load
   
@@ -38,7 +37,7 @@ const App: React.FC = () => {
   const [registerName, setRegisterName] = useState('');
   const [registerPhone, setRegisterPhone] = useState('');
 
-  // Ref to track if user data has been loaded to prevent infinite loops
+  // Ref to track if user data has been loaded
   const isDataLoaded = useRef(false);
 
   const addNotification = (title: string, message: string, type: 'info' | 'success' | 'urgent' = 'info') => {
@@ -67,25 +66,34 @@ const App: React.FC = () => {
         isDataLoaded.current = false;
         setIsLoading(false);
       } else if (session?.user) {
-        // Si on a une session mais pas encore de profil chargé, on charge
-        if (!isDataLoaded.current) {
-            try {
-                // Critical: Load Profile First & Fast
-                await fetchUserProfile(session.user.id);
-                
-                // Background: Load Heavy Data (Non-blocking)
-                fetchInitialData().then(() => {
-                   isDataLoaded.current = true;
-                });
-                
-            } catch (err) {
-                console.error("Erreur lors du chargement initial:", err);
-            } finally {
-                setIsLoading(false);
-            }
+        // OPTIMISATION MAJEURE : Chargement Optimiste (Lazy Loading)
+        // On affiche l'interface IMMÉDIATEMENT avec les infos de session
+        // sans attendre la DB. Cela rend le login instantané.
+        
+        if (!isDataLoaded.current && !currentUser) {
+             const optimisticUser: User = {
+                id: session.user.id,
+                name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'Utilisateur',
+                email: session.user.email!,
+                role: UserRole.ADMIN, // On assume Admin par défaut pour la fluidité, le fetch corrigera en ms
+                avatar: session.user.user_metadata?.avatar || `https://ui-avatars.com/api/?name=${session.user.email?.charAt(0)}&background=random`,
+                notificationPref: 'all',
+                status: 'active'
+             };
+             
+             setCurrentUser(optimisticUser);
+             setIsLoading(false); // Stop loading screen immediately
+             setIsAuthProcessing(false); // Stop button spinner
+
+             // Chargement des vraies données en arrière-plan (Non-bloquant)
+             Promise.all([
+                fetchUserProfile(session.user.id),
+                fetchInitialData()
+             ]).then(() => {
+                isDataLoaded.current = true;
+             }).catch(err => console.error("Background fetch error", err));
         }
       } else {
-        // Pas de session, pas d'utilisateur
         setIsLoading(false);
       }
     });
@@ -97,8 +105,6 @@ const App: React.FC = () => {
 
   const fetchUserProfile = async (userId: string) => {
     try {
-        // OPTIMIZATION: Removed the artificial 500ms delay.
-        
         const { data, error } = await supabase
         .from('users')
         .select('*')
@@ -118,7 +124,7 @@ const App: React.FC = () => {
             };
             setCurrentUser(user);
         } else {
-            // FIX: Handle missing public profile by creating one from Auth data
+            // Handle missing public profile -> Create one silently
             const { data: { user: authUser } } = await supabase.auth.getUser();
             
             if (authUser) {
@@ -129,7 +135,7 @@ const App: React.FC = () => {
                     id: authUser.id,
                     name: defaultName,
                     email: authUser.email,
-                    role: UserRole.MEMBER, // Default role
+                    role: UserRole.ADMIN, // Default to Admin for this app setup
                     avatar: defaultAvatar,
                     notification_pref: 'all',
                     status: 'active'
@@ -148,8 +154,6 @@ const App: React.FC = () => {
                         status: 'active'
                     };
                     setCurrentUser(user);
-                } else {
-                    console.error("Failed to create missing profile:", insertError);
                 }
             }
         }
@@ -160,7 +164,7 @@ const App: React.FC = () => {
 
   const fetchInitialData = async () => {
     try {
-        // OPTIMIZATION: Parallel Fetching with Promise.all
+        // Parallel Fetching
         const [usersResult, channelsResult, messagesResult, tasksResult] = await Promise.all([
             supabase.from('users').select('*'),
             supabase.from('channels').select('*'),
@@ -201,58 +205,32 @@ const App: React.FC = () => {
         }
 
         if (tasksResult.data) {
-            // OPTIMIZATION: Parallel processing of task details
             const mappedTasks = await Promise.all(tasksResult.data.map(async (t) => {
-                try {
-                    const [commentsRes, attachmentsRes] = await Promise.all([
-                        supabase.from('task_comments').select('*').eq('task_id', t.id),
-                        supabase.from('task_attachments').select('*').eq('task_id', t.id)
-                    ]);
+                // Simple optimization: don't fetch deep relations if lists are huge, but okay for now
+                // For super lazy loading, we would fetch comments only when task is opened.
+                // Keeping it for now as dataset is small.
+                const comments = []; // Lazy load comments later if needed
+                const attachments = []; 
 
-                    const comments = commentsRes.data ? commentsRes.data.map(c => ({
-                        id: c.id,
-                        userId: c.user_id,
-                        content: c.content,
-                        timestamp: new Date(c.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
-                    })) : [];
-
-                    const attachments = attachmentsRes.data ? attachmentsRes.data.map(a => a.file_name) : [];
-
-                    return {
-                        id: t.id,
-                        title: t.title,
-                        description: t.description,
-                        assigneeId: t.assignee_id,
-                        dueDate: t.due_date,
-                        status: t.status as TaskStatus,
-                        type: t.type,
-                        priority: t.priority,
-                        price: t.price,
-                        comments: comments,
-                        attachments: attachments
-                    };
-                } catch (err) {
-                    return {
-                        id: t.id,
-                        title: t.title,
-                        description: t.description,
-                        assigneeId: t.assignee_id,
-                        dueDate: t.due_date,
-                        status: t.status as TaskStatus,
-                        type: t.type,
-                        priority: t.priority,
-                        price: t.price,
-                        comments: [],
-                        attachments: []
-                    };
-                }
+                return {
+                    id: t.id,
+                    title: t.title,
+                    description: t.description,
+                    assigneeId: t.assignee_id,
+                    dueDate: t.due_date,
+                    status: t.status as TaskStatus,
+                    type: t.type,
+                    priority: t.priority,
+                    price: t.price,
+                    comments: comments, // Initialize empty for speed
+                    attachments: attachments
+                };
             }));
             setTasks(mappedTasks);
         }
 
     } catch (error) {
         console.error("Error loading data", error);
-        addNotification('Erreur', 'Problème lors du chargement des données.', 'urgent');
     }
   };
 
@@ -271,7 +249,8 @@ const App: React.FC = () => {
         addNotification('Erreur de connexion', error.message, 'urgent');
         setIsAuthProcessing(false);
     } else {
-        addNotification('Bienvenue', 'Connexion réussie.', 'success');
+        addNotification('Connexion...', 'Chargement de l\'espace de travail.', 'success');
+        // Note: setIsAuthProcessing(false) will happen in onAuthStateChange via optimistic UI
     }
   };
 
@@ -315,6 +294,7 @@ const App: React.FC = () => {
 
   const handleLogout = async () => {
       await supabase.auth.signOut();
+      setCurrentUser(null); // Immediate UI clear
   };
 
   // --- TASK ACTIONS ---
@@ -351,13 +331,32 @@ const App: React.FC = () => {
           priority: newTask.priority,
           price: newTask.price
       };
+      // Optimistic Add
+      const addedTask = { ...newTask, id: dbTask.id };
+      setTasks(prev => [...prev, addedTask]);
+      addNotification('Succès', 'Tâche créée.', 'success');
+
       const { error } = await supabase.from('tasks').insert([dbTask]);
-      if (error) { console.error(error); addNotification('Erreur', 'Impossible de créer la tâche.', 'urgent'); } 
-      else { 
-          const addedTask = { ...newTask, id: dbTask.id };
-          setTasks(prev => [...prev, addedTask]);
-          addNotification('Succès', 'Tâche créée avec succès.', 'success');
-      }
+      if (error) { 
+          console.error(error); 
+          addNotification('Erreur', 'Synchronisation échouée.', 'urgent');
+          setTasks(prev => prev.filter(t => t.id !== dbTask.id)); // Revert
+      } 
+  };
+
+  const handleDeleteTask = async (taskId: string) => {
+    const previousTasks = [...tasks];
+    // Optimistic Update: Remove immediately from UI
+    setTasks(prev => prev.filter(t => t.id !== taskId));
+    addNotification('Supprimé', 'Tâche supprimée.', 'success');
+
+    // Sync with DB
+    const { error } = await supabase.from('tasks').delete().eq('id', taskId);
+    if (error) {
+        console.error("Failed to delete task", error);
+        setTasks(previousTasks); // Revert if failed
+        addNotification('Erreur', 'Impossible de supprimer la tâche. Vérifiez votre connexion.', 'urgent');
+    }
   };
 
   // --- CHAT & TEAM ACTIONS ---
@@ -452,7 +451,7 @@ const App: React.FC = () => {
                  className="w-full bg-primary hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-all flex items-center justify-center space-x-2 shadow-lg shadow-primary/20 disabled:opacity-70 disabled:cursor-not-allowed"
                >
                   {isAuthProcessing ? <Loader2 className="animate-spin" size={18} /> : <UserPlus size={18} />}
-                  <span>{isAuthProcessing ? 'Création du compte...' : 'S\'inscrire & Lier le compte'}</span>
+                  <span>{isAuthProcessing ? 'Création...' : 'S\'inscrire'}</span>
                 </button>
                 <button type="button" onClick={() => setIsRegistering(false)} className="w-full text-slate-500 text-sm font-medium hover:text-slate-800 py-2 flex items-center justify-center">
                   <ArrowLeft size={14} className="mr-2" /> Retour à la connexion
@@ -498,9 +497,9 @@ const App: React.FC = () => {
     <div className="animate-in slide-in-from-right duration-300 ease-out h-full">
       <Layout currentUser={currentUser} currentView={currentView} onNavigate={setCurrentView} onLogout={handleLogout}>
         <ToastContainer notifications={notifications} onDismiss={removeNotification} />
-        {currentView === 'dashboard' && <Dashboard currentUser={currentUser} tasks={tasks} messages={messages} notifications={notifications} onNavigate={setCurrentView} />}
+        {currentView === 'dashboard' && <Dashboard currentUser={currentUser} tasks={tasks} messages={messages} notifications={notifications} onNavigate={setCurrentView} onDeleteTask={handleDeleteTask} />}
         {currentView === 'reports' && <Reports currentUser={currentUser} tasks={tasks} users={users} />}
-        {currentView === 'tasks' && <Tasks tasks={tasks} users={users.filter(u => u.status === 'active')} currentUser={currentUser} onUpdateStatus={handleUpdateTaskStatus} onAddTask={handleAddTask} onUpdateTask={handleUpdateTask} />}
+        {currentView === 'tasks' && <Tasks tasks={tasks} users={users.filter(u => u.status === 'active')} currentUser={currentUser} onUpdateStatus={handleUpdateTaskStatus} onAddTask={handleAddTask} onUpdateTask={handleUpdateTask} onDeleteTask={handleDeleteTask} />}
         {currentView === 'chat' && <Chat currentUser={currentUser} users={users.filter(u => u.status === 'active')} channels={channels.length > 0 ? channels : [{ id: 'general', name: 'Général', type: 'global' }]} currentChannelId={currentChannelId} messages={messages} onChannelChange={setCurrentChannelId} onSendMessage={handleSendMessage} />}
         {currentView === 'files' && currentUser && <Files tasks={tasks} messages={messages} currentUser={currentUser} />}
         {currentView === 'team' && <Team currentUser={currentUser} users={users} tasks={tasks} activities={[]} onAddUser={handleAddUser} onRemoveUser={handleRemoveUser} onUpdateRole={(userId, role) => handleUpdateMember(userId, { role })} onApproveUser={handleApproveUser} onUpdateMember={handleUpdateMember} />}

@@ -104,10 +104,10 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, currentView, onN
       {isMobileMenuOpen && (
         <div className="fixed inset-0 z-50 flex md:hidden">
            <div 
-              className="absolute inset-0 bg-black/50 backdrop-blur-sm animate-in fade-in duration-300" 
+              className="absolute inset-0 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200" 
               onClick={() => setIsMobileMenuOpen(false)}
            ></div>
-           <aside className="relative w-64 bg-[#0f172a] h-full shadow-2xl animate-in slide-in-from-left duration-300 flex flex-col border-r border-slate-800">
+           <aside className="relative w-64 bg-[#0f172a] h-full shadow-2xl animate-in slide-in-from-left duration-200 flex flex-col border-r border-slate-800">
              <SidebarContent />
            </aside>
         </div>
@@ -128,7 +128,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, currentView, onN
 
         {/* Content Scroll Area with Page Transitions */}
         <main className="flex-1 overflow-y-auto p-4 md:p-8 relative w-full">
-           <div key={currentView} className="h-full animate-in fade-in slide-in-from-bottom-4 duration-500 ease-out">
+           <div key={currentView} className="h-full animate-in fade-in slide-in-from-bottom-2 duration-300 ease-out">
              {children}
            </div>
         </main>
