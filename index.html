@@ -24,13 +24,14 @@
       }
     </script>
     <style>
+      /* Fond sombre par défaut pour éviter le flash blanc au chargement */
       body {
-        background-color: #e2e8f0; /* Significantly darker gray (Slate-200) */
-        color: #0f172a;
+        background-color: #0f172a; /* Slate-900 (Dark Blue) */
+        color: #f8fafc;
       }
       /* Force light scheme for date inputs to ensure black text/icons */
       :root {
-        color-scheme: light;
+        color-scheme: dark; 
       }
       /* Minimalist Scrollbar */
       ::-webkit-scrollbar {
@@ -41,11 +42,11 @@
         background: transparent;
       }
       ::-webkit-scrollbar-thumb {
-        background: #94a3b8;
+        background: #334155;
         border-radius: 3px;
       }
       ::-webkit-scrollbar-thumb:hover {
-        background: #64748b;
+        background: #475569;
       }
     </style>
   <script type="importmap">

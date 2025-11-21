@@ -198,29 +198,31 @@ const App: React.FC = () => {
       setUsers(users.map(u => u.id === userId ? { ...u, role } : u));
   };
 
-  // Login Screen
+  // Login Screen (DARK MODE REDESIGN)
   if (!currentUser) {
     return (
       <div className="min-h-[100dvh] bg-[#0f172a] flex items-center justify-center p-4 overflow-y-auto">
         <ToastContainer notifications={notifications} onDismiss={removeNotification} />
-        <div className="bg-white p-8 rounded-2xl shadow-2xl max-w-md w-full border border-slate-800">
+        
+        {/* Dark Theme Card */}
+        <div className="bg-[#1e293b] p-8 rounded-2xl shadow-2xl max-w-md w-full border border-slate-700">
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-slate-900 mb-2">
+            <h1 className="text-3xl font-bold text-white mb-2">
               <span className="text-primary">i</span>VISION AGENCY
             </h1>
-            <p className="text-slate-500">Connectez-vous à votre espace de travail</p>
+            <p className="text-slate-400">Connectez-vous à votre espace de travail</p>
           </div>
           
           <form onSubmit={handleLogin} className="space-y-6">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Email professionnel</label>
+              <label className="block text-sm font-medium text-slate-300 mb-1">Email professionnel</label>
               <div className="relative group">
-                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-500 group-focus-within:text-primary transition-colors" size={18} />
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" size={18} />
                 <input 
                   type="email" 
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-gray-200 text-black border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all placeholder-gray-500 font-medium"
+                  className="w-full pl-10 pr-4 py-3 bg-[#334155] text-white border border-slate-600 rounded-lg focus:bg-[#1e293b] focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all placeholder-slate-400 font-medium"
                   placeholder="nom@ivision.com"
                   required
                 />
@@ -229,16 +231,16 @@ const App: React.FC = () => {
             
             <div>
               <div className="flex justify-between items-center mb-1">
-                <label className="block text-sm font-medium text-slate-700">Mot de passe</label>
-                <a href="#" className="text-xs text-primary hover:underline">Oublié ?</a>
+                <label className="block text-sm font-medium text-slate-300">Mot de passe</label>
+                <a href="#" className="text-xs text-primary hover:text-blue-400 hover:underline">Oublié ?</a>
               </div>
               <div className="relative group">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-500 group-focus-within:text-primary transition-colors" size={18} />
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" size={18} />
                 <input 
                   type="password" 
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-gray-200 text-black border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all placeholder-gray-500 font-medium"
+                  className="w-full pl-10 pr-4 py-3 bg-[#334155] text-white border border-slate-600 rounded-lg focus:bg-[#1e293b] focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all placeholder-slate-400 font-medium"
                   placeholder="••••••••"
                 />
               </div>
@@ -254,17 +256,17 @@ const App: React.FC = () => {
           </form>
 
           {/* Demo Quick Access */}
-          <div className="mt-8 pt-6 border-t border-slate-100">
-            <p className="text-xs text-slate-400 uppercase font-bold tracking-wider text-center mb-4">Comptes de démonstration</p>
+          <div className="mt-8 pt-6 border-t border-slate-700">
+            <p className="text-xs text-slate-500 uppercase font-bold tracking-wider text-center mb-4">Comptes de démonstration</p>
             <div className="grid grid-cols-3 gap-3">
               {MOCK_USERS.map(user => (
                 <button
                   key={user.id}
                   onClick={() => handleDemoLogin(user)}
-                  className="flex flex-col items-center p-3 rounded-lg hover:bg-slate-50 transition-all group border border-transparent hover:border-slate-100 transform hover:-translate-y-1"
+                  className="flex flex-col items-center p-3 rounded-lg hover:bg-slate-800 transition-all group border border-transparent hover:border-slate-600 transform hover:-translate-y-1"
                 >
-                  <img src={user.avatar} alt={user.name} className="w-10 h-10 rounded-full mb-2 opacity-80 group-hover:opacity-100 transition-opacity shadow-sm" />
-                  <span className="text-[10px] text-slate-500 font-medium text-center leading-tight">{user.name.split(' ')[0]}<br/><span className="opacity-70 font-normal">{user.role}</span></span>
+                  <img src={user.avatar} alt={user.name} className="w-10 h-10 rounded-full mb-2 opacity-80 group-hover:opacity-100 transition-opacity shadow-sm border border-slate-600" />
+                  <span className="text-[10px] text-slate-400 font-medium text-center leading-tight group-hover:text-slate-200">{user.name.split(' ')[0]}<br/><span className="opacity-50 font-normal">{user.role}</span></span>
                 </button>
               ))}
             </div>
