@@ -197,19 +197,19 @@ const App: React.FC = () => {
       setUsers(users.map(u => u.id === userId ? { ...u, role } : u));
   };
 
-  // Login Screen (DARK MODE REDESIGN)
+  // Login Screen (DARK MODE REDESIGN v2.0)
   if (!currentUser) {
     return (
       <div className="min-h-[100dvh] bg-gradient-to-br from-[#0f172a] to-[#1e293b] flex items-center justify-center p-4 overflow-y-auto">
         <ToastContainer notifications={notifications} onDismiss={removeNotification} />
         
         {/* Dark Theme Card */}
-        <div className="bg-[#1e293b]/80 backdrop-blur-lg p-8 rounded-2xl shadow-2xl max-w-md w-full border border-slate-700/50 ring-1 ring-white/5">
+        <div className="bg-[#1e293b]/80 backdrop-blur-lg p-8 rounded-2xl shadow-2xl max-w-md w-full border border-slate-700/50 ring-1 ring-white/5 animate-in fade-in zoom-in duration-300">
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">
               <span className="text-primary">i</span>VISION AGENCY
             </h1>
-            <p className="text-slate-400">Connectez-vous à votre espace de travail</p>
+            <p className="text-slate-400">Espace Membre Sécurisé</p>
           </div>
           
           <form onSubmit={handleLogin} className="space-y-6">
@@ -252,13 +252,13 @@ const App: React.FC = () => {
               className="w-full bg-primary hover:bg-blue-600 text-white font-medium py-2.5 rounded-lg transition-all transform hover:scale-[1.02] active:scale-95 flex items-center justify-center space-x-2 shadow-lg shadow-primary/30"
             >
               <LogIn size={18} />
-              <span>Se connecter</span>
+              <span>Connexion</span>
             </button>
           </form>
 
           {/* Demo Quick Access */}
           <div className="mt-8 pt-6 border-t border-slate-700">
-            <p className="text-xs text-slate-500 uppercase font-bold tracking-wider text-center mb-4">Comptes de démonstration</p>
+            <p className="text-xs text-slate-500 uppercase font-bold tracking-wider text-center mb-4">Accès Rapide (Demo)</p>
             <div className="grid grid-cols-3 gap-3">
               {MOCK_USERS.map(user => (
                 <button
@@ -271,6 +271,11 @@ const App: React.FC = () => {
                 </button>
               ))}
             </div>
+          </div>
+          
+          {/* Version Indicator for Debugging */}
+          <div className="mt-4 text-center">
+             <span className="text-[10px] text-slate-600 font-mono">v2.0 • Secure Environment</span>
           </div>
         </div>
       </div>

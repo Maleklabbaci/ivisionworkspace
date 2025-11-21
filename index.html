@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0f172a">
     
-    <!-- Cache Busting Meta Tags to force update on deploy -->
+    <!-- Cache Busting Meta Tags -->
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
@@ -33,29 +33,28 @@
       }
     </script>
     <style>
-      /* Force full dark background on html/body to prevent white bounce/scroll areas */
+      /* 1. FORCE DARK BACKGROUND IMMEDIATELY */
       html, body {
-        background-color: #0f172a; /* Slate-900 */
+        background-color: #0f172a !important; /* Force Slate-900 */
         color: #f8fafc;
         height: 100%;
         margin: 0;
       }
       
-      /* Force light scheme for date inputs to ensure black text/icons when system is dark */
       :root {
         color-scheme: dark; 
       }
 
-      /* FIX: Override Browser Autofill White Background on Inputs */
-      /* This targets the "Log in barre" (input bars) turning white */
+      /* 2. FIX AUTOFILL WHITE BACKGROUND (AGGRESSIVE) */
+      /* Use a large inset box-shadow to cover the white browser background */
       input:-webkit-autofill,
       input:-webkit-autofill:hover, 
       input:-webkit-autofill:focus, 
       input:-webkit-autofill:active {
-          -webkit-box-shadow: 0 0 0 30px #334155 inset !important; /* Matches Slate-700 input bg */
+          -webkit-box-shadow: 0 0 0 1000px #334155 inset !important; /* Slate-700 */
           -webkit-text-fill-color: white !important;
+          caret-color: white !important;
           transition: background-color 5000s ease-in-out 0s;
-          caret-color: white;
       }
 
       /* Minimalist Scrollbar */
@@ -73,6 +72,16 @@
       ::-webkit-scrollbar-thumb:hover {
         background: #475569;
       }
+      
+      /* Loading Screen Animation */
+      .loading-pulse {
+        animation: pulse-opacity 2s infinite ease-in-out;
+      }
+      @keyframes pulse-opacity {
+        0% { opacity: 0.5; }
+        50% { opacity: 1; }
+        100% { opacity: 0.5; }
+      }
     </style>
   <script type="importmap">
 {
@@ -88,6 +97,17 @@
 </script>
 </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- PRE-REACT LOADING SCREEN -->
+      <!-- This shows instantly while React loads, preventing white flash -->
+      <div style="height: 100vh; width: 100vw; background-color: #0f172a; display: flex; justify-content: center; align-items: center; flex-direction: column; font-family: 'Inter', sans-serif;">
+        <div style="font-size: 2.5rem; font-weight: 800; letter-spacing: -0.05em; color: white;">
+          <span style="color: #1D4ED8;">i</span>VISION
+        </div>
+        <div class="loading-pulse" style="margin-top: 1rem; font-size: 0.875rem; color: #64748b; font-weight: 500;">
+          Chargement de l'espace de travail...
+        </div>
+      </div>
+    </div>
   </body>
 </html>
