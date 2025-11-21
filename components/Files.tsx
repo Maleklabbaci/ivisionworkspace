@@ -115,7 +115,7 @@ const Files: React.FC<FilesProps> = ({ tasks, messages, currentUser }) => {
               placeholder="Rechercher un fichier..." 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 pr-4 py-2 bg-slate-100 text-black border-transparent rounded-lg text-sm focus:outline-none focus:bg-white focus:ring-2 focus:ring-primary w-full md:w-64 transition-all placeholder-slate-500" 
+              className="pl-9 pr-4 py-2 bg-slate-200 text-black border-transparent rounded-lg text-sm focus:outline-none focus:bg-white focus:ring-2 focus:ring-primary w-full md:w-64 transition-all placeholder-slate-500 font-medium" 
             />
           </div>
           <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200">

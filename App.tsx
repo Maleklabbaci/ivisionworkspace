@@ -201,9 +201,9 @@ const App: React.FC = () => {
   // Login Screen
   if (!currentUser) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+      <div className="min-h-[100dvh] bg-slate-50 flex items-center justify-center p-4 overflow-y-auto">
         <ToastContainer notifications={notifications} onDismiss={removeNotification} />
-        <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full border border-slate-100 animate-in fade-in zoom-in-95 duration-500">
+        <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full border border-slate-100">
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold text-secondary mb-2">
               <span className="text-primary">i</span>VISION AGENCY
@@ -215,12 +215,12 @@ const App: React.FC = () => {
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Email professionnel</label>
               <div className="relative group">
-                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" size={18} />
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-500 group-focus-within:text-primary transition-colors" size={18} />
                 <input 
                   type="email" 
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-100 text-black border-transparent rounded-lg focus:ring-2 focus:ring-primary focus:bg-white outline-none transition-all placeholder-slate-500"
+                  className="w-full pl-10 pr-4 py-3 bg-slate-200 text-black border-transparent rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all placeholder-slate-500 font-medium"
                   placeholder="nom@ivision.com"
                   required
                 />
@@ -233,12 +233,12 @@ const App: React.FC = () => {
                 <a href="#" className="text-xs text-primary hover:underline">Oublié ?</a>
               </div>
               <div className="relative group">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" size={18} />
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-500 group-focus-within:text-primary transition-colors" size={18} />
                 <input 
                   type="password" 
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-100 text-black border-transparent rounded-lg focus:ring-2 focus:ring-primary focus:bg-white outline-none transition-all placeholder-slate-500"
+                  className="w-full pl-10 pr-4 py-3 bg-slate-200 text-black border-transparent rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all placeholder-slate-500 font-medium"
                   placeholder="••••••••"
                 />
               </div>

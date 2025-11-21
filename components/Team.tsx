@@ -206,7 +206,7 @@ const Team: React.FC<TeamProps> = ({ currentUser, users, tasks, activities, onAd
                             required
                             value={newUser.name}
                             onChange={e => setNewUser({...newUser, name: e.target.value})}
-                            className="w-full p-2.5 bg-slate-100 text-black border-transparent rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all placeholder-slate-500"
+                            className="w-full p-2.5 bg-slate-200 text-black border-transparent rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all placeholder-slate-500 font-medium"
                             placeholder="Ex: Thomas Anderson"
                           />
                       </div>
@@ -217,7 +217,7 @@ const Team: React.FC<TeamProps> = ({ currentUser, users, tasks, activities, onAd
                             required
                             value={newUser.email}
                             onChange={e => setNewUser({...newUser, email: e.target.value})}
-                            className="w-full p-2.5 bg-slate-100 text-black border-transparent rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all placeholder-slate-500"
+                            className="w-full p-2.5 bg-slate-200 text-black border-transparent rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all placeholder-slate-500 font-medium"
                             placeholder="thomas@agence.com"
                           />
                       </div>
@@ -226,7 +226,7 @@ const Team: React.FC<TeamProps> = ({ currentUser, users, tasks, activities, onAd
                           <select 
                             value={newUser.role}
                             onChange={e => setNewUser({...newUser, role: e.target.value as UserRole})}
-                            className="w-full p-2.5 bg-slate-100 text-black border-transparent rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all"
+                            className="w-full p-2.5 bg-slate-200 text-black border-transparent rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all font-medium"
                           >
                               <option value={UserRole.MEMBER}>Membre (Accès standard)</option>
                               <option value={UserRole.ADMIN}>Admin (Accès complet)</option>

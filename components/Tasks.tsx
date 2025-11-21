@@ -39,11 +39,14 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
     ? tasks 
     : tasks.filter(t => t.assigneeId === currentUser.id);
 
-  // Calendar Generation Logic
+  // Calendar Generation Logic (Fixed)
   const getCalendarDays = () => {
     const days = [];
     const today = new Date();
-    const startOfWeek = new Date(today.setDate(today.getDate() - today.getDay() + 1)); // Start Monday
+    const currentDay = today.getDay(); // 0 is Sunday
+    const distanceToMonday = currentDay === 0 ? -6 : 1 - currentDay;
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() + distanceToMonday);
     
     for (let i = 0; i < 7; i++) {
       const d = new Date(startOfWeek);
@@ -292,7 +295,7 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                                   <input 
                                     type="text" 
                                     required
-                                    className="w-full p-2.5 bg-slate-100 text-black border-transparent rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none placeholder-slate-500 transition-all"
+                                    className="w-full p-2.5 bg-slate-200 text-black border-transparent rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none placeholder-slate-500 transition-all font-medium"
                                     placeholder="Ex: Campagne Facebook Hiver"
                                     value={newTask.title}
                                     onChange={e => setNewTask({...newTask, title: e.target.value})}
@@ -301,7 +304,7 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                               <div>
                                   <label className="block text-sm font-medium text-slate-700 mb-1">Assigné à</label>
                                   <select 
-                                    className="w-full p-2.5 bg-slate-100 text-black border-transparent rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all"
+                                    className="w-full p-2.5 bg-slate-200 text-black border-transparent rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all font-medium"
                                     value={newTask.assigneeId}
                                     onChange={e => setNewTask({...newTask, assigneeId: e.target.value})}
                                   >
@@ -313,7 +316,7 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                                   <input 
                                     type="date" 
                                     required
-                                    className="w-full p-2.5 bg-slate-100 text-black border-transparent rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all accent-primary"
+                                    className="w-full p-2.5 bg-slate-200 text-black border-transparent rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all accent-primary font-medium"
                                     value={newTask.dueDate}
                                     onChange={e => setNewTask({...newTask, dueDate: e.target.value})}
                                   />
@@ -321,7 +324,7 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                               <div>
                                   <label className="block text-sm font-medium text-slate-700 mb-1">Type</label>
                                   <select 
-                                    className="w-full p-2.5 bg-slate-100 text-black border-transparent rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all"
+                                    className="w-full p-2.5 bg-slate-200 text-black border-transparent rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all font-medium"
                                     value={newTask.type}
                                     onChange={e => setNewTask({...newTask, type: e.target.value as any})}
                                   >
@@ -333,7 +336,7 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                               <div>
                                   <label className="block text-sm font-medium text-slate-700 mb-1">Priorité</label>
                                   <select 
-                                    className="w-full p-2.5 bg-slate-100 text-black border-transparent rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all"
+                                    className="w-full p-2.5 bg-slate-200 text-black border-transparent rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all font-medium"
                                     value={newTask.priority}
                                     onChange={e => setNewTask({...newTask, priority: e.target.value as any})}
                                   >
@@ -360,7 +363,7 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                                           <input 
                                             type="text"
                                             placeholder="Sujet de la campagne (ex: Soldes d'été)"
-                                            className="w-full text-sm p-2 bg-slate-100 text-black border-transparent rounded mb-2 focus:bg-white focus:ring-2 focus:ring-primary outline-none placeholder-slate-500 transition-all"
+                                            className="w-full text-sm p-2 bg-slate-200 text-black border-transparent rounded mb-2 focus:bg-white focus:ring-2 focus:ring-primary outline-none placeholder-slate-500 transition-all"
                                             value={brainstormTopic}
                                             onChange={e => setBrainstormTopic(e.target.value)}
                                           />
@@ -375,7 +378,7 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                                   )}
 
                                   <textarea 
-                                    className="w-full p-2.5 bg-slate-100 text-black border-transparent rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none h-24 resize-none placeholder-slate-500 transition-all"
+                                    className="w-full p-2.5 bg-slate-200 text-black border-transparent rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none h-24 resize-none placeholder-slate-500 transition-all font-medium"
                                     placeholder="Détails de la tâche..."
                                     value={newTask.description}
                                     onChange={e => setNewTask({...newTask, description: e.target.value})}
@@ -509,7 +512,7 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                            <div className="flex items-center space-x-2">
                                <input 
                                  type="text" 
-                                 className="flex-1 bg-slate-100 text-black border-transparent rounded-full px-4 py-2 text-sm focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all placeholder-slate-500"
+                                 className="flex-1 bg-slate-200 text-black border-transparent rounded-full px-4 py-2 text-sm focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all placeholder-slate-500 font-medium"
                                  placeholder="Écrire un commentaire..."
                                  value={taskComment}
                                  onChange={e => setTaskComment(e.target.value)}
