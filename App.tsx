@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { LogIn, Lock, Mail } from 'lucide-react';
 import Layout from './components/Layout';
@@ -201,9 +200,9 @@ const App: React.FC = () => {
   // Login Screen
   if (!currentUser) {
     return (
-      <div className="min-h-[100dvh] bg-slate-50 flex items-center justify-center p-4 overflow-y-auto">
+      <div className="min-h-[100dvh] bg-slate-300 flex items-center justify-center p-4 overflow-y-auto">
         <ToastContainer notifications={notifications} onDismiss={removeNotification} />
-        <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full border border-slate-100">
+        <div className="bg-white p-8 rounded-2xl shadow-2xl max-w-md w-full border border-slate-200">
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold text-secondary mb-2">
               <span className="text-primary">i</span>VISION AGENCY
@@ -220,7 +219,7 @@ const App: React.FC = () => {
                   type="email" 
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-slate-200 text-black border-transparent rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all placeholder-slate-500 font-medium"
+                  className="w-full pl-10 pr-4 py-3 bg-gray-200 text-black border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all placeholder-gray-500 font-medium"
                   placeholder="nom@ivision.com"
                   required
                 />
@@ -238,7 +237,7 @@ const App: React.FC = () => {
                   type="password" 
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-slate-200 text-black border-transparent rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all placeholder-slate-500 font-medium"
+                  className="w-full pl-10 pr-4 py-3 bg-gray-200 text-black border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all placeholder-gray-500 font-medium"
                   placeholder="••••••••"
                 />
               </div>

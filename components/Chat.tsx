@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Send, Paperclip, Smile, Hash, Lock, Search, Bell, MessageSquare, File, Image, Menu, X } from 'lucide-react';
 import { Message, User, Channel, UserRole } from '../types';
@@ -149,7 +148,7 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
             <div className="flex items-center space-x-3">
                 <div className="relative hidden lg:block">
                     <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
-                    <input type="text" placeholder="Rechercher..." className="pl-9 pr-4 py-1.5 bg-slate-200 text-black border-transparent rounded-full text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary w-48 transition-all placeholder-slate-500 font-medium" />
+                    <input type="text" placeholder="Rechercher..." className="pl-9 pr-4 py-1.5 bg-gray-200 text-black border border-gray-300 rounded-full text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary w-48 transition-all placeholder-gray-500 font-medium" />
                 </div>
                 <div className="flex -space-x-2 pl-2">
                     {users.slice(0,3).map(u => (
@@ -222,7 +221,7 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
 
         {/* Input Area */}
         <div className="p-4 bg-white border-t border-slate-200 shrink-0">
-            <div className="bg-slate-200 rounded-xl border border-transparent p-2 flex items-end shadow-inner focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary transition-all duration-200">
+            <div className="bg-gray-200 rounded-xl border border-gray-300 p-2 flex items-end shadow-inner focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary transition-all duration-200">
                 <button className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-300/50 rounded-lg transition-colors">
                     <Paperclip size={20} />
                 </button>
@@ -231,7 +230,7 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
                     onChange={(e) => setNewMessage(e.target.value)}
                     onKeyDown={handleKeyDown}
                     placeholder={`Envoyer un message...`}
-                    className="flex-1 bg-transparent border-none focus:ring-0 text-sm text-black placeholder-slate-500 resize-none py-2.5 px-2 max-h-32 font-medium"
+                    className="flex-1 bg-transparent border-none focus:ring-0 text-sm text-black placeholder-gray-500 resize-none py-2.5 px-2 max-h-32 font-medium"
                     rows={1}
                     style={{ minHeight: '44px' }}
                 />

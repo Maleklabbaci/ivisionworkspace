@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend, PieChart, Pie, Cell } from 'recharts';
 import { CampaignMetric, User, UserRole, Task, TaskStatus } from '../types';
@@ -137,7 +136,7 @@ const Reports: React.FC<ReportsProps> = ({ currentUser, campaignsData, tasks, us
                 <h3 className="text-lg font-bold text-slate-800">Performance Campagnes Ads</h3>
                 <p className="text-xs text-slate-400">Conversion et Budget</p>
             </div>
-            <select className="bg-slate-200 text-black border-transparent text-xs rounded p-2 outline-none focus:ring-2 focus:ring-primary focus:bg-white transition-all font-medium">
+            <select className="bg-gray-200 text-black border border-gray-300 text-xs rounded p-2 outline-none focus:ring-2 focus:ring-primary focus:bg-white transition-all font-medium">
                 <option>Ce mois-ci</option>
                 <option>Derniers 30 jours</option>
             </select>
