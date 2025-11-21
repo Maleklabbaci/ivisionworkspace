@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { LayoutDashboard, CheckSquare, MessageSquare, BarChart2, LogOut, Users as UsersIcon, FolderOpen, Menu, X } from 'lucide-react';
 import { User, ViewState, UserRole } from '../types';
@@ -103,7 +102,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, currentView, onN
       )}
 
       {/* Mobile Header & Main Content */}
-      <div className="flex-1 flex flex-col h-screen overflow-hidden bg-[#e2e8f0]">
+      <div className="flex-1 flex flex-col h-screen overflow-hidden bg-[#020617]"> {/* Changement ici vers bg very dark */}
         {/* Mobile Header */}
         <header className="md:hidden bg-[#0f172a] border-b border-slate-800 p-4 flex justify-between items-center z-10 shadow-sm sticky top-0">
           <button onClick={() => setIsMobileMenuOpen(true)} className="text-slate-400 hover:text-white transition-colors p-1">
@@ -117,6 +116,8 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, currentView, onN
 
         {/* Content Scroll Area with Page Transitions */}
         <main className="flex-1 overflow-y-auto p-4 md:p-8 relative w-full">
+           {/* Ajout d'un container pour s'assurer que le texte reste lisible sur le fond sombre si besoin, 
+               mais ici les composants enfants ont leurs propres fonds blancs (Card UI) */}
            <div key={currentView} className="h-full animate-in fade-in slide-in-from-bottom-4 duration-500 ease-out">
              {children}
            </div>

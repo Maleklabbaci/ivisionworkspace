@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { LogIn, Lock, Mail } from 'lucide-react';
 import Layout from './components/Layout';
@@ -201,13 +200,13 @@ const App: React.FC = () => {
   // Login Screen (DARK MODE REDESIGN)
   if (!currentUser) {
     return (
-      <div className="min-h-[100dvh] bg-[#0f172a] flex items-center justify-center p-4 overflow-y-auto">
+      <div className="min-h-[100dvh] bg-gradient-to-br from-[#0f172a] to-[#1e293b] flex items-center justify-center p-4 overflow-y-auto">
         <ToastContainer notifications={notifications} onDismiss={removeNotification} />
         
         {/* Dark Theme Card */}
-        <div className="bg-[#1e293b] p-8 rounded-2xl shadow-2xl max-w-md w-full border border-slate-700">
+        <div className="bg-[#1e293b]/80 backdrop-blur-lg p-8 rounded-2xl shadow-2xl max-w-md w-full border border-slate-700/50 ring-1 ring-white/5">
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-white mb-2">
+            <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">
               <span className="text-primary">i</span>VISION AGENCY
             </h1>
             <p className="text-slate-400">Connectez-vous à votre espace de travail</p>
@@ -225,6 +224,7 @@ const App: React.FC = () => {
                   className="w-full pl-10 pr-4 py-3 bg-[#334155] text-white border border-slate-600 rounded-lg focus:bg-[#1e293b] focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all placeholder-slate-400 font-medium"
                   placeholder="nom@ivision.com"
                   required
+                  autoComplete="email"
                 />
               </div>
             </div>
@@ -242,6 +242,7 @@ const App: React.FC = () => {
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full pl-10 pr-4 py-3 bg-[#334155] text-white border border-slate-600 rounded-lg focus:bg-[#1e293b] focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all placeholder-slate-400 font-medium"
                   placeholder="••••••••"
+                  autoComplete="current-password"
                 />
               </div>
             </div>
