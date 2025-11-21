@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { LogIn, Lock, Mail, UserPlus, ArrowLeft, User as UserIcon, Loader2, AlertCircle, Info } from 'lucide-react';
 import { supabase, isConfigured } from './services/supabaseClient';
 import Layout from './components/Layout';
@@ -34,6 +34,9 @@ const App: React.FC = () => {
   const [registerName, setRegisterName] = useState('');
   const [registerPhone, setRegisterPhone] = useState('');
 
+  // Ref to track if user data has been loaded to prevent infinite loops
+  const isDataLoaded = useRef(false);
+
   const addNotification = (title: string, message: string, type: 'info' | 'success' | 'urgent' = 'info') => {
     const id = Date.now().toString() + Math.random();
     setNotifications(prev => [...prev, { id, title, message, type }]);
@@ -51,32 +54,29 @@ const App: React.FC = () => {
       return;
     }
 
-    const checkSession = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session && session.user) {
-          await fetchUserProfile(session.user.id);
-          await fetchInitialData();
-        } else {
-          setIsLoading(false);
-        }
-      } catch (error) {
-        console.error("Session check error:", error);
+    // Ecouteur unique pour l'état de l'authentification
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_OUT') {
+        setCurrentUser(null);
+        setTasks([]);
+        setMessages([]);
+        isDataLoaded.current = false;
         setIsLoading(false);
-      }
-    };
-
-    checkSession();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session?.user) {
-        // Only fetch if we don't have the user yet to avoid loops
-        if (!currentUser) {
-            await fetchUserProfile(session.user.id);
-            await fetchInitialData();
+      } else if (session?.user) {
+        // Si on a une session mais pas encore de profil chargé, on charge
+        if (!isDataLoaded.current) {
+            try {
+                await fetchUserProfile(session.user.id);
+                await fetchInitialData();
+                isDataLoaded.current = true;
+            } catch (err) {
+                console.error("Erreur lors du chargement initial:", err);
+            } finally {
+                setIsLoading(false);
+            }
         }
       } else {
-        setCurrentUser(null);
+        // Pas de session, pas d'utilisateur
         setIsLoading(false);
       }
     });
@@ -87,68 +87,70 @@ const App: React.FC = () => {
   // --- DATA FETCHING ---
 
   const fetchUserProfile = async (userId: string) => {
-    setIsLoading(true);
-    
-    // Wait slightly in case the SQL Trigger is still running the merge
-    await new Promise(r => setTimeout(r, 500));
+    try {
+        // Wait slightly in case the SQL Trigger is still running the merge upon creation
+        await new Promise(r => setTimeout(r, 500));
 
-    const { data, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', userId)
-      .single();
+        const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .single();
 
-    if (data) {
-      const user: User = {
-        id: data.id,
-        name: data.name,
-        email: data.email,
-        role: data.role as UserRole,
-        avatar: data.avatar,
-        phoneNumber: data.phone_number,
-        notificationPref: data.notification_pref,
-        status: data.status
-      };
-      setCurrentUser(user);
-    } else {
-        // FIX: Handle missing public profile by creating one from Auth data
-        console.warn("Profile not found in public table. Attempting to create...");
-        const { data: { user: authUser } } = await supabase.auth.getUser();
-        
-        if (authUser) {
-             const defaultName = authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'Utilisateur';
-             const defaultAvatar = authUser.user_metadata?.avatar || `https://ui-avatars.com/api/?name=${defaultName}&background=random`;
-             
-             const newProfile = {
-                 id: authUser.id,
-                 name: defaultName,
-                 email: authUser.email,
-                 role: UserRole.MEMBER, // Default role
-                 avatar: defaultAvatar,
-                 notification_pref: 'all',
-                 status: 'active'
-             };
-
-             const { error: insertError } = await supabase.from('users').insert([newProfile]);
-             
-             if (!insertError) {
-                  const user: User = {
-                    id: newProfile.id,
-                    name: newProfile.name,
-                    email: newProfile.email!,
-                    role: newProfile.role as UserRole,
-                    avatar: newProfile.avatar,
-                    notificationPref: 'all',
+        if (data) {
+            const user: User = {
+                id: data.id,
+                name: data.name,
+                email: data.email,
+                role: data.role as UserRole,
+                avatar: data.avatar,
+                phoneNumber: data.phone_number,
+                notificationPref: data.notification_pref,
+                status: data.status
+            };
+            setCurrentUser(user);
+        } else {
+            // FIX: Handle missing public profile by creating one from Auth data
+            console.warn("Profile not found in public table. Attempting to create...");
+            const { data: { user: authUser } } = await supabase.auth.getUser();
+            
+            if (authUser) {
+                const defaultName = authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'Utilisateur';
+                const defaultAvatar = authUser.user_metadata?.avatar || `https://ui-avatars.com/api/?name=${defaultName}&background=random`;
+                
+                const newProfile = {
+                    id: authUser.id,
+                    name: defaultName,
+                    email: authUser.email,
+                    role: UserRole.MEMBER, // Default role
+                    avatar: defaultAvatar,
+                    notification_pref: 'all',
                     status: 'active'
-                  };
-                  setCurrentUser(user);
-             } else {
-                 console.error("Failed to create missing profile:", insertError);
-                 addNotification('Erreur', 'Impossible de charger le profil utilisateur.', 'urgent');
-             }
+                };
+
+                const { error: insertError } = await supabase.from('users').insert([newProfile]); // Use upsert if possible but insert is fine for fallback
+                
+                if (!insertError) {
+                    const user: User = {
+                        id: newProfile.id,
+                        name: newProfile.name,
+                        email: newProfile.email!,
+                        role: newProfile.role as UserRole,
+                        avatar: newProfile.avatar,
+                        notificationPref: 'all',
+                        status: 'active'
+                    };
+                    setCurrentUser(user);
+                } else {
+                    console.error("Failed to create missing profile:", insertError);
+                    // Ne pas bloquer l'UI, on permet de réessayer ou de contacter le support
+                    addNotification('Erreur Profil', 'Impossible de charger le profil. Veuillez recharger.', 'urgent');
+                }
+            }
         }
+    } catch (e) {
+        console.error("Fetch profile exception:", e);
     }
-    setIsLoading(false);
   };
 
   const fetchInitialData = async () => {
@@ -169,32 +171,54 @@ const App: React.FC = () => {
 
         const { data: tasksData } = await supabase.from('tasks').select('*');
         if (tasksData) {
-            const mappedTasks: Task[] = await Promise.all(tasksData.map(async (t) => {
-                const { data: commentsData } = await supabase.from('task_comments').select('*').eq('task_id', t.id);
-                const comments = commentsData ? commentsData.map(c => ({
-                    id: c.id,
-                    userId: c.user_id,
-                    content: c.content,
-                    timestamp: new Date(c.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
-                })) : [];
+            // Use a resilient mapping that handles errors in sub-fetches
+            const mappedTasks: Task[] = [];
+            for (const t of tasksData) {
+                try {
+                    // Fetch comments
+                    const { data: commentsData } = await supabase.from('task_comments').select('*').eq('task_id', t.id);
+                    const comments = commentsData ? commentsData.map(c => ({
+                        id: c.id,
+                        userId: c.user_id,
+                        content: c.content,
+                        timestamp: new Date(c.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+                    })) : [];
 
-                const { data: attachmentsData } = await supabase.from('task_attachments').select('*').eq('task_id', t.id);
-                const attachments = attachmentsData ? attachmentsData.map(a => a.file_name) : [];
+                    // Fetch attachments
+                    const { data: attachmentsData } = await supabase.from('task_attachments').select('*').eq('task_id', t.id);
+                    const attachments = attachmentsData ? attachmentsData.map(a => a.file_name) : [];
 
-                return {
-                    id: t.id,
-                    title: t.title,
-                    description: t.description,
-                    assigneeId: t.assignee_id,
-                    dueDate: t.due_date,
-                    status: t.status as TaskStatus,
-                    type: t.type,
-                    priority: t.priority,
-                    price: t.price,
-                    comments: comments,
-                    attachments: attachments
-                };
-            }));
+                    mappedTasks.push({
+                        id: t.id,
+                        title: t.title,
+                        description: t.description,
+                        assigneeId: t.assignee_id,
+                        dueDate: t.due_date,
+                        status: t.status as TaskStatus,
+                        type: t.type,
+                        priority: t.priority,
+                        price: t.price,
+                        comments: comments,
+                        attachments: attachments
+                    });
+                } catch (err) {
+                    console.warn(`Failed to load details for task ${t.id}`, err);
+                    // Push basic task if details fail
+                    mappedTasks.push({
+                        id: t.id,
+                        title: t.title,
+                        description: t.description,
+                        assigneeId: t.assignee_id,
+                        dueDate: t.due_date,
+                        status: t.status as TaskStatus,
+                        type: t.type,
+                        priority: t.priority,
+                        price: t.price,
+                        comments: [],
+                        attachments: []
+                    });
+                }
+            }
             setTasks(mappedTasks);
         }
 
@@ -221,7 +245,7 @@ const App: React.FC = () => {
 
     } catch (error) {
         console.error("Error loading data", error);
-        addNotification('Erreur', 'Impossible de charger les données.', 'urgent');
+        addNotification('Erreur', 'Problème lors du chargement des données.', 'urgent');
     }
   };
 
@@ -240,6 +264,7 @@ const App: React.FC = () => {
         addNotification('Erreur de connexion', error.message, 'urgent');
         setIsLoading(false);
     } else {
+        // Auth state listener will handle the fetch and redirection
         addNotification('Bienvenue', 'Connexion réussie.', 'success');
     }
   };
@@ -253,8 +278,6 @@ const App: React.FC = () => {
     
     setIsLoading(true);
 
-    // 1. Sign up in Supabase Auth
-    // IMPORTANT: We pass metadata so the SQL Trigger can use it to create/update the public profile
     const { data: authData, error: authError } = await supabase.auth.signUp({
         email: email,
         password: password,
@@ -273,16 +296,11 @@ const App: React.FC = () => {
     }
 
     if (authData.user) {
-        // We rely on the SQL TRIGGER to create or update the public.users table.
-        // This avoids the "duplicate key" error if the user already exists (demo account).
-        
-        // Check if session is active (sometimes require email confirmation)
         if (authData.session) {
-             addNotification('Compte activé !', 'Fusion réussie. Bienvenue.', 'success');
-             // Force refresh user profile to get the merged ID and Role
-             await fetchUserProfile(authData.user.id);
+             addNotification('Compte créé !', 'Bienvenue sur iVISION.', 'success');
+             // Listener handles loading logic
         } else {
-             addNotification('Vérifiez vos emails', 'Un lien de confirmation a peut-être été envoyé.', 'info');
+             addNotification('Vérifiez vos emails', 'Un lien de confirmation a été envoyé.', 'info');
              setIsLoading(false);
         }
     } else {
@@ -291,10 +309,9 @@ const App: React.FC = () => {
   };
 
   const handleLogout = async () => {
+      setIsLoading(true);
       await supabase.auth.signOut();
-      setCurrentUser(null);
-      setTasks([]);
-      setMessages([]);
+      // Listener handles the rest
   };
 
   // --- TASK ACTIONS ---
@@ -302,7 +319,7 @@ const App: React.FC = () => {
   const handleUpdateTaskStatus = async (taskId: string, newStatus: TaskStatus) => {
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
     const { error } = await supabase.from('tasks').update({ status: newStatus }).eq('id', taskId); 
-    if (error) { addNotification('Erreur', 'Impossible de mettre à jour le statut.', 'urgent'); fetchInitialData(); }
+    if (error) { addNotification('Erreur', 'Impossible de mettre à jour le statut.', 'urgent'); }
   };
   
   const handleUpdateTask = async (updatedTask: Task) => {
@@ -477,7 +494,7 @@ const App: React.FC = () => {
   return (
     <Layout currentUser={currentUser} currentView={currentView} onNavigate={setCurrentView} onLogout={handleLogout}>
       <ToastContainer notifications={notifications} onDismiss={removeNotification} />
-      {currentView === 'dashboard' && <Dashboard currentUser={currentUser} tasks={tasks} onNavigate={setCurrentView} />}
+      {currentView === 'dashboard' && <Dashboard currentUser={currentUser} tasks={tasks} messages={messages} notifications={notifications} onNavigate={setCurrentView} />}
       {currentView === 'reports' && <Reports currentUser={currentUser} tasks={tasks} users={users} />}
       {currentView === 'tasks' && <Tasks tasks={tasks} users={users.filter(u => u.status === 'active')} currentUser={currentUser} onUpdateStatus={handleUpdateTaskStatus} onAddTask={handleAddTask} onUpdateTask={handleUpdateTask} />}
       {currentView === 'chat' && <Chat currentUser={currentUser} users={users.filter(u => u.status === 'active')} channels={channels.length > 0 ? channels : [{ id: 'general', name: 'Général', type: 'global' }]} currentChannelId={currentChannelId} messages={messages} onChannelChange={setCurrentChannelId} onSendMessage={handleSendMessage} />}

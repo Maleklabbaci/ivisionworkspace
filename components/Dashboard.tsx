@@ -1,16 +1,18 @@
 
 import React, { useState } from 'react';
-import { TrendingUp, CheckCircle, AlertCircle, Sparkles, PlusCircle, Calendar, MessageCircle, Clock, DollarSign, Info } from 'lucide-react';
+import { TrendingUp, CheckCircle, AlertCircle, Sparkles, PlusCircle, Calendar, MessageCircle, Clock, DollarSign, Info, Bell } from 'lucide-react';
 import { generateMarketingInsight } from '../services/geminiService';
-import { Task, User, ViewState, TaskStatus, UserRole } from '../types';
+import { Task, User, ViewState, TaskStatus, UserRole, Message, ToastNotification } from '../types';
 
 interface DashboardProps {
   currentUser: User;
   tasks: Task[];
+  messages: Message[];
+  notifications: ToastNotification[];
   onNavigate: (view: ViewState) => void;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks, onNavigate }) => {
+const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks, messages, notifications, onNavigate }) => {
   const [aiInsight, setAiInsight] = useState<string>("");
   const [loadingAi, setLoadingAi] = useState(false);
 
@@ -24,13 +26,29 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks, onNavigate })
   const potentialValue = totalTaskValue - completedTaskValue;
   
   // Completion Rate Calculation
-  // For Admins: Global completion. For Members: Personal completion.
   const relevantTasks = currentUser.role === UserRole.ADMIN ? tasks : tasks.filter(t => t.assigneeId === currentUser.id);
   const completedTasks = relevantTasks.filter(t => t.status === TaskStatus.DONE).length;
   const completionRate = relevantTasks.length > 0 ? Math.round((completedTasks / relevantTasks.length) * 100) : 0;
 
   // Sort tasks by date
   myTasksToday.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+
+  // Dynamic Message Count (e.g., messages from the last 24 hours)
+  const recentMessages = messages.filter(m => {
+      // Simple logic: check if message is from "Today" based on string parsing or if needed, use a real date object comparison if timestamp was ISO
+      // For now, assuming timestamp is localized string, we just show total count or random simulation if strict date unavailable.
+      // BETTER: Just show total message count for now as "Activity".
+      return true; 
+  }).length;
+
+  // Tasks due this week for calendar button
+  const tasksDueThisWeek = tasks.filter(t => {
+      const date = new Date(t.dueDate);
+      const today = new Date();
+      const nextWeek = new Date();
+      nextWeek.setDate(today.getDate() + 7);
+      return date >= today && date <= nextWeek && t.status !== TaskStatus.DONE;
+  }).length;
 
   const handleGetInsights = async () => {
     setLoadingAi(true);
@@ -87,7 +105,9 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks, onNavigate })
         >
           <div className="flex flex-col items-start">
             <span className="font-bold">Voir Calendrier</span>
-            <span className="text-xs text-slate-400">Deadlines de la semaine</span>
+            <span className="text-xs text-slate-400">
+                {tasksDueThisWeek > 0 ? `${tasksDueThisWeek} tâches cette semaine` : "Aucune tâche cette semaine"}
+            </span>
           </div>
           <Calendar className="text-slate-400 group-hover:text-primary transition-colors" />
         </button>
@@ -98,7 +118,9 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks, onNavigate })
         >
           <div className="flex flex-col items-start">
             <span className="font-bold">Chat Équipe</span>
-            <span className="text-xs text-slate-400">3 messages non lus</span>
+            <span className="text-xs text-slate-400">
+                {recentMessages > 0 ? `${recentMessages} messages totaux` : "Accéder aux discussions"}
+            </span>
           </div>
           <MessageCircle className="text-slate-400 group-hover:text-primary transition-colors" />
         </button>
@@ -278,14 +300,35 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks, onNavigate })
               )}
            </div>
 
-           {/* Mini Notifications List */}
+           {/* Notifications List - DYNAMIC */}
            <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
-              <h3 className="font-bold text-slate-800 text-sm mb-3">Notifications</h3>
+              <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-bold text-slate-800 text-sm">Notifications</h3>
+                  {notifications.length > 0 && (
+                      <span className="bg-red-100 text-urgent text-[10px] font-bold px-1.5 py-0.5 rounded-full">{notifications.length}</span>
+                  )}
+              </div>
+              
               <div className="space-y-4">
-                 <div className="flex items-start space-x-3">
-                    <div className="w-2 h-2 mt-1.5 bg-primary rounded-full flex-shrink-0"></div>
-                    <p className="text-xs text-slate-600 leading-snug">Nouveau commentaire de <span className="font-semibold text-slate-900">Sarah</span> sur le shooting UGC.</p>
-                 </div>
+                 {notifications.length === 0 ? (
+                     <div className="text-center py-4 text-slate-400">
+                         <Bell size={16} className="mx-auto mb-2 opacity-50"/>
+                         <p className="text-xs">Rien à signaler.</p>
+                     </div>
+                 ) : (
+                     notifications.slice(0, 3).map(notif => (
+                        <div key={notif.id} className="flex items-start space-x-3 animate-in fade-in slide-in-from-right">
+                            <div className={`w-2 h-2 mt-1.5 rounded-full flex-shrink-0 ${
+                                notif.type === 'urgent' ? 'bg-urgent' : 
+                                notif.type === 'success' ? 'bg-success' : 'bg-primary'
+                            }`}></div>
+                            <div>
+                                <p className="text-xs text-slate-800 font-semibold">{notif.title}</p>
+                                <p className="text-[10px] text-slate-500 leading-snug">{notif.message}</p>
+                            </div>
+                        </div>
+                     ))
+                 )}
               </div>
            </div>
         </div>
