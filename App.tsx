@@ -1,5 +1,6 @@
+
 import React, { useState } from 'react';
-import { LogIn, Lock, Mail } from 'lucide-react';
+import { LogIn, Lock, Mail, UserPlus, ArrowLeft, User as UserIcon } from 'lucide-react';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
 import Tasks from './components/Tasks';
@@ -7,14 +8,15 @@ import Chat from './components/Chat';
 import Reports from './components/Campaigns';
 import Team from './components/Team';
 import Files from './components/Files';
+import Settings from './components/Settings';
 import ToastContainer from './components/Toast';
 import { User, UserRole, ViewState, Task, TaskStatus, CampaignMetric, Channel, ActivityLog, ToastNotification, Message } from './types';
 
 // Mock Data
 const MOCK_USERS: User[] = [
-  { id: '1', name: 'Alex Admin', email: 'admin@ivision.com', role: UserRole.ADMIN, avatar: 'https://picsum.photos/id/64/200/200', notificationPref: 'all' },
-  { id: '2', name: 'Sarah Creative', email: 'sarah@ivision.com', role: UserRole.MEMBER, avatar: 'https://picsum.photos/id/65/200/200', notificationPref: 'push' },
-  { id: '3', name: 'Marc Media', email: 'marc@ivision.com', role: UserRole.MEMBER, avatar: 'https://picsum.photos/id/91/200/200', notificationPref: 'all' },
+  { id: '1', name: 'Alex Admin', email: 'admin@ivision.com', role: UserRole.ADMIN, avatar: 'https://picsum.photos/id/64/200/200', notificationPref: 'all', phoneNumber: '06 12 34 56 78', status: 'active' },
+  { id: '2', name: 'Sarah Creative', email: 'sarah@ivision.com', role: UserRole.MEMBER, avatar: 'https://picsum.photos/id/65/200/200', notificationPref: 'push', phoneNumber: '06 98 76 54 32', status: 'active' },
+  { id: '3', name: 'Marc Media', email: 'marc@ivision.com', role: UserRole.MEMBER, avatar: 'https://picsum.photos/id/91/200/200', notificationPref: 'all', phoneNumber: '', status: 'active' },
 ];
 
 const MOCK_TASKS: Task[] = [
@@ -118,9 +120,13 @@ const App: React.FC = () => {
   const [notifications, setNotifications] = useState<ToastNotification[]>([]);
   const [currentChannelId, setCurrentChannelId] = useState('general');
   
-  // Login State
+  // Login & Register State
+  const [isRegistering, setIsRegistering] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  // Register specific fields
+  const [registerName, setRegisterName] = useState('');
+  const [registerPhone, setRegisterPhone] = useState('');
 
   const addNotification = (title: string, message: string, type: 'info' | 'success' | 'urgent' = 'info') => {
     const id = Date.now().toString() + Math.random();
@@ -134,15 +140,57 @@ const App: React.FC = () => {
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+    
     if (user) {
+      if (user.status === 'pending') {
+        addNotification('Compte en attente', 'Votre inscription est en cours de validation par un administrateur.', 'urgent');
+        return;
+      }
       setCurrentUser(user);
       addNotification('Bienvenue', `Ravi de vous revoir, ${user.name.split(' ')[0]} !`, 'success');
     } else {
-      alert("Utilisateur non trouvé (essayez admin@ivision.com)");
+      alert("Utilisateur non trouvé ou mot de passe incorrect.");
     }
   };
 
+  const handleRegister = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email || !password || !registerName) {
+      addNotification('Erreur', 'Veuillez remplir tous les champs obligatoires.', 'urgent');
+      return;
+    }
+
+    const existingUser = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+    if (existingUser) {
+      addNotification('Erreur', 'Un compte existe déjà avec cet email.', 'urgent');
+      return;
+    }
+
+    const newUser: User = {
+      id: Date.now().toString(),
+      name: registerName,
+      email: email,
+      role: UserRole.MEMBER, // Default role
+      status: 'pending', // Default status
+      avatar: `https://ui-avatars.com/api/?name=${registerName.replace(' ', '+')}&background=random`,
+      notificationPref: 'all',
+      phoneNumber: registerPhone
+    };
+
+    setUsers([...users, newUser]);
+    addNotification('Inscription réussie', 'Votre demande a été envoyée à l\'administrateur pour validation.', 'success');
+    setIsRegistering(false);
+    setEmail('');
+    setPassword('');
+    setRegisterName('');
+    setRegisterPhone('');
+  };
+
   const handleDemoLogin = (user: User) => {
+    if (user.status === 'pending') {
+       addNotification('Compte en attente', 'Ce compte demo est en attente de validation.', 'urgent');
+       return;
+    }
     setEmail(user.email);
     setPassword('password123');
     setCurrentUser(user);
@@ -159,8 +207,6 @@ const App: React.FC = () => {
 
   const handleAddTask = (newTask: Task) => {
       setTasks(prev => [...prev, newTask]);
-      
-      // Trigger Notification if assigned to someone else
       if (newTask.assigneeId !== currentUser?.id) {
           const assignee = users.find(u => u.id === newTask.assigneeId);
           if (assignee) {
@@ -183,9 +229,20 @@ const App: React.FC = () => {
       setMessages(prev => [...prev, newMessage]);
   };
 
+  const handleUpdateProfile = (updatedData: Partial<User>) => {
+    if (!currentUser) return;
+
+    const updatedUser = { ...currentUser, ...updatedData };
+    setCurrentUser(updatedUser);
+    setUsers(prevUsers => prevUsers.map(u => u.id === currentUser.id ? updatedUser : u));
+    addNotification("Profil mis à jour", "Vos modifications ont été enregistrées avec succès.", 'success');
+  };
+
   // Team Management
   const handleAddUser = (newUser: User) => {
-      setUsers([...users, newUser]);
+      // Direct add from Admin panel (active by default)
+      const userToAdd = { ...newUser, status: 'active' as const };
+      setUsers([...users, userToAdd]);
       addNotification('Membre ajouté', `${newUser.name} a rejoint l'équipe.`, 'success');
   };
 
@@ -193,74 +250,155 @@ const App: React.FC = () => {
       setUsers(users.filter(u => u.id !== userId));
   };
 
+  const handleApproveUser = (userId: string) => {
+      setUsers(users.map(u => u.id === userId ? { ...u, status: 'active' } : u));
+      const approvedUser = users.find(u => u.id === userId);
+      addNotification('Compte validé', `${approvedUser?.name} a maintenant accès à la plateforme.`, 'success');
+  };
+
   const handleUpdateRole = (userId: string, role: UserRole) => {
       setUsers(users.map(u => u.id === userId ? { ...u, role } : u));
   };
 
-  // Login Screen (LIGHT THEME RESTORED)
+  // Login/Register Screen
   if (!currentUser) {
     return (
       <div className="min-h-[100dvh] bg-slate-50 flex items-center justify-center p-4 overflow-y-auto">
         <ToastContainer notifications={notifications} onDismiss={removeNotification} />
         
-        {/* Light Theme Card */}
         <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full border border-slate-200 animate-in fade-in zoom-in duration-500">
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold text-slate-900 mb-2 tracking-tight">
               <span className="text-primary">i</span>VISION AGENCY
             </h1>
-            <p className="text-slate-500">Espace Membre Sécurisé</p>
+            <p className="text-slate-500">{isRegistering ? "Créer un nouveau compte" : "Espace Membre Sécurisé"}</p>
           </div>
           
-          <form onSubmit={handleLogin} className="space-y-6">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Email professionnel</label>
-              <div className="relative group">
-                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" size={18} />
-                <input 
-                  type="email" 
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-white text-slate-900 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all placeholder-slate-400 font-medium"
-                  placeholder="nom@ivision.com"
-                  required
-                  autoComplete="email"
-                />
-              </div>
-            </div>
-            
-            <div>
-              <div className="flex justify-between items-center mb-1">
-                <label className="block text-sm font-medium text-slate-700">Mot de passe</label>
-                <a href="#" className="text-xs text-primary hover:text-blue-600 hover:underline">Oublié ?</a>
-              </div>
-              <div className="relative group">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" size={18} />
-                <input 
-                  type="password" 
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-white text-slate-900 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all placeholder-slate-400 font-medium"
-                  placeholder="••••••••"
-                  autoComplete="current-password"
-                />
-              </div>
-            </div>
+          {isRegistering ? (
+            // REGISTER FORM
+            <form onSubmit={handleRegister} className="space-y-5">
+               <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Nom complet</label>
+                  <div className="relative group">
+                    <UserIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" size={18} />
+                    <input 
+                      type="text" 
+                      value={registerName}
+                      onChange={(e) => setRegisterName(e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 bg-white text-slate-900 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary outline-none transition-all placeholder-slate-400 font-medium"
+                      placeholder="Jean Dupont"
+                      required
+                    />
+                  </div>
+               </div>
+               <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Email professionnel</label>
+                  <div className="relative group">
+                    <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" size={18} />
+                    <input 
+                      type="email" 
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 bg-white text-slate-900 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary outline-none transition-all placeholder-slate-400 font-medium"
+                      placeholder="nom@ivision.com"
+                      required
+                    />
+                  </div>
+               </div>
+               <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Mot de passe</label>
+                  <div className="relative group">
+                    <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" size={18} />
+                    <input 
+                      type="password" 
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 bg-white text-slate-900 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary outline-none transition-all placeholder-slate-400 font-medium"
+                      placeholder="Créer un mot de passe"
+                      required
+                    />
+                  </div>
+               </div>
+               
+               <button 
+                  type="submit"
+                  className="w-full bg-primary hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-all transform hover:scale-[1.02] active:scale-95 flex items-center justify-center space-x-2 shadow-lg shadow-primary/20"
+                >
+                  <UserPlus size={18} />
+                  <span>S'inscrire</span>
+                </button>
 
-            <button 
-              type="submit"
-              className="w-full bg-primary hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-all transform hover:scale-[1.02] active:scale-95 flex items-center justify-center space-x-2 shadow-lg shadow-primary/20"
-            >
-              <LogIn size={18} />
-              <span>Connexion</span>
-            </button>
-          </form>
+                <button 
+                  type="button"
+                  onClick={() => setIsRegistering(false)}
+                  className="w-full text-slate-500 text-sm font-medium hover:text-slate-800 py-2 flex items-center justify-center"
+                >
+                  <ArrowLeft size={14} className="mr-2" /> Retour à la connexion
+                </button>
+            </form>
+          ) : (
+            // LOGIN FORM
+            <form onSubmit={handleLogin} className="space-y-6">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Email professionnel</label>
+                <div className="relative group">
+                  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" size={18} />
+                  <input 
+                    type="email" 
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full pl-10 pr-4 py-3 bg-white text-slate-900 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all placeholder-slate-400 font-medium"
+                    placeholder="nom@ivision.com"
+                    required
+                    autoComplete="email"
+                  />
+                </div>
+              </div>
+              
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="block text-sm font-medium text-slate-700">Mot de passe</label>
+                  <a href="#" className="text-xs text-primary hover:text-blue-600 hover:underline">Oublié ?</a>
+                </div>
+                <div className="relative group">
+                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" size={18} />
+                  <input 
+                    type="password" 
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full pl-10 pr-4 py-3 bg-white text-slate-900 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all placeholder-slate-400 font-medium"
+                    placeholder="••••••••"
+                    autoComplete="current-password"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col space-y-3">
+                <button 
+                  type="submit"
+                  className="w-full bg-primary hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-all transform hover:scale-[1.02] active:scale-95 flex items-center justify-center space-x-2 shadow-lg shadow-primary/20"
+                >
+                  <LogIn size={18} />
+                  <span>Connexion</span>
+                </button>
+                
+                <button 
+                  type="button"
+                  onClick={() => setIsRegistering(true)}
+                  className="w-full bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-medium py-2.5 rounded-lg transition-all flex items-center justify-center space-x-2"
+                >
+                  <UserPlus size={18} />
+                  <span>Créer un compte</span>
+                </button>
+              </div>
+            </form>
+          )}
 
           {/* Demo Quick Access */}
           <div className="mt-8 pt-6 border-t border-slate-100">
             <p className="text-xs text-slate-400 uppercase font-bold tracking-wider text-center mb-4">Accès Rapide (Demo)</p>
             <div className="grid grid-cols-3 gap-3">
-              {MOCK_USERS.map(user => (
+              {MOCK_USERS.filter(u => u.status === 'active').map(user => (
                 <button
                   key={user.id}
                   onClick={() => handleDemoLogin(user)}
@@ -274,7 +412,7 @@ const App: React.FC = () => {
           </div>
           
           <div className="mt-4 text-center">
-             <span className="text-[10px] text-slate-400 font-mono">v2.2 • Light Theme</span>
+             <span className="text-[10px] text-slate-400 font-mono">v2.3 • Registration Enabled</span>
           </div>
         </div>
       </div>
@@ -301,7 +439,7 @@ const App: React.FC = () => {
       {currentView === 'tasks' && (
         <Tasks 
             tasks={tasks} 
-            users={users} 
+            users={users.filter(u => u.status === 'active')} 
             currentUser={currentUser}
             onUpdateStatus={handleUpdateTaskStatus}
             onAddTask={handleAddTask}
@@ -311,7 +449,7 @@ const App: React.FC = () => {
       {currentView === 'chat' && (
         <Chat 
             currentUser={currentUser} 
-            users={users} 
+            users={users.filter(u => u.status === 'active')} 
             channels={MOCK_CHANNELS}
             currentChannelId={currentChannelId}
             messages={messages}
@@ -327,7 +465,7 @@ const App: React.FC = () => {
             currentUser={currentUser} 
             campaignsData={MOCK_CAMPAIGNS} 
             tasks={tasks}
-            users={users}
+            users={users.filter(u => u.status === 'active')}
         />
       )}
       {currentView === 'team' && (
@@ -339,6 +477,13 @@ const App: React.FC = () => {
             onAddUser={handleAddUser}
             onRemoveUser={handleRemoveUser}
             onUpdateRole={handleUpdateRole}
+            onApproveUser={handleApproveUser}
+        />
+      )}
+      {currentView === 'settings' && (
+        <Settings 
+          currentUser={currentUser}
+          onUpdateProfile={handleUpdateProfile}
         />
       )}
     </Layout>

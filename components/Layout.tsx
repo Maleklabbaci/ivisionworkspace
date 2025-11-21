@@ -1,5 +1,6 @@
+
 import React, { useState } from 'react';
-import { LayoutDashboard, CheckSquare, MessageSquare, BarChart2, LogOut, Users as UsersIcon, FolderOpen, Menu, X } from 'lucide-react';
+import { LayoutDashboard, CheckSquare, MessageSquare, BarChart2, LogOut, Users as UsersIcon, FolderOpen, Menu, X, Settings } from 'lucide-react';
 import { User, ViewState, UserRole } from '../types';
 
 interface LayoutProps {
@@ -63,20 +64,31 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, currentView, onN
       </nav>
 
       <div className="p-4 border-t border-slate-800">
-        <div className="flex items-center space-x-3 mb-4 px-1">
+        <div className="flex items-center space-x-3 mb-4 px-1 cursor-pointer hover:bg-slate-800 p-2 rounded-lg transition-colors" onClick={() => handleNavigate('settings')}>
           <img src={currentUser.avatar} alt="Avatar" className="w-8 h-8 rounded-full border border-slate-600 shadow-sm" />
           <div className="overflow-hidden">
             <p className="text-sm font-semibold text-slate-200 truncate">{currentUser.name}</p>
             <p className="text-xs text-slate-500 truncate" title={currentUser.role}>{currentUser.role}</p>
           </div>
         </div>
-        <button 
-          onClick={onLogout}
-          className="w-full flex items-center justify-center space-x-2 p-2 rounded-lg border border-slate-700 hover:bg-red-900/20 hover:text-red-400 hover:border-red-900/30 text-xs text-slate-400 transition-all font-medium"
-        >
-          <LogOut size={14} />
-          <span>Déconnexion</span>
-        </button>
+        <div className="grid grid-cols-2 gap-2">
+          <button 
+            onClick={() => handleNavigate('settings')}
+            className={`flex items-center justify-center space-x-2 p-2 rounded-lg border transition-all text-xs font-medium ${currentView === 'settings' ? 'bg-slate-700 text-white border-slate-600' : 'border-slate-700 hover:bg-slate-800 text-slate-400 hover:text-white'}`}
+            title="Paramètres"
+          >
+            <Settings size={14} />
+            <span>Réglages</span>
+          </button>
+          <button 
+            onClick={onLogout}
+            className="flex items-center justify-center space-x-2 p-2 rounded-lg border border-slate-700 hover:bg-red-900/20 hover:text-red-400 hover:border-red-900/30 text-xs text-slate-400 transition-all font-medium"
+            title="Déconnexion"
+          >
+            <LogOut size={14} />
+            <span>Sortir</span>
+          </button>
+        </div>
       </div>
     </>
   );

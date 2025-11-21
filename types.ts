@@ -13,7 +13,9 @@ export interface User {
   email: string;
   avatar: string;
   role: UserRole;
-  notificationPref: 'push' | 'all'; // 'push' = only push, 'all' = email + push
+  phoneNumber?: string;
+  notificationPref: 'push' | 'all';
+  status: 'active' | 'pending'; // Status added for account validation flow
 }
 
 export interface ActivityLog {
@@ -83,4 +85,4 @@ export interface ToastNotification {
   type: 'info' | 'success' | 'urgent';
 }
 
-export type ViewState = 'dashboard' | 'tasks' | 'chat' | 'files' | 'reports' | 'team';
+export type ViewState = 'dashboard' | 'tasks' | 'chat' | 'files' | 'reports' | 'team' | 'settings';

@@ -1,6 +1,7 @@
+
 import React, { useState } from 'react';
 import { User, UserRole, ActivityLog, Task, TaskStatus } from '../types';
-import { MoreHorizontal, Mail, Shield, Trash2, UserPlus, History, Briefcase, Bell, Lock, X } from 'lucide-react';
+import { MoreHorizontal, Mail, Shield, Trash2, UserPlus, History, Briefcase, Bell, Lock, X, CheckCircle, AlertCircle } from 'lucide-react';
 
 interface TeamProps {
   currentUser: User;
@@ -10,11 +11,12 @@ interface TeamProps {
   onAddUser: (user: User) => void;
   onRemoveUser: (userId: string) => void;
   onUpdateRole: (userId: string, role: UserRole) => void;
+  onApproveUser: (userId: string) => void; // New prop for approving pending users
 }
 
-const Team: React.FC<TeamProps> = ({ currentUser, users, tasks, activities, onAddUser, onRemoveUser, onUpdateRole }) => {
+const Team: React.FC<TeamProps> = ({ currentUser, users, tasks, activities, onAddUser, onRemoveUser, onUpdateRole, onApproveUser }) => {
   const [showAddModal, setShowAddModal] = useState(false);
-  const [newUser, setNewUser] = useState({ name: '', email: '', role: UserRole.MEMBER, notificationPref: 'all' as 'push' | 'all' });
+  const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: UserRole.MEMBER, notificationPref: 'all' as 'push' | 'all' });
   const [selectedMember, setSelectedMember] = useState<User | null>(null);
 
   // Access Guard
@@ -31,6 +33,10 @@ const Team: React.FC<TeamProps> = ({ currentUser, users, tasks, activities, onAd
         </div>
     );
   }
+
+  // Separate active and pending users
+  const activeUsers = users.filter(u => u.status === 'active');
+  const pendingUsers = users.filter(u => u.status === 'pending');
 
   // Filter activities for selected member or show all
   const displayedActivities = selectedMember 
@@ -49,7 +55,7 @@ const Team: React.FC<TeamProps> = ({ currentUser, users, tasks, activities, onAd
 
   const handleAddSubmit = (e: React.FormEvent) => {
       e.preventDefault();
-      if(!newUser.name || !newUser.email) return;
+      if(!newUser.name || !newUser.email || !newUser.password) return;
       
       const user: User = {
           id: Date.now().toString(),
@@ -57,12 +63,15 @@ const Team: React.FC<TeamProps> = ({ currentUser, users, tasks, activities, onAd
           email: newUser.email,
           role: newUser.role,
           avatar: `https://ui-avatars.com/api/?name=${newUser.name.replace(' ', '+')}&background=random`,
-          notificationPref: newUser.notificationPref
+          notificationPref: newUser.notificationPref,
+          status: 'active' // Admin added users are active by default
       };
       
+      console.log("Compte créé avec le mot de passe : ", newUser.password);
+
       onAddUser(user);
       setShowAddModal(false);
-      setNewUser({ name: '', email: '', role: UserRole.MEMBER, notificationPref: 'all' });
+      setNewUser({ name: '', email: '', password: '', role: UserRole.MEMBER, notificationPref: 'all' });
   };
 
   return (
@@ -83,72 +92,117 @@ const Team: React.FC<TeamProps> = ({ currentUser, users, tasks, activities, onAd
               </button>
           </div>
           
-          <div className="overflow-y-auto p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-              {users.map(user => {
-                  const stats = getUserStats(user.id);
-                  const isSelected = selectedMember?.id === user.id;
-                  
-                  return (
-                      <div 
-                        key={user.id}
-                        onClick={() => setSelectedMember(user)}
-                        className={`relative border rounded-xl p-5 transition-all cursor-pointer group ${
-                            isSelected ? 'border-primary bg-blue-50/30 ring-1 ring-primary/20' : 'border-slate-200 hover:border-blue-300 hover:shadow-sm bg-white hover:-translate-y-1'
-                        }`}
-                      >
-                          <div className="flex items-start justify-between mb-5">
-                              <div className="flex items-center space-x-3">
-                                  <img src={user.avatar} alt={user.name} className="w-12 h-12 rounded-full border border-slate-100 shadow-sm" />
-                                  <div>
-                                      <h3 className="font-bold text-slate-900">{user.name}</h3>
-                                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
-                                          user.role === UserRole.ADMIN ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-600'
-                                      }`}>
-                                          {user.role}
-                                      </span>
-                                  </div>
-                              </div>
-                              {currentUser.id !== user.id && (
-                                  <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                                      <button 
-                                        onClick={(e) => { e.stopPropagation(); onRemoveUser(user.id); }}
-                                        className="p-2 text-slate-400 hover:text-urgent hover:bg-red-50 rounded transition-colors"
-                                        title="Supprimer"
-                                      >
-                                          <Trash2 size={16} />
-                                      </button>
-                                  </div>
-                              )}
+          <div className="overflow-y-auto p-6 space-y-8">
+              
+              {/* PENDING REQUESTS SECTION */}
+              {pendingUsers.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center">
+                    <AlertCircle size={16} className="mr-2 text-orange-500" />
+                    Demandes en attente ({pendingUsers.length})
+                  </h3>
+                  <div className="space-y-3">
+                    {pendingUsers.map(user => (
+                       <div key={user.id} className="bg-orange-50/50 border border-orange-100 rounded-xl p-4 flex justify-between items-center">
+                          <div className="flex items-center space-x-3">
+                            <img src={user.avatar} alt={user.name} className="w-10 h-10 rounded-full grayscale opacity-70" />
+                            <div>
+                               <h4 className="font-bold text-slate-800 text-sm">{user.name}</h4>
+                               <p className="text-xs text-slate-500">{user.email}</p>
+                               <span className="text-[10px] text-orange-600 font-semibold bg-orange-100 px-1.5 py-0.5 rounded">En attente de validation</span>
+                            </div>
                           </div>
-                          
-                          <div className="grid grid-cols-3 gap-3 mb-4 text-center">
-                              <div className="bg-slate-50 p-2 rounded border border-slate-100">
-                                  <div className="text-lg font-bold text-slate-800">{stats.total}</div>
-                                  <div className="text-[10px] text-slate-400 uppercase font-semibold">Tâches</div>
-                              </div>
-                              <div className="bg-green-50 p-2 rounded border border-green-100">
-                                  <div className="text-lg font-bold text-success">{stats.done}</div>
-                                  <div className="text-[10px] text-green-600 uppercase font-semibold">Faites</div>
-                              </div>
-                              <div className="bg-orange-50 p-2 rounded border border-orange-100">
-                                  <div className="text-lg font-bold text-orange-600">{stats.pending}</div>
-                                  <div className="text-[10px] text-orange-600 uppercase font-semibold">En cours</div>
-                              </div>
+                          <div className="flex space-x-2">
+                             <button 
+                                onClick={() => onApproveUser(user.id)}
+                                className="p-2 bg-success text-white rounded-lg hover:bg-green-600 transition-colors shadow-sm"
+                                title="Valider l'inscription"
+                             >
+                               <CheckCircle size={18} />
+                             </button>
+                             <button 
+                                onClick={() => onRemoveUser(user.id)}
+                                className="p-2 bg-white border border-slate-200 text-slate-400 hover:text-urgent hover:border-urgent rounded-lg transition-colors"
+                                title="Refuser"
+                             >
+                               <X size={18} />
+                             </button>
                           </div>
+                       </div>
+                    ))}
+                  </div>
+                  <div className="h-px bg-slate-100 mt-6"></div>
+                </div>
+              )}
 
-                          <div className="flex items-center justify-between text-xs text-slate-400">
-                              <div className="flex items-center space-x-2">
-                                <Mail size={12} />
-                                <span className="truncate max-w-[100px]">{user.email}</span>
-                              </div>
-                              <div className="flex items-center space-x-1">
-                                <Bell size={12} />
-                                <span>{user.notificationPref === 'all' ? 'Email+Push' : 'Push'}</span>
-                              </div>
-                          </div>
-                      </div>
-                  );
-              })}
+              {/* ACTIVE MEMBERS GRID */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {activeUsers.map(user => {
+                    const stats = getUserStats(user.id);
+                    const isSelected = selectedMember?.id === user.id;
+                    
+                    return (
+                        <div 
+                            key={user.id}
+                            onClick={() => setSelectedMember(user)}
+                            className={`relative border rounded-xl p-5 transition-all cursor-pointer group ${
+                                isSelected ? 'border-primary bg-blue-50/30 ring-1 ring-primary/20' : 'border-slate-200 hover:border-blue-300 hover:shadow-sm bg-white hover:-translate-y-1'
+                            }`}
+                        >
+                            <div className="flex items-start justify-between mb-5">
+                                <div className="flex items-center space-x-3">
+                                    <img src={user.avatar} alt={user.name} className="w-12 h-12 rounded-full border border-slate-100 shadow-sm" />
+                                    <div>
+                                        <h3 className="font-bold text-slate-900">{user.name}</h3>
+                                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
+                                            user.role === UserRole.ADMIN ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-600'
+                                        }`}>
+                                            {user.role}
+                                        </span>
+                                    </div>
+                                </div>
+                                {currentUser.id !== user.id && (
+                                    <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button 
+                                            onClick={(e) => { e.stopPropagation(); onRemoveUser(user.id); }}
+                                            className="p-2 text-slate-400 hover:text-urgent hover:bg-red-50 rounded transition-colors"
+                                            title="Supprimer"
+                                        >
+                                            <Trash2 size={16} />
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                            
+                            <div className="grid grid-cols-3 gap-3 mb-4 text-center">
+                                <div className="bg-slate-50 p-2 rounded border border-slate-100">
+                                    <div className="text-lg font-bold text-slate-800">{stats.total}</div>
+                                    <div className="text-[10px] text-slate-400 uppercase font-semibold">Tâches</div>
+                                </div>
+                                <div className="bg-green-50 p-2 rounded border border-green-100">
+                                    <div className="text-lg font-bold text-success">{stats.done}</div>
+                                    <div className="text-[10px] text-green-600 uppercase font-semibold">Faites</div>
+                                </div>
+                                <div className="bg-orange-50 p-2 rounded border border-orange-100">
+                                    <div className="text-lg font-bold text-orange-600">{stats.pending}</div>
+                                    <div className="text-[10px] text-orange-600 uppercase font-semibold">En cours</div>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center justify-between text-xs text-slate-400">
+                                <div className="flex items-center space-x-2">
+                                    <Mail size={12} />
+                                    <span className="truncate max-w-[100px]">{user.email}</span>
+                                </div>
+                                <div className="flex items-center space-x-1">
+                                    <Bell size={12} />
+                                    <span>{user.notificationPref === 'all' ? 'Email+Push' : 'Push'}</span>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })}
+              </div>
           </div>
       </div>
 
@@ -167,6 +221,7 @@ const Team: React.FC<TeamProps> = ({ currentUser, users, tasks, activities, onAd
                   <div className="divide-y divide-slate-50">
                       {displayedActivities.map(log => {
                           const user = users.find(u => u.id === log.userId);
+                          if (!user) return null;
                           return (
                               <div key={log.id} className="p-4 hover:bg-slate-50 transition-colors flex space-x-3 animate-in fade-in slide-in-from-right-4 duration-300">
                                   <div className="mt-1.5">
@@ -177,7 +232,7 @@ const Team: React.FC<TeamProps> = ({ currentUser, users, tasks, activities, onAd
                                   </div>
                                   <div>
                                       <p className="text-sm text-slate-800 leading-snug">
-                                          <span className="font-bold text-slate-900">{user?.name}</span> {log.action} <span className="font-medium text-primary">{log.target}</span>
+                                          <span className="font-bold text-slate-900">{user.name}</span> {log.action} <span className="font-medium text-primary">{log.target}</span>
                                       </p>
                                       <p className="text-xs text-slate-400 mt-1">{log.timestamp}</p>
                                   </div>
@@ -218,6 +273,17 @@ const Team: React.FC<TeamProps> = ({ currentUser, users, tasks, activities, onAd
                             onChange={e => setNewUser({...newUser, email: e.target.value})}
                             className="w-full p-2.5 bg-gray-200 text-black border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all placeholder-gray-500 font-medium"
                             placeholder="thomas@agence.com"
+                          />
+                      </div>
+                      <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-1">Mot de passe provisoire</label>
+                          <input 
+                            type="password" 
+                            required
+                            value={newUser.password}
+                            onChange={e => setNewUser({...newUser, password: e.target.value})}
+                            className="w-full p-2.5 bg-gray-200 text-black border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all placeholder-gray-500 font-medium"
+                            placeholder="••••••••"
                           />
                       </div>
                       <div>
