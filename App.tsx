@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { LogIn, Lock, Mail, UserPlus, ArrowLeft, User as UserIcon, Loader2, AlertCircle, Info } from 'lucide-react';
 import { supabase, isConfigured } from './services/supabaseClient';
@@ -97,10 +98,7 @@ const App: React.FC = () => {
       .eq('id', userId)
       .single();
 
-    if (error) {
-      console.error("Error fetching profile:", error);
-      // Fallback if profile not found (rare if trigger works)
-    } else if (data) {
+    if (data) {
       const user: User = {
         id: data.id,
         name: data.name,
@@ -112,6 +110,43 @@ const App: React.FC = () => {
         status: data.status
       };
       setCurrentUser(user);
+    } else {
+        // FIX: Handle missing public profile by creating one from Auth data
+        console.warn("Profile not found in public table. Attempting to create...");
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        
+        if (authUser) {
+             const defaultName = authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'Utilisateur';
+             const defaultAvatar = authUser.user_metadata?.avatar || `https://ui-avatars.com/api/?name=${defaultName}&background=random`;
+             
+             const newProfile = {
+                 id: authUser.id,
+                 name: defaultName,
+                 email: authUser.email,
+                 role: UserRole.MEMBER, // Default role
+                 avatar: defaultAvatar,
+                 notification_pref: 'all',
+                 status: 'active'
+             };
+
+             const { error: insertError } = await supabase.from('users').insert([newProfile]);
+             
+             if (!insertError) {
+                  const user: User = {
+                    id: newProfile.id,
+                    name: newProfile.name,
+                    email: newProfile.email!,
+                    role: newProfile.role as UserRole,
+                    avatar: newProfile.avatar,
+                    notificationPref: 'all',
+                    status: 'active'
+                  };
+                  setCurrentUser(user);
+             } else {
+                 console.error("Failed to create missing profile:", insertError);
+                 addNotification('Erreur', 'Impossible de charger le profil utilisateur.', 'urgent');
+             }
+        }
     }
     setIsLoading(false);
   };
@@ -243,7 +278,9 @@ const App: React.FC = () => {
         
         // Check if session is active (sometimes require email confirmation)
         if (authData.session) {
-             addNotification('Compte créé', 'Vous êtes connecté.', 'success');
+             addNotification('Compte activé !', 'Fusion réussie. Bienvenue.', 'success');
+             // Force refresh user profile to get the merged ID and Role
+             await fetchUserProfile(authData.user.id);
         } else {
              addNotification('Vérifiez vos emails', 'Un lien de confirmation a peut-être été envoyé.', 'info');
              setIsLoading(false);
@@ -375,15 +412,6 @@ const App: React.FC = () => {
             <p className="text-slate-500">{isRegistering ? "Créer un nouveau compte" : "Connexion Espace de Travail"}</p>
           </div>
           
-          {/* IMPORTANT INFO BOX FOR DEMO USERS */}
-          <div className="mb-6 bg-blue-50 p-4 rounded-lg border border-blue-100 flex items-start space-x-3">
-              <Info size={20} className="text-primary flex-shrink-0 mt-0.5" />
-              <div className="text-sm text-slate-700">
-                  <p className="font-bold text-primary mb-1">Compte Démo Existant ?</p>
-                  <p>Si vous voulez utiliser le compte <strong>admin@ivision.com</strong>, vous devez cliquer sur <strong>"Créer un compte"</strong> avec cet email pour activer l'accès.</p>
-              </div>
-          </div>
-
           {isRegistering ? (
             <form onSubmit={handleRegister} className="space-y-5 animate-in slide-in-from-right duration-300">
                <div>
