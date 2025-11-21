@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { LogIn, Lock, Mail } from 'lucide-react';
 import Layout from './components/Layout';
@@ -200,11 +201,11 @@ const App: React.FC = () => {
   // Login Screen
   if (!currentUser) {
     return (
-      <div className="min-h-[100dvh] bg-slate-300 flex items-center justify-center p-4 overflow-y-auto">
+      <div className="min-h-[100dvh] bg-[#0f172a] flex items-center justify-center p-4 overflow-y-auto">
         <ToastContainer notifications={notifications} onDismiss={removeNotification} />
-        <div className="bg-white p-8 rounded-2xl shadow-2xl max-w-md w-full border border-slate-200">
+        <div className="bg-white p-8 rounded-2xl shadow-2xl max-w-md w-full border border-slate-800">
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-secondary mb-2">
+            <h1 className="text-3xl font-bold text-slate-900 mb-2">
               <span className="text-primary">i</span>VISION AGENCY
             </h1>
             <p className="text-slate-500">Connectez-vous à votre espace de travail</p>
@@ -245,7 +246,7 @@ const App: React.FC = () => {
 
             <button 
               type="submit"
-              className="w-full bg-primary hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-all transform hover:scale-[1.02] active:scale-95 flex items-center justify-center space-x-2 shadow-lg shadow-primary/20"
+              className="w-full bg-primary hover:bg-blue-600 text-white font-medium py-2.5 rounded-lg transition-all transform hover:scale-[1.02] active:scale-95 flex items-center justify-center space-x-2 shadow-lg shadow-primary/30"
             >
               <LogIn size={18} />
               <span>Se connecter</span>

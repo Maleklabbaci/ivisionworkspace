@@ -33,11 +33,11 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, currentView, onN
   const SidebarContent = () => (
     <>
       <div className="p-6 mb-2 flex justify-between items-center">
-        <h1 className="text-xl font-bold tracking-tight text-secondary">
+        <h1 className="text-xl font-bold tracking-tight text-white">
           <span className="text-primary">i</span>VISION AGENCY
         </h1>
         {/* Mobile Close Button */}
-        <button onClick={() => setIsMobileMenuOpen(false)} className="md:hidden text-slate-400 hover:text-slate-600">
+        <button onClick={() => setIsMobileMenuOpen(false)} className="md:hidden text-slate-400 hover:text-white">
           <X size={24} />
         </button>
       </div>
@@ -50,10 +50,10 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, currentView, onN
               <button
                 key={item.id}
                 onClick={() => handleNavigate(item.id as ViewState)}
-                className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-all duration-200 text-sm group ${
+                className={`w-full flex items-center space-x-3 px-3 py-3 rounded-lg transition-all duration-200 text-sm group ${
                   isActive 
-                    ? 'bg-primary text-white shadow-md shadow-primary/20 translate-x-1' 
-                    : 'text-slate-600 hover:bg-white hover:text-slate-900 hover:translate-x-1'
+                    ? 'bg-primary text-white shadow-lg shadow-primary/30 translate-x-1' 
+                    : 'text-slate-400 hover:bg-slate-800 hover:text-white hover:translate-x-1'
                 }`}
               >
                 <Icon size={18} strokeWidth={isActive ? 2.5 : 2} className={`transition-transform duration-200 ${isActive ? 'scale-110' : 'group-hover:scale-110'}`} />
@@ -63,17 +63,17 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, currentView, onN
         })}
       </nav>
 
-      <div className="p-4 border-t border-slate-200">
+      <div className="p-4 border-t border-slate-800">
         <div className="flex items-center space-x-3 mb-4 px-1">
-          <img src={currentUser.avatar} alt="Avatar" className="w-8 h-8 rounded-full border border-slate-200 shadow-sm" />
+          <img src={currentUser.avatar} alt="Avatar" className="w-8 h-8 rounded-full border border-slate-600 shadow-sm" />
           <div className="overflow-hidden">
-            <p className="text-sm font-semibold text-slate-800 truncate">{currentUser.name}</p>
+            <p className="text-sm font-semibold text-slate-200 truncate">{currentUser.name}</p>
             <p className="text-xs text-slate-500 truncate" title={currentUser.role}>{currentUser.role}</p>
           </div>
         </div>
         <button 
           onClick={onLogout}
-          className="w-full flex items-center justify-center space-x-2 p-2 rounded-lg border border-slate-200 hover:bg-red-50 hover:text-urgent hover:border-red-100 text-xs text-slate-600 transition-all font-medium"
+          className="w-full flex items-center justify-center space-x-2 p-2 rounded-lg border border-slate-700 hover:bg-red-900/20 hover:text-red-400 hover:border-red-900/30 text-xs text-slate-400 transition-all font-medium"
         >
           <LogOut size={14} />
           <span>Déconnexion</span>
@@ -83,9 +83,9 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, currentView, onN
   );
 
   return (
-    <div className="flex h-screen bg-white overflow-hidden font-sans text-slate-900">
-      {/* Desktop Sidebar */}
-      <aside className="w-64 bg-slate-50 border-r border-slate-200 hidden md:flex flex-col transition-all duration-300 ease-in-out z-20">
+    <div className="flex h-screen bg-[#0f172a] overflow-hidden font-sans text-slate-900">
+      {/* Desktop Sidebar - DARK THEME */}
+      <aside className="w-64 bg-[#0f172a] border-r border-slate-800 hidden md:flex flex-col transition-all duration-300 ease-in-out z-20 shadow-xl">
         <SidebarContent />
       </aside>
 
@@ -93,24 +93,24 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, currentView, onN
       {isMobileMenuOpen && (
         <div className="fixed inset-0 z-50 flex md:hidden">
            <div 
-              className="absolute inset-0 bg-black/30 backdrop-blur-sm animate-in fade-in duration-300" 
+              className="absolute inset-0 bg-black/50 backdrop-blur-sm animate-in fade-in duration-300" 
               onClick={() => setIsMobileMenuOpen(false)}
            ></div>
-           <aside className="relative w-64 bg-slate-50 h-full shadow-2xl animate-in slide-in-from-left duration-300 flex flex-col">
+           <aside className="relative w-64 bg-[#0f172a] h-full shadow-2xl animate-in slide-in-from-left duration-300 flex flex-col border-r border-slate-800">
              <SidebarContent />
            </aside>
         </div>
       )}
 
       {/* Mobile Header & Main Content */}
-      <div className="flex-1 flex flex-col h-screen overflow-hidden bg-[#F3F4F6]">
+      <div className="flex-1 flex flex-col h-screen overflow-hidden bg-[#e2e8f0]">
         {/* Mobile Header */}
-        <header className="md:hidden bg-white border-b border-slate-200 p-4 flex justify-between items-center z-10 shadow-sm sticky top-0">
-          <button onClick={() => setIsMobileMenuOpen(true)} className="text-slate-500 hover:text-primary transition-colors p-1">
+        <header className="md:hidden bg-[#0f172a] border-b border-slate-800 p-4 flex justify-between items-center z-10 shadow-sm sticky top-0">
+          <button onClick={() => setIsMobileMenuOpen(true)} className="text-slate-400 hover:text-white transition-colors p-1">
              <Menu size={24} />
           </button>
-          <span className="font-bold text-secondary text-lg">
-            <span className="text-primary">i</span>VISION AGENCY
+          <span className="font-bold text-white text-lg">
+            <span className="text-primary">i</span>VISION
           </span>
           <div className="w-6"></div> {/* Spacer for centering logo roughly */}
         </header>
