@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
-import { LogIn, Lock, Mail, UserPlus, ArrowLeft, User as UserIcon, Loader2, AlertCircle } from 'lucide-react';
+import { LogIn, Lock, Mail, UserPlus, ArrowLeft, User as UserIcon, Loader2, AlertCircle, Info } from 'lucide-react';
 import { supabase, isConfigured } from './services/supabaseClient';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
@@ -88,6 +87,10 @@ const App: React.FC = () => {
 
   const fetchUserProfile = async (userId: string) => {
     setIsLoading(true);
+    
+    // Wait slightly in case the SQL Trigger is still running the merge
+    await new Promise(r => setTimeout(r, 500));
+
     const { data, error } = await supabase
       .from('users')
       .select('*')
@@ -96,8 +99,8 @@ const App: React.FC = () => {
 
     if (error) {
       console.error("Error fetching profile:", error);
+      // Fallback if profile not found (rare if trigger works)
     } else if (data) {
-      // Map DB snake_case to TS camelCase
       const user: User = {
         id: data.id,
         name: data.name,
@@ -115,7 +118,6 @@ const App: React.FC = () => {
 
   const fetchInitialData = async () => {
     try {
-        // 1. Fetch Users
         const { data: usersData } = await supabase.from('users').select('*');
         if (usersData) {
             setUsers(usersData.map(u => ({
@@ -130,13 +132,9 @@ const App: React.FC = () => {
             })));
         }
 
-        // 2. Fetch Tasks
         const { data: tasksData } = await supabase.from('tasks').select('*');
         if (tasksData) {
-            // Need to fetch comments separately or via join, for simplicity fetching basic task data first
-            // And Assuming we handle comments via a separate fetch or real-time later
             const mappedTasks: Task[] = await Promise.all(tasksData.map(async (t) => {
-                // Fetch comments for this task
                 const { data: commentsData } = await supabase.from('task_comments').select('*').eq('task_id', t.id);
                 const comments = commentsData ? commentsData.map(c => ({
                     id: c.id,
@@ -145,7 +143,6 @@ const App: React.FC = () => {
                     timestamp: new Date(c.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
                 })) : [];
 
-                // Fetch attachments
                 const { data: attachmentsData } = await supabase.from('task_attachments').select('*').eq('task_id', t.id);
                 const attachments = attachmentsData ? attachmentsData.map(a => a.file_name) : [];
 
@@ -166,7 +163,6 @@ const App: React.FC = () => {
             setTasks(mappedTasks);
         }
 
-        // 3. Fetch Channels
         const { data: channelsData } = await supabase.from('channels').select('*');
         if (channelsData) {
             setChannels(channelsData.map(c => ({
@@ -177,7 +173,6 @@ const App: React.FC = () => {
             })));
         }
 
-        // 4. Fetch Messages (All for now, or filtered by channel later)
         const { data: msgData } = await supabase.from('messages').select('*').order('created_at', { ascending: true });
         if (msgData) {
             setMessages(msgData.map(m => ({
@@ -210,7 +205,6 @@ const App: React.FC = () => {
         addNotification('Erreur de connexion', error.message, 'urgent');
         setIsLoading(false);
     } else {
-        // Session check useEffect will handle the rest
         addNotification('Bienvenue', 'Connexion réussie.', 'success');
     }
   };
@@ -225,9 +219,16 @@ const App: React.FC = () => {
     setIsLoading(true);
 
     // 1. Sign up in Supabase Auth
+    // IMPORTANT: We pass metadata so the SQL Trigger can use it to create/update the public profile
     const { data: authData, error: authError } = await supabase.auth.signUp({
         email: email,
         password: password,
+        options: {
+            data: {
+                name: registerName,
+                avatar: `https://ui-avatars.com/api/?name=${registerName.replace(' ', '+')}&background=random`
+            }
+        }
     });
 
     if (authError) {
@@ -237,29 +238,19 @@ const App: React.FC = () => {
     }
 
     if (authData.user) {
-        // 2. Create profile in public.users table
-        const newUserProfile = {
-            id: authData.user.id, // Important: match Auth ID
-            name: registerName,
-            email: email,
-            role: UserRole.MEMBER,
-            status: 'pending',
-            avatar: `https://ui-avatars.com/api/?name=${registerName.replace(' ', '+')}&background=random`,
-            phone_number: registerPhone,
-            notification_pref: 'all'
-        };
-
-        const { error: dbError } = await supabase.from('users').insert([newUserProfile]);
-
-        if (dbError) {
-            console.error(dbError);
-            addNotification('Attention', 'Compte créé mais erreur lors de la création du profil.', 'urgent');
+        // We rely on the SQL TRIGGER to create or update the public.users table.
+        // This avoids the "duplicate key" error if the user already exists (demo account).
+        
+        // Check if session is active (sometimes require email confirmation)
+        if (authData.session) {
+             addNotification('Compte créé', 'Vous êtes connecté.', 'success');
         } else {
-            addNotification('Inscription réussie', 'Votre compte est en attente de validation.', 'success');
-            setIsRegistering(false);
+             addNotification('Vérifiez vos emails', 'Un lien de confirmation a peut-être été envoyé.', 'info');
+             setIsLoading(false);
         }
+    } else {
+        setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   const handleLogout = async () => {
@@ -272,22 +263,12 @@ const App: React.FC = () => {
   // --- TASK ACTIONS ---
 
   const handleUpdateTaskStatus = async (taskId: string, newStatus: TaskStatus) => {
-    // Optimistic UI Update
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
-    
-    const { error } = await supabase
-        .from('tasks')
-        .update({ status: newStatus })
-        .eq('id', taskId);
-        
-    if (error) {
-        addNotification('Erreur', 'Impossible de mettre à jour le statut.', 'urgent');
-        fetchInitialData(); // Revert
-    }
+    const { error } = await supabase.from('tasks').update({ status: newStatus }).eq('id', taskId); 
+    if (error) { addNotification('Erreur', 'Impossible de mettre à jour le statut.', 'urgent'); fetchInitialData(); }
   };
   
   const handleUpdateTask = async (updatedTask: Task) => {
-    // Handle basic fields
     const { error } = await supabase.from('tasks').update({
         title: updatedTask.title,
         description: updatedTask.description,
@@ -297,22 +278,13 @@ const App: React.FC = () => {
         type: updatedTask.type,
         price: updatedTask.price
     }).eq('id', updatedTask.id);
-
-    if (error) {
-        addNotification('Erreur', 'Mise à jour échouée.', 'urgent');
-        return;
-    }
-
-    // Handle Comments (New ones only? Simplified: Just refresh UI for now or implement proper comment insert logic in Tasks.tsx)
-    // For this scope, we assume Tasks.tsx calls this with the full object. 
-    // Since comments are separate table, we usually insert them separately.
-    // Let's refresh the local state to match.
+    if (error) { addNotification('Erreur', 'Mise à jour échouée.', 'urgent'); return; }
     setTasks(prev => prev.map(t => t.id === updatedTask.id ? updatedTask : t));
   };
 
   const handleAddTask = async (newTask: Task) => {
       const dbTask = {
-          id: crypto.randomUUID(), // Generate ID here or let DB do it (if auto-gen)
+          id: crypto.randomUUID(),
           title: newTask.title,
           description: newTask.description,
           assignee_id: newTask.assigneeId,
@@ -322,106 +294,47 @@ const App: React.FC = () => {
           priority: newTask.priority,
           price: newTask.price
       };
-
       const { error } = await supabase.from('tasks').insert([dbTask]);
-
-      if (error) {
-          console.error(error);
-          addNotification('Erreur', 'Impossible de créer la tâche.', 'urgent');
-      } else {
-          // Add to local state with the new ID (mapped back)
+      if (error) { console.error(error); addNotification('Erreur', 'Impossible de créer la tâche.', 'urgent'); } 
+      else { 
           const addedTask = { ...newTask, id: dbTask.id };
           setTasks(prev => [...prev, addedTask]);
           addNotification('Succès', 'Tâche créée avec succès.', 'success');
       }
   };
 
-  // --- CHAT ACTIONS ---
+  // --- CHAT & TEAM ACTIONS ---
 
   const handleSendMessage = async (text: string, channelId: string) => {
       if (!currentUser) return;
-      
       const newMessageId = crypto.randomUUID();
-      const dbMessage = {
-          id: newMessageId,
-          channel_id: channelId,
-          user_id: currentUser.id,
-          content: text
-      };
-
-      // Optimistic Update
-      const displayMessage: Message = {
-          id: newMessageId,
-          userId: currentUser.id,
-          channelId,
-          content: text,
-          timestamp: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
-      };
+      const dbMessage = { id: newMessageId, channel_id: channelId, user_id: currentUser.id, content: text };
+      const displayMessage: Message = { id: newMessageId, userId: currentUser.id, channelId, content: text, timestamp: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) };
       setMessages(prev => [...prev, displayMessage]);
-
       const { error } = await supabase.from('messages').insert([dbMessage]);
-      
-      if (error) {
-          console.error(error);
-          addNotification('Erreur', 'Message non envoyé.', 'urgent');
-      }
+      if (error) { console.error(error); addNotification('Erreur', 'Message non envoyé.', 'urgent'); }
   };
 
-  // --- TEAM ACTIONS ---
-
-  const handleAddUser = async (newUser: User) => {
-      // In a real app, this would trigger a cloud function to create an Auth user.
-      // Here, we simulate by just adding to the DB, but they won't be able to login without Auth.
-      // We'll prompt the Admin that this is a DB entry only.
-      addNotification('Info', "L'utilisateur doit s'inscrire lui-même via la page de connexion pour activer l'authentification.", 'info');
-  };
-
+  const handleAddUser = async (newUser: User) => { addNotification('Info', "L'utilisateur doit s'inscrire lui-même pour activer l'authentification.", 'info'); };
   const handleRemoveUser = async (userId: string) => {
       const { error } = await supabase.from('users').delete().eq('id', userId);
-      if (!error) {
-        setUsers(users.filter(u => u.id !== userId));
-        addNotification('Succès', 'Utilisateur supprimé.', 'success');
-      }
+      if (!error) { setUsers(users.filter(u => u.id !== userId)); addNotification('Succès', 'Utilisateur supprimé.', 'success'); }
   };
-
   const handleUpdateProfile = async (updatedData: Partial<User>) => {
     if (!currentUser) return;
-    
-    const { error } = await supabase.from('users').update({
-        name: updatedData.name,
-        email: updatedData.email,
-        phone_number: updatedData.phoneNumber,
-        avatar: updatedData.avatar
-    }).eq('id', currentUser.id);
-
-    if (!error) {
-        setCurrentUser({ ...currentUser, ...updatedData });
-        addNotification("Profil mis à jour", "Vos modifications ont été enregistrées.", 'success');
-    }
+    const { error } = await supabase.from('users').update({ name: updatedData.name, email: updatedData.email, phone_number: updatedData.phoneNumber, avatar: updatedData.avatar }).eq('id', currentUser.id);
+    if (!error) { setCurrentUser({ ...currentUser, ...updatedData }); addNotification("Profil mis à jour", "Vos modifications ont été enregistrées.", 'success'); }
   };
-  
   const handleApproveUser = async (userId: string) => {
       const { error } = await supabase.from('users').update({ status: 'active' }).eq('id', userId);
-      if (!error) {
-          setUsers(users.map(u => u.id === userId ? { ...u, status: 'active' } : u));
-          addNotification('Succès', 'Compte validé.', 'success');
-      }
+      if (!error) { setUsers(users.map(u => u.id === userId ? { ...u, status: 'active' } : u)); addNotification('Succès', 'Compte validé.', 'success'); }
   };
-  
   const handleUpdateMember = async (userId: string, updatedData: Partial<User>) => {
-      const { error } = await supabase.from('users').update({
-          role: updatedData.role,
-          name: updatedData.name,
-          email: updatedData.email
-      }).eq('id', userId);
-      
-      if(!error) {
-           setUsers(users.map(u => u.id === userId ? { ...u, ...updatedData } : u));
-           addNotification('Compte modifié', 'Les informations ont été mises à jour.', 'success');
-      }
+      const { error } = await supabase.from('users').update({ role: updatedData.role, name: updatedData.name, email: updatedData.email }).eq('id', userId);
+      if(!error) { setUsers(users.map(u => u.id === userId ? { ...u, ...updatedData } : u)); addNotification('Compte modifié', 'Les informations ont été mises à jour.', 'success'); }
   };
 
-  // --- CONFIGURATION CHECK ---
+  // --- CONFIG CHECK ---
   if (!isConfigured) {
       return (
         <div className="h-screen w-screen flex items-center justify-center bg-slate-50 flex-col p-4 text-center">
@@ -430,26 +343,8 @@ const App: React.FC = () => {
                <AlertCircle size={32} />
             </div>
             <h1 className="text-2xl font-bold text-slate-900 mb-3">Configuration Requise</h1>
-            <p className="text-slate-600 mb-6">
-              Pour utiliser iVISION, vous devez connecter votre base de données Supabase.
-            </p>
-            
-            <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 text-left text-sm space-y-3 mb-6">
-              <p className="font-semibold text-slate-800">Étapes à suivre :</p>
-              <ol className="list-decimal pl-5 space-y-2 text-slate-600">
-                <li>Créez un projet sur <a href="https://supabase.com" target="_blank" className="text-primary hover:underline">supabase.com</a></li>
-                <li>Récupérez votre <strong>Project URL</strong> et <strong>Anon Key</strong></li>
-                <li>Ouvrez le fichier <code>services/supabaseClient.ts</code></li>
-                <li>Remplacez les valeurs par défaut par vos clés</li>
-              </ol>
-            </div>
-            
-            <button 
-              onClick={() => window.location.reload()}
-              className="w-full bg-primary hover:bg-blue-700 text-white font-medium py-3 rounded-lg transition-all"
-            >
-              J'ai mis à jour le fichier, recharger
-            </button>
+            <p className="text-slate-600 mb-6">Pour utiliser iVISION, vous devez connecter votre base de données Supabase.</p>
+            <button onClick={() => window.location.reload()} className="w-full bg-primary hover:bg-blue-700 text-white font-medium py-3 rounded-lg transition-all">Recharger</button>
           </div>
         </div>
       );
@@ -460,7 +355,7 @@ const App: React.FC = () => {
       return (
         <div className="h-screen w-screen flex items-center justify-center bg-slate-50 flex-col">
             <Loader2 size={48} className="text-primary animate-spin mb-4" />
-            <p className="text-slate-500 font-medium">Connexion à iVISION...</p>
+            <p className="text-slate-500 font-medium">Chargement iVISION...</p>
         </div>
       );
   }
@@ -471,124 +366,77 @@ const App: React.FC = () => {
       <div className="min-h-[100dvh] bg-slate-50 flex items-center justify-center p-4 overflow-y-auto">
         <ToastContainer notifications={notifications} onDismiss={removeNotification} />
         
-        <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full border border-slate-200">
+        <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full border border-slate-200 relative overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-1.5 bg-primary"></div>
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold text-slate-900 mb-2 tracking-tight">
               <span className="text-primary">i</span>VISION AGENCY
             </h1>
-            <p className="text-slate-500">{isRegistering ? "Créer un nouveau compte" : "Connexion Supabase"}</p>
+            <p className="text-slate-500">{isRegistering ? "Créer un nouveau compte" : "Connexion Espace de Travail"}</p>
           </div>
           
+          {/* IMPORTANT INFO BOX FOR DEMO USERS */}
+          <div className="mb-6 bg-blue-50 p-4 rounded-lg border border-blue-100 flex items-start space-x-3">
+              <Info size={20} className="text-primary flex-shrink-0 mt-0.5" />
+              <div className="text-sm text-slate-700">
+                  <p className="font-bold text-primary mb-1">Compte Démo Existant ?</p>
+                  <p>Si vous voulez utiliser le compte <strong>admin@ivision.com</strong>, vous devez cliquer sur <strong>"Créer un compte"</strong> avec cet email pour activer l'accès.</p>
+              </div>
+          </div>
+
           {isRegistering ? (
-            <form onSubmit={handleRegister} className="space-y-5">
+            <form onSubmit={handleRegister} className="space-y-5 animate-in slide-in-from-right duration-300">
                <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Nom complet</label>
                   <div className="relative group">
                     <UserIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} />
-                    <input 
-                      type="text" 
-                      value={registerName}
-                      onChange={(e) => setRegisterName(e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 bg-white text-slate-900 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary outline-none transition-all"
-                      placeholder="Jean Dupont"
-                      required
-                    />
+                    <input type="text" value={registerName} onChange={(e) => setRegisterName(e.target.value)} className="w-full pl-10 pr-4 py-3 bg-white text-slate-900 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary outline-none transition-all" placeholder="Jean Dupont" required />
                   </div>
                </div>
                <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Email professionnel</label>
                   <div className="relative group">
                     <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} />
-                    <input 
-                      type="email" 
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 bg-white text-slate-900 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary outline-none transition-all"
-                      placeholder="nom@ivision.com"
-                      required
-                    />
+                    <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full pl-10 pr-4 py-3 bg-white text-slate-900 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary outline-none transition-all" placeholder="nom@ivision.com" required />
                   </div>
                </div>
                <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Mot de passe</label>
                   <div className="relative group">
                     <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} />
-                    <input 
-                      type="password" 
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 bg-white text-slate-900 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary outline-none transition-all"
-                      placeholder="Créer un mot de passe"
-                      required
-                    />
+                    <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full pl-10 pr-4 py-3 bg-white text-slate-900 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary outline-none transition-all" placeholder="Créer un mot de passe" required />
                   </div>
                </div>
                
-               <button 
-                  type="submit"
-                  className="w-full bg-primary hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-all flex items-center justify-center space-x-2"
-                >
-                  <UserPlus size={18} />
-                  <span>S'inscrire</span>
+               <button type="submit" className="w-full bg-primary hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-all flex items-center justify-center space-x-2 shadow-lg shadow-primary/20">
+                  <UserPlus size={18} /> <span>S'inscrire & Lier le compte</span>
                 </button>
-
-                <button 
-                  type="button"
-                  onClick={() => setIsRegistering(false)}
-                  className="w-full text-slate-500 text-sm font-medium hover:text-slate-800 py-2 flex items-center justify-center"
-                >
+                <button type="button" onClick={() => setIsRegistering(false)} className="w-full text-slate-500 text-sm font-medium hover:text-slate-800 py-2 flex items-center justify-center">
                   <ArrowLeft size={14} className="mr-2" /> Retour à la connexion
                 </button>
             </form>
           ) : (
-            <form onSubmit={handleLogin} className="space-y-6">
+            <form onSubmit={handleLogin} className="space-y-6 animate-in slide-in-from-left duration-300">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Email professionnel</label>
                 <div className="relative group">
                   <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} />
-                  <input 
-                    type="email" 
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 bg-white text-slate-900 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary outline-none"
-                    placeholder="nom@ivision.com"
-                    required
-                  />
+                  <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full pl-10 pr-4 py-3 bg-white text-slate-900 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary outline-none" placeholder="nom@ivision.com" required />
                 </div>
               </div>
-              
               <div>
-                <div className="flex justify-between items-center mb-1">
-                  <label className="block text-sm font-medium text-slate-700">Mot de passe</label>
-                </div>
+                <div className="flex justify-between items-center mb-1"><label className="block text-sm font-medium text-slate-700">Mot de passe</label></div>
                 <div className="relative group">
                   <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} />
-                  <input 
-                    type="password" 
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 bg-white text-slate-900 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary outline-none"
-                    placeholder="••••••••"
-                  />
+                  <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full pl-10 pr-4 py-3 bg-white text-slate-900 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary outline-none" placeholder="••••••••" />
                 </div>
               </div>
-
               <div className="flex flex-col space-y-3">
-                <button 
-                  type="submit"
-                  className="w-full bg-primary hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-all flex items-center justify-center space-x-2"
-                >
-                  <LogIn size={18} />
-                  <span>Connexion</span>
+                <button type="submit" className="w-full bg-primary hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-all flex items-center justify-center space-x-2 shadow-lg shadow-primary/20">
+                  <LogIn size={18} /> <span>Connexion</span>
                 </button>
-                
-                <button 
-                  type="button"
-                  onClick={() => setIsRegistering(true)}
-                  className="w-full bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-medium py-2.5 rounded-lg transition-all flex items-center justify-center space-x-2"
-                >
-                  <UserPlus size={18} />
-                  <span>Créer un compte</span>
+                <button type="button" onClick={() => setIsRegistering(true)} className="w-full bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-medium py-2.5 rounded-lg transition-all flex items-center justify-center space-x-2">
+                  <UserPlus size={18} /> <span>Créer un compte</span>
                 </button>
               </div>
             </form>
@@ -599,71 +447,15 @@ const App: React.FC = () => {
   }
 
   return (
-    <Layout 
-      currentUser={currentUser} 
-      currentView={currentView} 
-      onNavigate={setCurrentView}
-      onLogout={handleLogout}
-    >
+    <Layout currentUser={currentUser} currentView={currentView} onNavigate={setCurrentView} onLogout={handleLogout}>
       <ToastContainer notifications={notifications} onDismiss={removeNotification} />
-      
-      {currentView === 'dashboard' && (
-        <Dashboard 
-          currentUser={currentUser} 
-          tasks={tasks}
-          onNavigate={setCurrentView}
-        />
-      )}
-      {currentView === 'reports' && (
-        <Reports 
-          currentUser={currentUser} 
-          tasks={tasks}
-          users={users}
-        />
-      )}
-      {currentView === 'tasks' && (
-        <Tasks 
-            tasks={tasks} 
-            users={users.filter(u => u.status === 'active')} 
-            currentUser={currentUser}
-            onUpdateStatus={handleUpdateTaskStatus}
-            onAddTask={handleAddTask}
-            onUpdateTask={handleUpdateTask}
-        />
-      )}
-      {currentView === 'chat' && (
-        <Chat 
-            currentUser={currentUser} 
-            users={users.filter(u => u.status === 'active')} 
-            channels={channels.length > 0 ? channels : [{ id: 'general', name: 'Général', type: 'global' }]}
-            currentChannelId={currentChannelId}
-            messages={messages}
-            onChannelChange={setCurrentChannelId}
-            onSendMessage={handleSendMessage}
-        />
-      )}
-      {currentView === 'files' && currentUser && (
-        <Files tasks={tasks} messages={messages} currentUser={currentUser} />
-      )}
-      {currentView === 'team' && (
-        <Team 
-            currentUser={currentUser} 
-            users={users} 
-            tasks={tasks}
-            activities={[]} // Activity logs could be implemented via a separate table
-            onAddUser={handleAddUser}
-            onRemoveUser={handleRemoveUser}
-            onUpdateRole={(userId, role) => handleUpdateMember(userId, { role })}
-            onApproveUser={handleApproveUser}
-            onUpdateMember={handleUpdateMember}
-        />
-      )}
-      {currentView === 'settings' && (
-        <Settings 
-          currentUser={currentUser}
-          onUpdateProfile={handleUpdateProfile}
-        />
-      )}
+      {currentView === 'dashboard' && <Dashboard currentUser={currentUser} tasks={tasks} onNavigate={setCurrentView} />}
+      {currentView === 'reports' && <Reports currentUser={currentUser} tasks={tasks} users={users} />}
+      {currentView === 'tasks' && <Tasks tasks={tasks} users={users.filter(u => u.status === 'active')} currentUser={currentUser} onUpdateStatus={handleUpdateTaskStatus} onAddTask={handleAddTask} onUpdateTask={handleUpdateTask} />}
+      {currentView === 'chat' && <Chat currentUser={currentUser} users={users.filter(u => u.status === 'active')} channels={channels.length > 0 ? channels : [{ id: 'general', name: 'Général', type: 'global' }]} currentChannelId={currentChannelId} messages={messages} onChannelChange={setCurrentChannelId} onSendMessage={handleSendMessage} />}
+      {currentView === 'files' && currentUser && <Files tasks={tasks} messages={messages} currentUser={currentUser} />}
+      {currentView === 'team' && <Team currentUser={currentUser} users={users} tasks={tasks} activities={[]} onAddUser={handleAddUser} onRemoveUser={handleRemoveUser} onUpdateRole={(userId, role) => handleUpdateMember(userId, { role })} onApproveUser={handleApproveUser} onUpdateMember={handleUpdateMember} />}
+      {currentView === 'settings' && <Settings currentUser={currentUser} onUpdateProfile={handleUpdateProfile} />}
     </Layout>
   );
 };
