@@ -145,8 +145,8 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
       const columnTasks = visibleTasks.filter(t => t.status === status);
       
       return (
-          <div className="flex-1 min-w-[280px] bg-slate-50 rounded-xl p-4 border border-slate-200 flex flex-col">
-              <div className="flex justify-between items-center mb-4">
+          <div className="flex-1 min-w-[280px] bg-slate-50 rounded-xl p-4 border border-slate-200 flex flex-col h-full">
+              <div className="flex justify-between items-center mb-4 shrink-0">
                   <h3 className="font-bold text-slate-700 text-sm uppercase tracking-wide flex items-center space-x-2">
                     <span className={`w-2 h-2 rounded-full ${
                         status === TaskStatus.DONE ? 'bg-success' : 
@@ -189,14 +189,14 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
   return (
     <div className="h-[calc(100vh-100px)] flex flex-col">
       {/* Toolbar */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 shrink-0">
         <div>
             <h2 className="text-2xl font-bold text-slate-900">Tâches</h2>
             <p className="text-slate-500 text-sm">
                 {currentUser.role === UserRole.ADMIN ? 'Vue globale des tâches de l\'agence' : 'Mes tâches assignées'}
             </p>
         </div>
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-3 w-full md:w-auto justify-between md:justify-end">
             <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
                 <button 
                     onClick={() => setViewMode('board')}
@@ -227,7 +227,7 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
 
       {/* Board View */}
       {viewMode === 'board' && (
-          <div className="flex-1 overflow-x-auto pb-4">
+          <div className="flex-1 overflow-x-auto pb-4 min-h-0">
               <div className="flex space-x-4 min-w-[1000px] h-full">
                   {renderBoardColumn(TaskStatus.TODO)}
                   {renderBoardColumn(TaskStatus.IN_PROGRESS)}
@@ -239,7 +239,7 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
 
       {/* Calendar View (Weekly) */}
       {viewMode === 'calendar' && (
-          <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col animate-in fade-in duration-300">
+          <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col animate-in fade-in duration-300 min-h-0">
               <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50">
                   {getCalendarDays().map((day, i) => (
                       <div key={i} className="p-3 text-center border-r border-slate-200 last:border-r-0">
@@ -255,7 +255,7 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                        const dayString = day.toISOString().split('T')[0];
                        const dayTasks = visibleTasks.filter(t => t.dueDate === dayString);
                        return (
-                           <div key={i} className="p-2 space-y-2 min-h-[200px]">
+                           <div key={i} className="p-2 space-y-2 min-h-[100px]">
                                {dayTasks.map(task => (
                                    <div 
                                     key={task.id} 
@@ -280,7 +280,7 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
       {showModal && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
               <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
-                  <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+                  <div className="p-6 border-b border-slate-100 flex justify-between items-center shrink-0">
                       <h3 className="text-xl font-bold text-slate-900">Créer une nouvelle tâche</h3>
                       <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600"><X size={24}/></button>
                   </div>
@@ -313,7 +313,7 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                                   <input 
                                     type="date" 
                                     required
-                                    className="w-full p-2.5 bg-slate-100 text-black border-transparent rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all"
+                                    className="w-full p-2.5 bg-slate-100 text-black border-transparent rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all accent-primary"
                                     value={newTask.dueDate}
                                     onChange={e => setNewTask({...newTask, dueDate: e.target.value})}
                                   />
@@ -402,7 +402,7 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                           </div>
                       </form>
                   </div>
-                  <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end space-x-3">
+                  <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end space-x-3 shrink-0">
                       <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 text-slate-600 hover:bg-white rounded-lg transition-colors">Annuler</button>
                       <button type="submit" form="createTaskForm" className="px-6 py-2 bg-primary text-white rounded-lg font-medium hover:bg-blue-700 shadow-md transition-colors">Créer la tâche</button>
                   </div>
@@ -459,7 +459,7 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
 
                        <div className="mt-8">
                            <h4 className="text-sm font-bold text-slate-900 mb-2">Statut</h4>
-                           <div className="flex space-x-2">
+                           <div className="flex space-x-2 flex-wrap gap-2">
                                {Object.values(TaskStatus).map(status => (
                                    <button
                                     key={status}
@@ -478,8 +478,8 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                   </div>
 
                   {/* Right: Chat & Activity */}
-                  <div className="w-full md:w-96 bg-slate-50 flex flex-col">
-                       <div className="p-4 border-b border-slate-200 bg-white flex justify-between items-center md:block">
+                  <div className="w-full md:w-96 bg-slate-50 flex flex-col h-full">
+                       <div className="p-4 border-b border-slate-200 bg-white flex justify-between items-center shrink-0">
                            <h3 className="font-bold text-slate-800">Commentaires</h3>
                            <button onClick={() => setSelectedTask(null)} className="text-slate-400 hover:text-slate-600 hidden md:block float-right"><X size={20}/></button>
                        </div>
@@ -505,7 +505,7 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                            )}
                        </div>
 
-                       <div className="p-4 bg-white border-t border-slate-200">
+                       <div className="p-4 bg-white border-t border-slate-200 shrink-0">
                            <div className="flex items-center space-x-2">
                                <input 
                                  type="text" 

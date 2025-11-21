@@ -94,7 +94,7 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
   );
 
   return (
-    <div className="flex h-[calc(100vh-100px)] bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden relative">
+    <div className="flex flex-col md:flex-row h-[calc(100vh-100px)] bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden relative">
       {/* Channels Sidebar (Desktop) */}
       <div className="w-64 bg-slate-50 border-r border-slate-200 flex flex-col hidden md:flex">
         <div className="p-5 border-b border-slate-200 flex justify-between items-center">
@@ -114,7 +114,7 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
       {/* Channels Sidebar (Mobile Drawer) */}
       {showMobileSidebar && (
           <div className="absolute inset-0 z-30 flex md:hidden">
-              <div className="w-64 bg-slate-50 border-r border-slate-200 flex flex-col h-full shadow-2xl animate-in slide-in-from-left duration-300">
+              <div className="w-64 bg-slate-50 border-r border-slate-200 flex flex-col h-full shadow-2xl animate-in slide-in-from-left duration-300 z-40">
                   <div className="p-5 border-b border-slate-200 flex justify-between items-center bg-slate-50">
                     <h2 className="font-bold text-slate-900 text-lg">Discussions</h2>
                     <button onClick={() => setShowMobileSidebar(false)} className="text-slate-500"><X size={20}/></button>
@@ -123,14 +123,14 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
                       <ChannelList />
                   </div>
               </div>
-              <div className="flex-1 bg-black/20 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setShowMobileSidebar(false)}></div>
+              <div className="absolute inset-0 bg-black/20 backdrop-blur-sm animate-in fade-in duration-300 z-30" onClick={() => setShowMobileSidebar(false)}></div>
           </div>
       )}
 
       {/* Chat Area */}
-      <div className="flex-1 flex flex-col min-w-0 bg-white">
+      <div className="flex-1 flex flex-col min-w-0 bg-white h-full">
         {/* Chat Header */}
-        <div className="p-4 border-b border-slate-200 flex justify-between items-center bg-white z-10">
+        <div className="p-4 border-b border-slate-200 flex justify-between items-center bg-white z-20 shrink-0">
             <div className="flex items-center">
                 <button onClick={() => setShowMobileSidebar(true)} className="mr-3 md:hidden text-slate-500 p-1 hover:bg-slate-100 rounded">
                     <Menu size={20} />
@@ -138,11 +138,11 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
                 <span className="text-slate-400 mr-3 p-2 bg-slate-50 rounded-full border border-slate-100">
                     {activeChannel?.type === 'project' ? <Lock size={18}/> : <Hash size={18}/>}
                 </span>
-                <div>
-                    <h2 className="font-bold text-slate-900">{activeChannel?.name}</h2>
+                <div className="overflow-hidden">
+                    <h2 className="font-bold text-slate-900 truncate max-w-[150px] sm:max-w-md">{activeChannel?.name}</h2>
                     <p className="text-xs text-slate-500 flex items-center">
                         <span className="w-1.5 h-1.5 bg-success rounded-full mr-1.5"></span>
-                        {users.length} membres actifs
+                        {users.length} membres
                     </p>
                 </div>
             </div>
@@ -151,10 +151,6 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
                     <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
                     <input type="text" placeholder="Rechercher..." className="pl-9 pr-4 py-1.5 bg-slate-100 text-black border-transparent rounded-full text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary w-48 transition-all placeholder-slate-500" />
                 </div>
-                <button className="p-2 hover:bg-slate-100 rounded-full text-slate-400 transition-colors relative">
-                    <Bell size={18} />
-                    <span className="absolute top-2 right-2 w-2 h-2 bg-urgent rounded-full border-2 border-white animate-bounce"></span>
-                </button>
                 <div className="flex -space-x-2 pl-2">
                     {users.slice(0,3).map(u => (
                         <img key={u.id} src={u.avatar} className="w-8 h-8 rounded-full border-2 border-white" title={u.name} />
@@ -165,7 +161,7 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-white">
+        <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 bg-white">
             {activeMessages.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-slate-300">
                     <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
@@ -182,7 +178,7 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
                     
                     return (
                         <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'} group animate-in fade-in slide-in-from-bottom-2 duration-300`}>
-                          <div className={`flex max-w-[75%] ${isMe ? 'flex-row-reverse space-x-reverse' : 'flex-row space-x-3'}`}>
+                          <div className={`flex max-w-[85%] md:max-w-[75%] ${isMe ? 'flex-row-reverse space-x-reverse' : 'flex-row space-x-3'}`}>
                               {!isMe && !isSequence && (
                                 <img src={sender?.avatar} className="w-8 h-8 rounded-full mt-1 flex-shrink-0" title={sender?.name} />
                               )}
@@ -225,7 +221,7 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
         </div>
 
         {/* Input Area */}
-        <div className="p-4 bg-white border-t border-slate-200">
+        <div className="p-4 bg-white border-t border-slate-200 shrink-0">
             <div className="bg-slate-100 rounded-xl border border-transparent p-2 flex items-end shadow-inner focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary transition-all duration-200">
                 <button className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 rounded-lg transition-colors">
                     <Paperclip size={20} />
@@ -234,7 +230,7 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    placeholder={`Envoyer un message à #${activeChannel?.name}`}
+                    placeholder={`Envoyer un message...`}
                     className="flex-1 bg-transparent border-none focus:ring-0 text-sm text-black placeholder-slate-500 resize-none py-2.5 px-2 max-h-32"
                     rows={1}
                     style={{ minHeight: '44px' }}
