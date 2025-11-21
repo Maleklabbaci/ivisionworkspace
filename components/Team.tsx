@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { User, UserRole, ActivityLog, Task, TaskStatus } from '../types';
-import { MoreHorizontal, Mail, Shield, Trash2, UserPlus, History, Briefcase, Bell, Lock, X, CheckCircle, AlertCircle } from 'lucide-react';
+import { MoreHorizontal, Mail, Shield, Trash2, UserPlus, History, Briefcase, Bell, Lock, X, CheckCircle, AlertCircle, Edit2, Save } from 'lucide-react';
 
 interface TeamProps {
   currentUser: User;
@@ -11,13 +11,20 @@ interface TeamProps {
   onAddUser: (user: User) => void;
   onRemoveUser: (userId: string) => void;
   onUpdateRole: (userId: string, role: UserRole) => void;
-  onApproveUser: (userId: string) => void; // New prop for approving pending users
+  onApproveUser: (userId: string) => void;
+  onUpdateMember: (userId: string, updatedData: Partial<User>) => void;
 }
 
-const Team: React.FC<TeamProps> = ({ currentUser, users, tasks, activities, onAddUser, onRemoveUser, onUpdateRole, onApproveUser }) => {
+const Team: React.FC<TeamProps> = ({ currentUser, users, tasks, activities, onAddUser, onRemoveUser, onUpdateRole, onApproveUser, onUpdateMember }) => {
   const [showAddModal, setShowAddModal] = useState(false);
-  const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: UserRole.MEMBER, notificationPref: 'all' as 'push' | 'all' });
+  const [showEditModal, setShowEditModal] = useState(false);
   const [selectedMember, setSelectedMember] = useState<User | null>(null);
+  
+  // New User State
+  const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: UserRole.MEMBER, notificationPref: 'all' as 'push' | 'all' });
+  
+  // Edit User State
+  const [editUser, setEditUser] = useState<Partial<User>>({});
 
   // Access Guard
   if (currentUser.role !== UserRole.ADMIN) {
@@ -72,6 +79,20 @@ const Team: React.FC<TeamProps> = ({ currentUser, users, tasks, activities, onAd
       onAddUser(user);
       setShowAddModal(false);
       setNewUser({ name: '', email: '', password: '', role: UserRole.MEMBER, notificationPref: 'all' });
+  };
+
+  const handleEditClick = (user: User, e: React.MouseEvent) => {
+      e.stopPropagation();
+      setEditUser(user);
+      setShowEditModal(true);
+  };
+
+  const handleEditSubmit = (e: React.FormEvent) => {
+      e.preventDefault();
+      if (editUser.id) {
+          onUpdateMember(editUser.id, editUser);
+          setShowEditModal(false);
+      }
   };
 
   return (
@@ -162,7 +183,14 @@ const Team: React.FC<TeamProps> = ({ currentUser, users, tasks, activities, onAd
                                     </div>
                                 </div>
                                 {currentUser.id !== user.id && (
-                                    <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <div className="opacity-0 group-hover:opacity-100 transition-opacity flex space-x-1">
+                                        <button 
+                                            onClick={(e) => handleEditClick(user, e)}
+                                            className="p-2 text-slate-400 hover:text-primary hover:bg-blue-50 rounded transition-colors"
+                                            title="Modifier"
+                                        >
+                                            <Edit2 size={16} />
+                                        </button>
                                         <button 
                                             onClick={(e) => { e.stopPropagation(); onRemoveUser(user.id); }}
                                             className="p-2 text-slate-400 hover:text-urgent hover:bg-red-50 rounded transition-colors"
@@ -340,6 +368,69 @@ const Team: React.FC<TeamProps> = ({ currentUser, users, tasks, activities, onAd
                             className="flex-1 py-2.5 bg-primary text-white rounded-lg font-medium hover:bg-blue-700 shadow-md shadow-primary/20 transition-all transform hover:scale-[1.02] active:scale-95"
                           >
                               Envoyer l'invitation
+                          </button>
+                      </div>
+                  </form>
+              </div>
+          </div>
+      )}
+
+      {/* Edit User Modal */}
+      {showEditModal && editUser && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                  <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+                      <h3 className="text-lg font-bold text-slate-900">Modifier le membre</h3>
+                      <button onClick={() => setShowEditModal(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
+                  </div>
+                  <form onSubmit={handleEditSubmit} className="p-6 space-y-5">
+                      <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-1">Nom complet</label>
+                          <input 
+                            type="text" 
+                            value={editUser.name || ''}
+                            onChange={e => setEditUser({...editUser, name: e.target.value})}
+                            className="w-full p-2.5 bg-gray-200 text-black border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all font-medium"
+                          />
+                      </div>
+                      <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+                          <input 
+                            type="email" 
+                            value={editUser.email || ''}
+                            onChange={e => setEditUser({...editUser, email: e.target.value})}
+                            className="w-full p-2.5 bg-gray-200 text-black border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all font-medium"
+                          />
+                      </div>
+                      <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-1">Rôle</label>
+                          <select 
+                            value={editUser.role}
+                            onChange={e => setEditUser({...editUser, role: e.target.value as UserRole})}
+                            className="w-full p-2.5 bg-gray-200 text-black border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all font-medium"
+                          >
+                              <option value={UserRole.MEMBER}>Membre (Accès standard)</option>
+                              <option value={UserRole.ADMIN}>Admin (Accès complet)</option>
+                              <option value={UserRole.PROJECT_MANAGER}>Chef de Projet</option>
+                              <option value={UserRole.COMMUNITY_MANAGER}>Community Manager</option>
+                              <option value={UserRole.ANALYST}>Analyste Marketing</option>
+                          </select>
+                      </div>
+                      
+                      <div className="pt-4 flex space-x-3">
+                          <button 
+                            type="button"
+                            onClick={() => setShowEditModal(false)}
+                            className="flex-1 py-2.5 text-slate-600 hover:bg-slate-100 rounded-lg font-medium transition-colors"
+                          >
+                              Annuler
+                          </button>
+                          <button 
+                            type="submit"
+                            className="flex-1 py-2.5 bg-primary text-white rounded-lg font-medium hover:bg-blue-700 shadow-md shadow-primary/20 transition-all transform hover:scale-[1.02] active:scale-95 flex items-center justify-center"
+                          >
+                              <Save size={16} className="mr-2" />
+                              Sauvegarder
                           </button>
                       </div>
                   </form>

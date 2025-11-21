@@ -1,5 +1,6 @@
+
 import React, { useState } from 'react';
-import { Plus, Calendar as CalendarIcon, Clock, Sparkles, Filter, LayoutGrid, List, AlertCircle, Paperclip, Send, X, FileText, Trash2 } from 'lucide-react';
+import { Plus, Calendar as CalendarIcon, Clock, Sparkles, Filter, LayoutGrid, List, AlertCircle, Paperclip, Send, X, FileText, Trash2, DollarSign, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Task, TaskStatus, User, Comment, UserRole } from '../types';
 import { brainstormTaskIdeas } from '../services/geminiService';
 
@@ -22,6 +23,9 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
   const [isBrainstorming, setIsBrainstorming] = useState(false);
   const [taskComment, setTaskComment] = useState('');
   
+  // Calendar State
+  const [currentDate, setCurrentDate] = useState(new Date());
+  
   // New Task State
   const [newTask, setNewTask] = useState<Partial<Task>>({
     title: '',
@@ -30,30 +34,48 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
     dueDate: '',
     type: 'content',
     priority: 'medium',
-    attachments: []
+    attachments: [],
+    price: 0
   });
 
   // Filter tasks based on role
+  // ADMIN sees ALL tasks. MEMBERS see ONLY their assigned tasks.
   const visibleTasks = currentUser.role === UserRole.ADMIN 
     ? tasks 
     : tasks.filter(t => t.assigneeId === currentUser.id);
 
-  // Calendar Generation Logic (Fixed)
-  const getCalendarDays = () => {
-    const days = [];
-    const today = new Date();
-    const currentDay = today.getDay(); // 0 is Sunday
-    const distanceToMonday = currentDay === 0 ? -6 : 1 - currentDay;
-    const startOfWeek = new Date(today);
-    startOfWeek.setDate(today.getDate() + distanceToMonday);
-    
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(startOfWeek);
-      d.setDate(startOfWeek.getDate() + i);
-      days.push(d);
-    }
-    return days;
+  const handleTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+      const newType = e.target.value as any;
+      setNewTask({ 
+          ...newTask, 
+          type: newType
+      });
   };
+
+  // --- Calendar Logic ---
+  const nextMonth = () => {
+    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
+  };
+
+  const prevMonth = () => {
+    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
+  };
+
+  const goToToday = () => {
+    setCurrentDate(new Date());
+  };
+
+  const getDaysInMonth = (year: number, month: number) => {
+    return new Date(year, month + 1, 0).getDate();
+  };
+
+  const getFirstDayOfMonth = (year: number, month: number) => {
+    // 0 = Sunday, 1 = Monday...
+    const day = new Date(year, month, 1).getDay();
+    // Convert to Monday = 0, Sunday = 6
+    return day === 0 ? 6 : day - 1;
+  };
+  // -----------------------
 
   const handleBrainstorm = async () => {
     if (!brainstormTopic) return;
@@ -79,13 +101,14 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
           type: newTask.type as any,
           priority: newTask.priority as any,
           comments: [],
-          attachments: newTask.attachments || []
+          attachments: newTask.attachments || [],
+          price: newTask.price // Price defined by admin (or 0 if not set)
       };
 
       onAddTask(task);
       setShowModal(false);
       setNewTask({
-        title: '', description: '', assigneeId: currentUser.id, dueDate: '', type: 'content', priority: 'medium', attachments: []
+        title: '', description: '', assigneeId: currentUser.id, dueDate: '', type: 'content', priority: 'medium', attachments: [], price: 0
       });
       setBrainstormTopic('');
   };
@@ -139,6 +162,8 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
       switch(type) {
           case 'content': return 'bg-blue-100 text-blue-700'; // Blue for Content
           case 'ads': return 'bg-green-100 text-green-700'; // Green for Ads
+          case 'social': return 'bg-purple-100 text-purple-700';
+          case 'seo': return 'bg-yellow-100 text-yellow-700';
           default: return 'bg-slate-100 text-slate-600';
       }
   };
@@ -170,7 +195,18 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                               <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${getTypeColor(task.type)}`}>{task.type}</span>
                               {task.priority === 'high' && <AlertCircle size={14} className="text-urgent" />}
                           </div>
+                          
                           <h4 className="font-bold text-slate-800 mb-1 text-sm leading-snug group-hover:text-primary transition-colors">{task.title}</h4>
+                          
+                          {/* Admin Only: Price Badge */}
+                          {currentUser.role === UserRole.ADMIN && task.price && task.price > 0 && (
+                             <div className="mb-2">
+                               <span className="text-[10px] font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border border-slate-200">
+                                 {task.price} DA
+                               </span>
+                             </div>
+                          )}
+
                           <div className="flex items-center justify-between mt-3">
                               <div className="flex -space-x-2">
                                   {users.filter(u => u.id === task.assigneeId).map(u => (
@@ -195,7 +231,7 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
         <div>
             <h2 className="text-2xl font-bold text-slate-900">Tâches</h2>
             <p className="text-slate-500 text-sm">
-                {currentUser.role === UserRole.ADMIN ? 'Vue globale des tâches de l\'agence' : 'Mes tâches assignées'}
+                {currentUser.role === UserRole.ADMIN ? 'Vue globale des tâches & budgets' : 'Mes tâches assignées'}
             </p>
         </div>
         <div className="flex items-center space-x-3 w-full md:w-auto justify-between md:justify-end">
@@ -239,41 +275,131 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
           </div>
       )}
 
-      {/* Calendar View (Weekly) */}
+      {/* Calendar View (Monthly) */}
       {viewMode === 'calendar' && (
           <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col animate-in fade-in duration-300 min-h-0">
-              <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50">
-                  {getCalendarDays().map((day, i) => (
-                      <div key={i} className="p-3 text-center border-r border-slate-200 last:border-r-0">
-                          <p className="text-xs font-bold text-slate-400 uppercase">{day.toLocaleDateString('fr-FR', { weekday: 'short' })}</p>
-                          <p className={`text-sm font-bold mt-1 w-8 h-8 mx-auto flex items-center justify-center rounded-full ${
-                              day.toDateString() === new Date().toDateString() ? 'bg-primary text-white' : 'text-slate-800'
-                          }`}>{day.getDate()}</p>
+              {/* Calendar Header */}
+              <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+                  <div className="flex items-center space-x-4">
+                      <h3 className="text-lg font-bold text-slate-900 capitalize w-48">
+                          {currentDate.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
+                      </h3>
+                      <div className="flex items-center space-x-1">
+                          <button onClick={prevMonth} className="p-1.5 hover:bg-white hover:shadow-sm rounded-md text-slate-500 transition-all">
+                              <ChevronLeft size={20} />
+                          </button>
+                          <button onClick={goToToday} className="px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-white hover:shadow-sm rounded-md transition-all">
+                              Aujourd'hui
+                          </button>
+                          <button onClick={nextMonth} className="p-1.5 hover:bg-white hover:shadow-sm rounded-md text-slate-500 transition-all">
+                              <ChevronRight size={20} />
+                          </button>
                       </div>
-                  ))}
+                  </div>
+                  
+                  {/* Legend */}
+                  <div className="hidden md:flex items-center space-x-3 text-[10px]">
+                     <div className="flex items-center"><div className="w-2 h-2 bg-blue-500 rounded-full mr-1"></div>Content</div>
+                     <div className="flex items-center"><div className="w-2 h-2 bg-green-500 rounded-full mr-1"></div>Ads</div>
+                     <div className="flex items-center"><div className="w-2 h-2 bg-purple-500 rounded-full mr-1"></div>Social</div>
+                  </div>
               </div>
-              <div className="grid grid-cols-7 flex-1 divide-x divide-slate-200 overflow-y-auto">
-                   {getCalendarDays().map((day, i) => {
-                       const dayString = day.toISOString().split('T')[0];
-                       const dayTasks = visibleTasks.filter(t => t.dueDate === dayString);
-                       return (
-                           <div key={i} className="p-2 space-y-2 min-h-[100px]">
-                               {dayTasks.map(task => (
-                                   <div 
-                                    key={task.id} 
-                                    onClick={() => setSelectedTask(task)}
-                                    className={`p-2 rounded text-xs border cursor-pointer truncate hover:opacity-80 transition-all ${
-                                        task.priority === 'high' ? 'bg-orange-100 text-orange-800 border-orange-200' :
-                                        task.type === 'content' ? 'bg-blue-50 text-blue-700 border-blue-100' :
-                                        'bg-green-50 text-green-700 border-green-100'
-                                   }`}
-                                   >
-                                       {task.title}
-                                   </div>
-                               ))}
-                           </div>
-                       )
-                   })}
+
+              {/* Calendar Grid */}
+              <div className="flex-1 overflow-y-auto">
+                <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50 sticky top-0 z-10">
+                    {['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map(day => (
+                        <div key={day} className="p-3 text-center border-r border-slate-200 last:border-r-0">
+                            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{day}</span>
+                        </div>
+                    ))}
+                </div>
+                
+                <div className="grid grid-cols-7 auto-rows-fr min-h-[600px]">
+                     {(() => {
+                         const year = currentDate.getFullYear();
+                         const month = currentDate.getMonth();
+                         const daysInMonth = getDaysInMonth(year, month);
+                         const startDay = getFirstDayOfMonth(year, month); // 0 (Mon) to 6 (Sun)
+                         const totalSlots = Math.ceil((daysInMonth + startDay) / 7) * 7;
+                         const cells = [];
+
+                         // Empty cells for previous month
+                         for (let i = 0; i < startDay; i++) {
+                             cells.push(<div key={`empty-${i}`} className="bg-slate-50/30 border-b border-r border-slate-100"></div>);
+                         }
+
+                         // Days of current month
+                         for (let day = 1; day <= daysInMonth; day++) {
+                             const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                             const dayTasks = visibleTasks.filter(t => t.dueDate === dateStr);
+                             const isToday = new Date().toDateString() === new Date(year, month, day).toDateString();
+
+                             cells.push(
+                                 <div key={day} className={`min-h-[120px] border-b border-r border-slate-100 p-2 flex flex-col transition-colors hover:bg-slate-50 group relative ${isToday ? 'bg-blue-50/20' : 'bg-white'}`}>
+                                     <div className="flex justify-between items-start mb-2">
+                                         <span className={`text-sm font-semibold w-7 h-7 flex items-center justify-center rounded-full ${isToday ? 'bg-primary text-white shadow-md' : 'text-slate-700'}`}>
+                                             {day}
+                                         </span>
+                                         {currentUser.role === UserRole.ADMIN && (
+                                            <button 
+                                                onClick={() => {
+                                                    setNewTask({...newTask, dueDate: dateStr});
+                                                    setShowModal(true);
+                                                }}
+                                                className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-primary transition-opacity"
+                                            >
+                                                <Plus size={16} />
+                                            </button>
+                                         )}
+                                     </div>
+                                     
+                                     <div className="flex-1 space-y-1.5 overflow-y-auto custom-scrollbar max-h-[100px]">
+                                         {dayTasks.map(task => {
+                                             // Determine color bar based on type
+                                             let barColor = 'bg-slate-400';
+                                             if(task.type === 'content') barColor = 'bg-blue-500';
+                                             else if(task.type === 'ads') barColor = 'bg-green-500';
+                                             else if(task.type === 'social') barColor = 'bg-purple-500';
+                                             
+                                             const assignee = users.find(u => u.id === task.assigneeId);
+
+                                             return (
+                                                 <div 
+                                                    key={task.id} 
+                                                    onClick={(e) => { e.stopPropagation(); setSelectedTask(task); }}
+                                                    className={`text-[10px] p-1.5 rounded cursor-pointer border shadow-sm transition-transform hover:scale-[1.02] hover:shadow-md flex items-center space-x-1.5 group/task ${
+                                                        task.status === TaskStatus.DONE ? 'bg-slate-50 text-slate-400 border-slate-200 opacity-70' : 'bg-white text-slate-700 border-slate-200'
+                                                    }`}
+                                                 >
+                                                     <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${barColor}`}></div>
+                                                     {/* Assignee Avatar (for Admin/Team view clarity) */}
+                                                     {assignee && (
+                                                        <img 
+                                                            src={assignee.avatar} 
+                                                            alt={assignee.name}
+                                                            title={`Assigné à: ${assignee.name}`}
+                                                            className="w-3.5 h-3.5 rounded-full border border-slate-200 flex-shrink-0"
+                                                        />
+                                                     )}
+                                                     <span className={`truncate font-medium ${task.status === TaskStatus.DONE ? 'line-through' : ''}`}>{task.title}</span>
+                                                 </div>
+                                             )
+                                         })}
+                                     </div>
+                                 </div>
+                             );
+                         }
+
+                         // Fill remaining slots
+                         const remainingSlots = totalSlots - (startDay + daysInMonth);
+                         for (let i = 0; i < remainingSlots; i++) {
+                              cells.push(<div key={`empty-end-${i}`} className="bg-slate-50/30 border-b border-r border-slate-100"></div>);
+                         }
+
+                         return cells;
+                     })()}
+                </div>
               </div>
           </div>
       )}
@@ -321,14 +447,16 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                                   />
                               </div>
                               <div>
-                                  <label className="block text-sm font-medium text-slate-700 mb-1">Type</label>
+                                  <label className="block text-sm font-medium text-slate-700 mb-1">Service (Type)</label>
                                   <select 
                                     className="w-full p-2.5 bg-gray-200 text-black border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all font-medium"
                                     value={newTask.type}
-                                    onChange={e => setNewTask({...newTask, type: e.target.value as any})}
+                                    onChange={handleTypeChange}
                                   >
                                       <option value="content">Création de Contenu</option>
-                                      <option value="ads">Campagne Ads</option>
+                                      <option value="ads">Publicité (Ads)</option>
+                                      <option value="social">Social Media</option>
+                                      <option value="seo">SEO / Web</option>
                                       <option value="admin">Administratif</option>
                                   </select>
                               </div>
@@ -344,6 +472,28 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                                       <option value="high">Haute</option>
                                   </select>
                               </div>
+                              
+                              {/* Price - Admin Only */}
+                              {currentUser.role === UserRole.ADMIN && (
+                                <div className="col-span-2">
+                                    <label className="block text-sm font-medium text-slate-700 mb-1 flex items-center">
+                                        <DollarSign size={14} className="mr-1.5 text-slate-400"/>
+                                        Prix / Budget (Visible uniquement par Admin)
+                                    </label>
+                                    <div className="relative">
+                                        <input 
+                                            type="number" 
+                                            min="0"
+                                            className="w-full p-2.5 pl-4 bg-gray-200 text-black border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all font-medium"
+                                            placeholder="0"
+                                            value={newTask.price}
+                                            onChange={e => setNewTask({...newTask, price: Number(e.target.value)})}
+                                        />
+                                        <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-500 text-xs font-bold">DA</span>
+                                    </div>
+                                </div>
+                              )}
+
                               <div className="col-span-2">
                                   <div className="flex justify-between items-center mb-1">
                                       <label className="block text-sm font-medium text-slate-700">Description</label>
@@ -423,8 +573,18 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                            <button onClick={() => setSelectedTask(null)} className="text-slate-400 hover:text-slate-600 md:hidden"><X size={24}/></button>
                        </div>
                        
-                       <h2 className="text-2xl font-bold text-slate-900 mb-4">{selectedTask.title}</h2>
+                       <h2 className="text-2xl font-bold text-slate-900 mb-2">{selectedTask.title}</h2>
                        
+                       {/* Admin Only Price View */}
+                       {currentUser.role === UserRole.ADMIN && (
+                           <div className="mb-4 flex items-center">
+                               <div className="bg-slate-100 text-slate-700 px-3 py-1 rounded-lg border border-slate-200 text-sm font-medium flex items-center">
+                                   <DollarSign size={14} className="mr-1 text-slate-400" />
+                                   Budget : {selectedTask.price || 0} DA
+                               </div>
+                           </div>
+                       )}
+
                        <div className="flex items-center space-x-4 mb-6 text-sm text-slate-600">
                            <div className="flex items-center">
                                <Clock size={16} className="mr-2" />

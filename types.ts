@@ -15,7 +15,7 @@ export interface User {
   role: UserRole;
   phoneNumber?: string;
   notificationPref: 'push' | 'all';
-  status: 'active' | 'pending'; // Status added for account validation flow
+  status: 'active' | 'pending';
 }
 
 export interface ActivityLog {
@@ -48,10 +48,11 @@ export interface Task {
   assigneeId: string;
   dueDate: string;
   status: TaskStatus;
-  type: 'content' | 'ads' | 'admin';
+  type: 'content' | 'ads' | 'social' | 'seo' | 'admin'; 
   priority?: 'low' | 'medium' | 'high';
   comments?: Comment[];
   attachments?: string[];
+  price?: number;
 }
 
 export interface Channel {
@@ -70,14 +71,6 @@ export interface Message {
   attachments?: string[];
 }
 
-export interface CampaignMetric {
-  name: string;
-  clicks: number;
-  conversions: number;
-  spend: number;
-  impressions: number;
-}
-
 export interface ToastNotification {
   id: string;
   title: string;
@@ -85,4 +78,16 @@ export interface ToastNotification {
   type: 'info' | 'success' | 'urgent';
 }
 
-export type ViewState = 'dashboard' | 'tasks' | 'chat' | 'files' | 'reports' | 'team' | 'settings';
+export type ViewState = 'dashboard' | 'tasks' | 'chat' | 'files' | 'team' | 'settings' | 'reports' | 'campaigns';
+
+export type CampaignCategory = 'content' | 'ads' | 'social' | 'mixed';
+
+export interface CampaignMetric {
+  name: string;
+  category: CampaignCategory;
+  budget: number;
+  spend: number;
+  clicks: number;
+  conversions: number;
+  impressions: number;
+}

@@ -1,130 +1,36 @@
 
-import React, { useState } from 'react';
-import { LogIn, Lock, Mail, UserPlus, ArrowLeft, User as UserIcon } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { LogIn, Lock, Mail, UserPlus, ArrowLeft, User as UserIcon, Loader2, AlertCircle } from 'lucide-react';
+import { supabase, isConfigured } from './services/supabaseClient';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
 import Tasks from './components/Tasks';
 import Chat from './components/Chat';
-import Reports from './components/Campaigns';
 import Team from './components/Team';
 import Files from './components/Files';
 import Settings from './components/Settings';
+import Reports from './components/Reports';
 import ToastContainer from './components/Toast';
-import { User, UserRole, ViewState, Task, TaskStatus, CampaignMetric, Channel, ActivityLog, ToastNotification, Message } from './types';
-
-// Mock Data
-const MOCK_USERS: User[] = [
-  { id: '1', name: 'Alex Admin', email: 'admin@ivision.com', role: UserRole.ADMIN, avatar: 'https://picsum.photos/id/64/200/200', notificationPref: 'all', phoneNumber: '06 12 34 56 78', status: 'active' },
-  { id: '2', name: 'Sarah Creative', email: 'sarah@ivision.com', role: UserRole.MEMBER, avatar: 'https://picsum.photos/id/65/200/200', notificationPref: 'push', phoneNumber: '06 98 76 54 32', status: 'active' },
-  { id: '3', name: 'Marc Media', email: 'marc@ivision.com', role: UserRole.MEMBER, avatar: 'https://picsum.photos/id/91/200/200', notificationPref: 'all', phoneNumber: '', status: 'active' },
-];
-
-const MOCK_TASKS: Task[] = [
-  { 
-    id: '101', 
-    title: 'Créer visuels Instagram - Soldes', 
-    description: 'Format carré et story pour la campagne hivernale. Utiliser la nouvelle charte graphique.', 
-    assigneeId: '2', 
-    status: TaskStatus.IN_PROGRESS, 
-    dueDate: '2023-10-25', 
-    type: 'content',
-    priority: 'high',
-    comments: [
-      { id: 'c1', userId: '1', content: 'Attention au logo, il doit être en blanc.', timestamp: '10:00' }
-    ],
-    attachments: ['brief_hiver.pdf', 'logo_white.png']
-  },
-  { 
-    id: '102', 
-    title: 'Setup Campagne Google Ads', 
-    description: 'Mots clés: Chaussures sport. Budget journalier: 50€.', 
-    assigneeId: '3', 
-    status: TaskStatus.TODO, 
-    dueDate: '2023-10-28', 
-    type: 'ads',
-    priority: 'medium',
-    comments: [],
-    attachments: ['keywords_list.xlsx']
-  },
-  { 
-    id: '103', 
-    title: 'Rapport Mensuel Septembre', 
-    description: 'Inclure KPIs Facebook et l\'analyse du ROI.', 
-    assigneeId: '1', 
-    status: TaskStatus.DONE, 
-    dueDate: '2023-10-01', 
-    type: 'admin',
-    priority: 'low',
-    comments: []
-  },
-  { 
-    id: '104', 
-    title: 'Brief Créatif TikTok', 
-    description: 'Vidéo trend transition pour le produit phare.', 
-    assigneeId: '2', 
-    status: TaskStatus.BLOCKED, 
-    dueDate: '2023-10-26', 
-    type: 'content',
-    priority: 'high',
-    comments: [
-      { id: 'c2', userId: '2', content: 'J\'attends la validation du script par le client.', timestamp: '14:30' }
-    ]
-  },
-  { 
-    id: '105', 
-    title: 'Optimisation SEO Blog', 
-    description: 'Revoir les meta descriptions des articles Hiver.', 
-    assigneeId: '1', 
-    status: TaskStatus.IN_PROGRESS, 
-    dueDate: '2023-11-05', 
-    type: 'admin',
-    priority: 'medium',
-    comments: []
-  },
-];
-
-const MOCK_CAMPAIGNS: CampaignMetric[] = [
-  { name: 'Promo Hiver', clicks: 4000, conversions: 240, spend: 1200, impressions: 240 },
-  { name: 'Retargeting', clicks: 3000, conversions: 139, spend: 800, impressions: 150 },
-  { name: 'Brand Awareness', clicks: 2000, conversions: 50, spend: 2000, impressions: 500 },
-  { name: 'Lancement Produit', clicks: 2780, conversions: 190, spend: 1500, impressions: 200 },
-];
-
-const MOCK_CHANNELS: Channel[] = [
-    { id: 'general', name: 'Général', type: 'global' },
-    { id: 'random', name: 'Pause Café', type: 'global' },
-    { id: 'winter-campaign', name: 'Campagne Hiver', type: 'project', unread: 2 },
-    { id: 'website-redesign', name: 'Redesign Site', type: 'project' },
-];
-
-const MOCK_MESSAGES: Message[] = [
-    { id: 'm1', userId: '1', channelId: 'general', content: 'Bienvenue sur la nouvelle plateforme iVISION ! 🚀', timestamp: '09:00' },
-    { id: 'm2', userId: '2', channelId: 'general', content: 'Superbe interface, merci Alex !', timestamp: '09:05' },
-    { id: 'm3', userId: '3', channelId: 'winter-campaign', content: 'Voici les assets pour la campagne hiver.', timestamp: '11:30', attachments: ['assets_hiver.zip'] },
-    { id: 'm4', userId: '1', channelId: 'winter-campaign', content: 'Merci Marc, je regarde ça.', timestamp: '11:35' },
-];
-
-const MOCK_ACTIVITIES: ActivityLog[] = [
-    { id: 'a1', userId: '2', action: 'a terminé la tâche', target: 'Visuels Instagram', timestamp: 'Il y a 2h' },
-    { id: 'a2', userId: '3', action: 'a commenté sur', target: 'Setup Ads', timestamp: 'Il y a 4h' },
-    { id: 'a3', userId: '1', action: 'a créé le projet', target: 'Redesign Site', timestamp: 'Hier' },
-    { id: 'a4', userId: '2', action: 'a uploadé un fichier', target: 'brief_v2.pdf', timestamp: 'Hier' },
-];
+import { User, UserRole, ViewState, Task, TaskStatus, Channel, ActivityLog, ToastNotification, Message } from './types';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<ViewState>('dashboard');
-  const [tasks, setTasks] = useState<Task[]>(MOCK_TASKS);
-  const [users, setUsers] = useState<User[]>(MOCK_USERS);
-  const [messages, setMessages] = useState<Message[]>(MOCK_MESSAGES);
+  
+  // Data State
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [channels, setChannels] = useState<Channel[]>([]);
+  
   const [notifications, setNotifications] = useState<ToastNotification[]>([]);
   const [currentChannelId, setCurrentChannelId] = useState('general');
+  const [isLoading, setIsLoading] = useState(true);
   
   // Login & Register State
   const [isRegistering, setIsRegistering] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  // Register specific fields
   const [registerName, setRegisterName] = useState('');
   const [registerPhone, setRegisterPhone] = useState('');
 
@@ -137,155 +43,453 @@ const App: React.FC = () => {
     setNotifications(prev => prev.filter(n => n.id !== id));
   };
 
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
-    
-    if (user) {
-      if (user.status === 'pending') {
-        addNotification('Compte en attente', 'Votre inscription est en cours de validation par un administrateur.', 'urgent');
-        return;
+  // --- INITIALIZATION & AUTH CHECK ---
+
+  useEffect(() => {
+    if (!isConfigured) {
+      setIsLoading(false);
+      return;
+    }
+
+    const checkSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session && session.user) {
+          await fetchUserProfile(session.user.id);
+          await fetchInitialData();
+        } else {
+          setIsLoading(false);
+        }
+      } catch (error) {
+        console.error("Session check error:", error);
+        setIsLoading(false);
       }
-      setCurrentUser(user);
-      addNotification('Bienvenue', `Ravi de vous revoir, ${user.name.split(' ')[0]} !`, 'success');
-    } else {
-      alert("Utilisateur non trouvé ou mot de passe incorrect.");
-    }
-  };
-
-  const handleRegister = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email || !password || !registerName) {
-      addNotification('Erreur', 'Veuillez remplir tous les champs obligatoires.', 'urgent');
-      return;
-    }
-
-    const existingUser = users.find(u => u.email.toLowerCase() === email.toLowerCase());
-    if (existingUser) {
-      addNotification('Erreur', 'Un compte existe déjà avec cet email.', 'urgent');
-      return;
-    }
-
-    const newUser: User = {
-      id: Date.now().toString(),
-      name: registerName,
-      email: email,
-      role: UserRole.MEMBER, // Default role
-      status: 'pending', // Default status
-      avatar: `https://ui-avatars.com/api/?name=${registerName.replace(' ', '+')}&background=random`,
-      notificationPref: 'all',
-      phoneNumber: registerPhone
     };
 
-    setUsers([...users, newUser]);
-    addNotification('Inscription réussie', 'Votre demande a été envoyée à l\'administrateur pour validation.', 'success');
-    setIsRegistering(false);
-    setEmail('');
-    setPassword('');
-    setRegisterName('');
-    setRegisterPhone('');
-  };
+    checkSession();
 
-  const handleDemoLogin = (user: User) => {
-    if (user.status === 'pending') {
-       addNotification('Compte en attente', 'Ce compte demo est en attente de validation.', 'urgent');
-       return;
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session?.user) {
+        // Only fetch if we don't have the user yet to avoid loops
+        if (!currentUser) {
+            await fetchUserProfile(session.user.id);
+            await fetchInitialData();
+        }
+      } else {
+        setCurrentUser(null);
+        setIsLoading(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // --- DATA FETCHING ---
+
+  const fetchUserProfile = async (userId: string) => {
+    setIsLoading(true);
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', userId)
+      .single();
+
+    if (error) {
+      console.error("Error fetching profile:", error);
+    } else if (data) {
+      // Map DB snake_case to TS camelCase
+      const user: User = {
+        id: data.id,
+        name: data.name,
+        email: data.email,
+        role: data.role as UserRole,
+        avatar: data.avatar,
+        phoneNumber: data.phone_number,
+        notificationPref: data.notification_pref,
+        status: data.status
+      };
+      setCurrentUser(user);
     }
-    setEmail(user.email);
-    setPassword('password123');
-    setCurrentUser(user);
-    addNotification('Bienvenue', `Ravi de vous revoir, ${user.name.split(' ')[0]} !`, 'success');
+    setIsLoading(false);
   };
 
-  const handleUpdateTaskStatus = (taskId: string, newStatus: TaskStatus) => {
+  const fetchInitialData = async () => {
+    try {
+        // 1. Fetch Users
+        const { data: usersData } = await supabase.from('users').select('*');
+        if (usersData) {
+            setUsers(usersData.map(u => ({
+                id: u.id,
+                name: u.name,
+                email: u.email,
+                role: u.role as UserRole,
+                avatar: u.avatar,
+                phoneNumber: u.phone_number,
+                notificationPref: u.notification_pref,
+                status: u.status
+            })));
+        }
+
+        // 2. Fetch Tasks
+        const { data: tasksData } = await supabase.from('tasks').select('*');
+        if (tasksData) {
+            // Need to fetch comments separately or via join, for simplicity fetching basic task data first
+            // And Assuming we handle comments via a separate fetch or real-time later
+            const mappedTasks: Task[] = await Promise.all(tasksData.map(async (t) => {
+                // Fetch comments for this task
+                const { data: commentsData } = await supabase.from('task_comments').select('*').eq('task_id', t.id);
+                const comments = commentsData ? commentsData.map(c => ({
+                    id: c.id,
+                    userId: c.user_id,
+                    content: c.content,
+                    timestamp: new Date(c.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+                })) : [];
+
+                // Fetch attachments
+                const { data: attachmentsData } = await supabase.from('task_attachments').select('*').eq('task_id', t.id);
+                const attachments = attachmentsData ? attachmentsData.map(a => a.file_name) : [];
+
+                return {
+                    id: t.id,
+                    title: t.title,
+                    description: t.description,
+                    assigneeId: t.assignee_id,
+                    dueDate: t.due_date,
+                    status: t.status as TaskStatus,
+                    type: t.type,
+                    priority: t.priority,
+                    price: t.price,
+                    comments: comments,
+                    attachments: attachments
+                };
+            }));
+            setTasks(mappedTasks);
+        }
+
+        // 3. Fetch Channels
+        const { data: channelsData } = await supabase.from('channels').select('*');
+        if (channelsData) {
+            setChannels(channelsData.map(c => ({
+                id: c.id,
+                name: c.name,
+                type: c.type,
+                unread: c.unread_count
+            })));
+        }
+
+        // 4. Fetch Messages (All for now, or filtered by channel later)
+        const { data: msgData } = await supabase.from('messages').select('*').order('created_at', { ascending: true });
+        if (msgData) {
+            setMessages(msgData.map(m => ({
+                id: m.id,
+                userId: m.user_id,
+                channelId: m.channel_id,
+                content: m.content,
+                timestamp: new Date(m.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+            })));
+        }
+
+    } catch (error) {
+        console.error("Error loading data", error);
+        addNotification('Erreur', 'Impossible de charger les données.', 'urgent');
+    }
+  };
+
+  // --- ACTIONS ---
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    
+    const { data, error } = await supabase.auth.signInWithPassword({
+        email: email,
+        password: password
+    });
+
+    if (error) {
+        addNotification('Erreur de connexion', error.message, 'urgent');
+        setIsLoading(false);
+    } else {
+        // Session check useEffect will handle the rest
+        addNotification('Bienvenue', 'Connexion réussie.', 'success');
+    }
+  };
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email || !password || !registerName) {
+      addNotification('Erreur', 'Veuillez remplir tous les champs.', 'urgent');
+      return;
+    }
+    
+    setIsLoading(true);
+
+    // 1. Sign up in Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: email,
+        password: password,
+    });
+
+    if (authError) {
+        addNotification('Erreur inscription', authError.message, 'urgent');
+        setIsLoading(false);
+        return;
+    }
+
+    if (authData.user) {
+        // 2. Create profile in public.users table
+        const newUserProfile = {
+            id: authData.user.id, // Important: match Auth ID
+            name: registerName,
+            email: email,
+            role: UserRole.MEMBER,
+            status: 'pending',
+            avatar: `https://ui-avatars.com/api/?name=${registerName.replace(' ', '+')}&background=random`,
+            phone_number: registerPhone,
+            notification_pref: 'all'
+        };
+
+        const { error: dbError } = await supabase.from('users').insert([newUserProfile]);
+
+        if (dbError) {
+            console.error(dbError);
+            addNotification('Attention', 'Compte créé mais erreur lors de la création du profil.', 'urgent');
+        } else {
+            addNotification('Inscription réussie', 'Votre compte est en attente de validation.', 'success');
+            setIsRegistering(false);
+        }
+    }
+    setIsLoading(false);
+  };
+
+  const handleLogout = async () => {
+      await supabase.auth.signOut();
+      setCurrentUser(null);
+      setTasks([]);
+      setMessages([]);
+  };
+
+  // --- TASK ACTIONS ---
+
+  const handleUpdateTaskStatus = async (taskId: string, newStatus: TaskStatus) => {
+    // Optimistic UI Update
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
+    
+    const { error } = await supabase
+        .from('tasks')
+        .update({ status: newStatus })
+        .eq('id', taskId);
+        
+    if (error) {
+        addNotification('Erreur', 'Impossible de mettre à jour le statut.', 'urgent');
+        fetchInitialData(); // Revert
+    }
   };
   
-  const handleUpdateTask = (updatedTask: Task) => {
+  const handleUpdateTask = async (updatedTask: Task) => {
+    // Handle basic fields
+    const { error } = await supabase.from('tasks').update({
+        title: updatedTask.title,
+        description: updatedTask.description,
+        priority: updatedTask.priority,
+        due_date: updatedTask.dueDate,
+        assignee_id: updatedTask.assigneeId,
+        type: updatedTask.type,
+        price: updatedTask.price
+    }).eq('id', updatedTask.id);
+
+    if (error) {
+        addNotification('Erreur', 'Mise à jour échouée.', 'urgent');
+        return;
+    }
+
+    // Handle Comments (New ones only? Simplified: Just refresh UI for now or implement proper comment insert logic in Tasks.tsx)
+    // For this scope, we assume Tasks.tsx calls this with the full object. 
+    // Since comments are separate table, we usually insert them separately.
+    // Let's refresh the local state to match.
     setTasks(prev => prev.map(t => t.id === updatedTask.id ? updatedTask : t));
   };
 
-  const handleAddTask = (newTask: Task) => {
-      setTasks(prev => [...prev, newTask]);
-      if (newTask.assigneeId !== currentUser?.id) {
-          const assignee = users.find(u => u.id === newTask.assigneeId);
-          if (assignee) {
-              addNotification('Tâche assignée', `Tâche envoyée à ${assignee.name}.`, 'success');
-          }
+  const handleAddTask = async (newTask: Task) => {
+      const dbTask = {
+          id: crypto.randomUUID(), // Generate ID here or let DB do it (if auto-gen)
+          title: newTask.title,
+          description: newTask.description,
+          assignee_id: newTask.assigneeId,
+          due_date: newTask.dueDate,
+          status: newTask.status,
+          type: newTask.type,
+          priority: newTask.priority,
+          price: newTask.price
+      };
+
+      const { error } = await supabase.from('tasks').insert([dbTask]);
+
+      if (error) {
+          console.error(error);
+          addNotification('Erreur', 'Impossible de créer la tâche.', 'urgent');
+      } else {
+          // Add to local state with the new ID (mapped back)
+          const addedTask = { ...newTask, id: dbTask.id };
+          setTasks(prev => [...prev, addedTask]);
+          addNotification('Succès', 'Tâche créée avec succès.', 'success');
       }
   };
 
-  const handleSendMessage = (text: string, channelId: string) => {
+  // --- CHAT ACTIONS ---
+
+  const handleSendMessage = async (text: string, channelId: string) => {
       if (!currentUser) return;
       
-      const newMessage: Message = {
-          id: Date.now().toString(),
+      const newMessageId = crypto.randomUUID();
+      const dbMessage = {
+          id: newMessageId,
+          channel_id: channelId,
+          user_id: currentUser.id,
+          content: text
+      };
+
+      // Optimistic Update
+      const displayMessage: Message = {
+          id: newMessageId,
           userId: currentUser.id,
           channelId,
           content: text,
           timestamp: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
       };
+      setMessages(prev => [...prev, displayMessage]);
+
+      const { error } = await supabase.from('messages').insert([dbMessage]);
       
-      setMessages(prev => [...prev, newMessage]);
+      if (error) {
+          console.error(error);
+          addNotification('Erreur', 'Message non envoyé.', 'urgent');
+      }
   };
 
-  const handleUpdateProfile = (updatedData: Partial<User>) => {
+  // --- TEAM ACTIONS ---
+
+  const handleAddUser = async (newUser: User) => {
+      // In a real app, this would trigger a cloud function to create an Auth user.
+      // Here, we simulate by just adding to the DB, but they won't be able to login without Auth.
+      // We'll prompt the Admin that this is a DB entry only.
+      addNotification('Info', "L'utilisateur doit s'inscrire lui-même via la page de connexion pour activer l'authentification.", 'info');
+  };
+
+  const handleRemoveUser = async (userId: string) => {
+      const { error } = await supabase.from('users').delete().eq('id', userId);
+      if (!error) {
+        setUsers(users.filter(u => u.id !== userId));
+        addNotification('Succès', 'Utilisateur supprimé.', 'success');
+      }
+  };
+
+  const handleUpdateProfile = async (updatedData: Partial<User>) => {
     if (!currentUser) return;
+    
+    const { error } = await supabase.from('users').update({
+        name: updatedData.name,
+        email: updatedData.email,
+        phone_number: updatedData.phoneNumber,
+        avatar: updatedData.avatar
+    }).eq('id', currentUser.id);
 
-    const updatedUser = { ...currentUser, ...updatedData };
-    setCurrentUser(updatedUser);
-    setUsers(prevUsers => prevUsers.map(u => u.id === currentUser.id ? updatedUser : u));
-    addNotification("Profil mis à jour", "Vos modifications ont été enregistrées avec succès.", 'success');
+    if (!error) {
+        setCurrentUser({ ...currentUser, ...updatedData });
+        addNotification("Profil mis à jour", "Vos modifications ont été enregistrées.", 'success');
+    }
+  };
+  
+  const handleApproveUser = async (userId: string) => {
+      const { error } = await supabase.from('users').update({ status: 'active' }).eq('id', userId);
+      if (!error) {
+          setUsers(users.map(u => u.id === userId ? { ...u, status: 'active' } : u));
+          addNotification('Succès', 'Compte validé.', 'success');
+      }
+  };
+  
+  const handleUpdateMember = async (userId: string, updatedData: Partial<User>) => {
+      const { error } = await supabase.from('users').update({
+          role: updatedData.role,
+          name: updatedData.name,
+          email: updatedData.email
+      }).eq('id', userId);
+      
+      if(!error) {
+           setUsers(users.map(u => u.id === userId ? { ...u, ...updatedData } : u));
+           addNotification('Compte modifié', 'Les informations ont été mises à jour.', 'success');
+      }
   };
 
-  // Team Management
-  const handleAddUser = (newUser: User) => {
-      // Direct add from Admin panel (active by default)
-      const userToAdd = { ...newUser, status: 'active' as const };
-      setUsers([...users, userToAdd]);
-      addNotification('Membre ajouté', `${newUser.name} a rejoint l'équipe.`, 'success');
-  };
+  // --- CONFIGURATION CHECK ---
+  if (!isConfigured) {
+      return (
+        <div className="h-screen w-screen flex items-center justify-center bg-slate-50 flex-col p-4 text-center">
+          <div className="bg-white p-8 rounded-2xl shadow-xl max-w-lg w-full border border-slate-200">
+            <div className="w-16 h-16 bg-blue-50 text-primary rounded-full flex items-center justify-center mx-auto mb-6">
+               <AlertCircle size={32} />
+            </div>
+            <h1 className="text-2xl font-bold text-slate-900 mb-3">Configuration Requise</h1>
+            <p className="text-slate-600 mb-6">
+              Pour utiliser iVISION, vous devez connecter votre base de données Supabase.
+            </p>
+            
+            <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 text-left text-sm space-y-3 mb-6">
+              <p className="font-semibold text-slate-800">Étapes à suivre :</p>
+              <ol className="list-decimal pl-5 space-y-2 text-slate-600">
+                <li>Créez un projet sur <a href="https://supabase.com" target="_blank" className="text-primary hover:underline">supabase.com</a></li>
+                <li>Récupérez votre <strong>Project URL</strong> et <strong>Anon Key</strong></li>
+                <li>Ouvrez le fichier <code>services/supabaseClient.ts</code></li>
+                <li>Remplacez les valeurs par défaut par vos clés</li>
+              </ol>
+            </div>
+            
+            <button 
+              onClick={() => window.location.reload()}
+              className="w-full bg-primary hover:bg-blue-700 text-white font-medium py-3 rounded-lg transition-all"
+            >
+              J'ai mis à jour le fichier, recharger
+            </button>
+          </div>
+        </div>
+      );
+  }
 
-  const handleRemoveUser = (userId: string) => {
-      setUsers(users.filter(u => u.id !== userId));
-  };
+  // --- LOADING SCREEN ---
+  if (isLoading) {
+      return (
+        <div className="h-screen w-screen flex items-center justify-center bg-slate-50 flex-col">
+            <Loader2 size={48} className="text-primary animate-spin mb-4" />
+            <p className="text-slate-500 font-medium">Connexion à iVISION...</p>
+        </div>
+      );
+  }
 
-  const handleApproveUser = (userId: string) => {
-      setUsers(users.map(u => u.id === userId ? { ...u, status: 'active' } : u));
-      const approvedUser = users.find(u => u.id === userId);
-      addNotification('Compte validé', `${approvedUser?.name} a maintenant accès à la plateforme.`, 'success');
-  };
-
-  const handleUpdateRole = (userId: string, role: UserRole) => {
-      setUsers(users.map(u => u.id === userId ? { ...u, role } : u));
-  };
-
-  // Login/Register Screen
+  // --- AUTH SCREEN ---
   if (!currentUser) {
     return (
       <div className="min-h-[100dvh] bg-slate-50 flex items-center justify-center p-4 overflow-y-auto">
         <ToastContainer notifications={notifications} onDismiss={removeNotification} />
         
-        <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full border border-slate-200 animate-in fade-in zoom-in duration-500">
+        <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full border border-slate-200">
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold text-slate-900 mb-2 tracking-tight">
               <span className="text-primary">i</span>VISION AGENCY
             </h1>
-            <p className="text-slate-500">{isRegistering ? "Créer un nouveau compte" : "Espace Membre Sécurisé"}</p>
+            <p className="text-slate-500">{isRegistering ? "Créer un nouveau compte" : "Connexion Supabase"}</p>
           </div>
           
           {isRegistering ? (
-            // REGISTER FORM
             <form onSubmit={handleRegister} className="space-y-5">
                <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Nom complet</label>
                   <div className="relative group">
-                    <UserIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" size={18} />
+                    <UserIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} />
                     <input 
                       type="text" 
                       value={registerName}
                       onChange={(e) => setRegisterName(e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 bg-white text-slate-900 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary outline-none transition-all placeholder-slate-400 font-medium"
+                      className="w-full pl-10 pr-4 py-3 bg-white text-slate-900 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary outline-none transition-all"
                       placeholder="Jean Dupont"
                       required
                     />
@@ -294,12 +498,12 @@ const App: React.FC = () => {
                <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Email professionnel</label>
                   <div className="relative group">
-                    <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" size={18} />
+                    <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} />
                     <input 
                       type="email" 
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 bg-white text-slate-900 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary outline-none transition-all placeholder-slate-400 font-medium"
+                      className="w-full pl-10 pr-4 py-3 bg-white text-slate-900 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary outline-none transition-all"
                       placeholder="nom@ivision.com"
                       required
                     />
@@ -308,12 +512,12 @@ const App: React.FC = () => {
                <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Mot de passe</label>
                   <div className="relative group">
-                    <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" size={18} />
+                    <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} />
                     <input 
                       type="password" 
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 bg-white text-slate-900 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary outline-none transition-all placeholder-slate-400 font-medium"
+                      className="w-full pl-10 pr-4 py-3 bg-white text-slate-900 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary outline-none transition-all"
                       placeholder="Créer un mot de passe"
                       required
                     />
@@ -322,7 +526,7 @@ const App: React.FC = () => {
                
                <button 
                   type="submit"
-                  className="w-full bg-primary hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-all transform hover:scale-[1.02] active:scale-95 flex items-center justify-center space-x-2 shadow-lg shadow-primary/20"
+                  className="w-full bg-primary hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-all flex items-center justify-center space-x-2"
                 >
                   <UserPlus size={18} />
                   <span>S'inscrire</span>
@@ -337,20 +541,18 @@ const App: React.FC = () => {
                 </button>
             </form>
           ) : (
-            // LOGIN FORM
             <form onSubmit={handleLogin} className="space-y-6">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Email professionnel</label>
                 <div className="relative group">
-                  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" size={18} />
+                  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} />
                   <input 
                     type="email" 
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 bg-white text-slate-900 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all placeholder-slate-400 font-medium"
+                    className="w-full pl-10 pr-4 py-3 bg-white text-slate-900 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary outline-none"
                     placeholder="nom@ivision.com"
                     required
-                    autoComplete="email"
                   />
                 </div>
               </div>
@@ -358,17 +560,15 @@ const App: React.FC = () => {
               <div>
                 <div className="flex justify-between items-center mb-1">
                   <label className="block text-sm font-medium text-slate-700">Mot de passe</label>
-                  <a href="#" className="text-xs text-primary hover:text-blue-600 hover:underline">Oublié ?</a>
                 </div>
                 <div className="relative group">
-                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" size={18} />
+                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} />
                   <input 
                     type="password" 
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 bg-white text-slate-900 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all placeholder-slate-400 font-medium"
+                    className="w-full pl-10 pr-4 py-3 bg-white text-slate-900 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary outline-none"
                     placeholder="••••••••"
-                    autoComplete="current-password"
                   />
                 </div>
               </div>
@@ -376,7 +576,7 @@ const App: React.FC = () => {
               <div className="flex flex-col space-y-3">
                 <button 
                   type="submit"
-                  className="w-full bg-primary hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-all transform hover:scale-[1.02] active:scale-95 flex items-center justify-center space-x-2 shadow-lg shadow-primary/20"
+                  className="w-full bg-primary hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-all flex items-center justify-center space-x-2"
                 >
                   <LogIn size={18} />
                   <span>Connexion</span>
@@ -393,27 +593,6 @@ const App: React.FC = () => {
               </div>
             </form>
           )}
-
-          {/* Demo Quick Access */}
-          <div className="mt-8 pt-6 border-t border-slate-100">
-            <p className="text-xs text-slate-400 uppercase font-bold tracking-wider text-center mb-4">Accès Rapide (Demo)</p>
-            <div className="grid grid-cols-3 gap-3">
-              {MOCK_USERS.filter(u => u.status === 'active').map(user => (
-                <button
-                  key={user.id}
-                  onClick={() => handleDemoLogin(user)}
-                  className="flex flex-col items-center p-3 rounded-lg hover:bg-slate-50 transition-all group border border-transparent hover:border-slate-200 transform hover:-translate-y-1"
-                >
-                  <img src={user.avatar} alt={user.name} className="w-10 h-10 rounded-full mb-2 opacity-90 group-hover:opacity-100 transition-opacity shadow-sm border border-slate-200" />
-                  <span className="text-[10px] text-slate-500 font-medium text-center leading-tight group-hover:text-slate-800">{user.name.split(' ')[0]}<br/><span className="opacity-50 font-normal">{user.role}</span></span>
-                </button>
-              ))}
-            </div>
-          </div>
-          
-          <div className="mt-4 text-center">
-             <span className="text-[10px] text-slate-400 font-mono">v2.3 • Registration Enabled</span>
-          </div>
         </div>
       </div>
     );
@@ -424,7 +603,7 @@ const App: React.FC = () => {
       currentUser={currentUser} 
       currentView={currentView} 
       onNavigate={setCurrentView}
-      onLogout={() => setCurrentUser(null)}
+      onLogout={handleLogout}
     >
       <ToastContainer notifications={notifications} onDismiss={removeNotification} />
       
@@ -432,8 +611,14 @@ const App: React.FC = () => {
         <Dashboard 
           currentUser={currentUser} 
           tasks={tasks}
-          campaigns={MOCK_CAMPAIGNS}
           onNavigate={setCurrentView}
+        />
+      )}
+      {currentView === 'reports' && (
+        <Reports 
+          currentUser={currentUser} 
+          tasks={tasks}
+          users={users}
         />
       )}
       {currentView === 'tasks' && (
@@ -450,7 +635,7 @@ const App: React.FC = () => {
         <Chat 
             currentUser={currentUser} 
             users={users.filter(u => u.status === 'active')} 
-            channels={MOCK_CHANNELS}
+            channels={channels.length > 0 ? channels : [{ id: 'general', name: 'Général', type: 'global' }]}
             currentChannelId={currentChannelId}
             messages={messages}
             onChannelChange={setCurrentChannelId}
@@ -460,24 +645,17 @@ const App: React.FC = () => {
       {currentView === 'files' && currentUser && (
         <Files tasks={tasks} messages={messages} currentUser={currentUser} />
       )}
-      {currentView === 'reports' && (
-        <Reports 
-            currentUser={currentUser} 
-            campaignsData={MOCK_CAMPAIGNS} 
-            tasks={tasks}
-            users={users.filter(u => u.status === 'active')}
-        />
-      )}
       {currentView === 'team' && (
         <Team 
             currentUser={currentUser} 
             users={users} 
             tasks={tasks}
-            activities={MOCK_ACTIVITIES}
+            activities={[]} // Activity logs could be implemented via a separate table
             onAddUser={handleAddUser}
             onRemoveUser={handleRemoveUser}
-            onUpdateRole={handleUpdateRole}
+            onUpdateRole={(userId, role) => handleUpdateMember(userId, { role })}
             onApproveUser={handleApproveUser}
+            onUpdateMember={handleUpdateMember}
         />
       )}
       {currentView === 'settings' && (

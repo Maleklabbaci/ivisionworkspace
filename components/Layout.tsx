@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { LayoutDashboard, CheckSquare, MessageSquare, BarChart2, LogOut, Users as UsersIcon, FolderOpen, Menu, X, Settings } from 'lucide-react';
+import { LayoutDashboard, CheckSquare, MessageSquare, Users as UsersIcon, FolderOpen, Menu, X, Settings, LogOut, BarChart3 } from 'lucide-react';
 import { User, ViewState, UserRole } from '../types';
 
 interface LayoutProps {
@@ -16,10 +16,10 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, currentView, onN
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: [UserRole.ADMIN, UserRole.MEMBER, UserRole.PROJECT_MANAGER, UserRole.COMMUNITY_MANAGER, UserRole.ANALYST] },
+    { id: 'reports', label: 'Rapports', icon: BarChart3, roles: [UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.ANALYST] },
     { id: 'tasks', label: 'Tâches', icon: CheckSquare, roles: [UserRole.ADMIN, UserRole.MEMBER, UserRole.PROJECT_MANAGER, UserRole.COMMUNITY_MANAGER, UserRole.ANALYST] },
     { id: 'chat', label: 'Chat & Équipe', icon: MessageSquare, roles: [UserRole.ADMIN, UserRole.MEMBER, UserRole.PROJECT_MANAGER, UserRole.COMMUNITY_MANAGER, UserRole.ANALYST] },
     { id: 'files', label: 'Fichiers', icon: FolderOpen, roles: [UserRole.ADMIN] },
-    { id: 'reports', label: 'Rapports', icon: BarChart2, roles: [UserRole.ADMIN] },
     { id: 'team', label: 'Membres', icon: UsersIcon, roles: [UserRole.ADMIN] },
   ];
 
