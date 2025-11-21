@@ -25,7 +25,10 @@ const App: React.FC = () => {
   
   const [notifications, setNotifications] = useState<ToastNotification[]>([]);
   const [currentChannelId, setCurrentChannelId] = useState('general');
-  const [isLoading, setIsLoading] = useState(true);
+  
+  // Loading States
+  const [isLoading, setIsLoading] = useState(true); // Global initial load
+  const [isAuthProcessing, setIsAuthProcessing] = useState(false); // Button specific load
   
   // Login & Register State
   const [isRegistering, setIsRegistering] = useState(false);
@@ -253,7 +256,7 @@ const App: React.FC = () => {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
+    setIsAuthProcessing(true);
     
     const { data, error } = await supabase.auth.signInWithPassword({
         email: email,
@@ -262,9 +265,10 @@ const App: React.FC = () => {
 
     if (error) {
         addNotification('Erreur de connexion', error.message, 'urgent');
-        setIsLoading(false);
+        setIsAuthProcessing(false);
     } else {
         // Auth state listener will handle the fetch and redirection
+        // We keep isAuthProcessing true to show spinning button until component unmounts
         addNotification('Bienvenue', 'Connexion réussie.', 'success');
     }
   };
@@ -276,7 +280,7 @@ const App: React.FC = () => {
       return;
     }
     
-    setIsLoading(true);
+    setIsAuthProcessing(true);
 
     const { data: authData, error: authError } = await supabase.auth.signUp({
         email: email,
@@ -291,7 +295,7 @@ const App: React.FC = () => {
 
     if (authError) {
         addNotification('Erreur inscription', authError.message, 'urgent');
-        setIsLoading(false);
+        setIsAuthProcessing(false);
         return;
     }
 
@@ -301,17 +305,16 @@ const App: React.FC = () => {
              // Listener handles loading logic
         } else {
              addNotification('Vérifiez vos emails', 'Un lien de confirmation a été envoyé.', 'info');
-             setIsLoading(false);
+             setIsAuthProcessing(false);
         }
     } else {
-        setIsLoading(false);
+        setIsAuthProcessing(false);
     }
   };
 
   const handleLogout = async () => {
-      setIsLoading(true);
       await supabase.auth.signOut();
-      // Listener handles the rest
+      // Listener handles the rest, immediate visual feedback via view switch
   };
 
   // --- TASK ACTIONS ---
@@ -453,8 +456,13 @@ const App: React.FC = () => {
                   </div>
                </div>
                
-               <button type="submit" className="w-full bg-primary hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-all flex items-center justify-center space-x-2 shadow-lg shadow-primary/20">
-                  <UserPlus size={18} /> <span>S'inscrire & Lier le compte</span>
+               <button 
+                 type="submit" 
+                 disabled={isAuthProcessing}
+                 className="w-full bg-primary hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-all flex items-center justify-center space-x-2 shadow-lg shadow-primary/20 disabled:opacity-70 disabled:cursor-not-allowed"
+               >
+                  {isAuthProcessing ? <Loader2 className="animate-spin" size={18} /> : <UserPlus size={18} />}
+                  <span>{isAuthProcessing ? 'Création du compte...' : 'S\'inscrire & Lier le compte'}</span>
                 </button>
                 <button type="button" onClick={() => setIsRegistering(false)} className="w-full text-slate-500 text-sm font-medium hover:text-slate-800 py-2 flex items-center justify-center">
                   <ArrowLeft size={14} className="mr-2" /> Retour à la connexion
@@ -477,8 +485,13 @@ const App: React.FC = () => {
                 </div>
               </div>
               <div className="flex flex-col space-y-3">
-                <button type="submit" className="w-full bg-primary hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-all flex items-center justify-center space-x-2 shadow-lg shadow-primary/20">
-                  <LogIn size={18} /> <span>Connexion</span>
+                <button 
+                    type="submit" 
+                    disabled={isAuthProcessing}
+                    className="w-full bg-primary hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-all flex items-center justify-center space-x-2 shadow-lg shadow-primary/20 disabled:opacity-70 disabled:cursor-not-allowed"
+                >
+                  {isAuthProcessing ? <Loader2 className="animate-spin" size={18} /> : <LogIn size={18} />}
+                  <span>{isAuthProcessing ? 'Connexion...' : 'Connexion'}</span>
                 </button>
                 <button type="button" onClick={() => setIsRegistering(true)} className="w-full bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-medium py-2.5 rounded-lg transition-all flex items-center justify-center space-x-2">
                   <UserPlus size={18} /> <span>Créer un compte</span>
