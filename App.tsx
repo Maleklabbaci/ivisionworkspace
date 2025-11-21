@@ -70,9 +70,14 @@ const App: React.FC = () => {
         // Si on a une session mais pas encore de profil chargé, on charge
         if (!isDataLoaded.current) {
             try {
+                // Critical: Load Profile First & Fast
                 await fetchUserProfile(session.user.id);
-                await fetchInitialData();
-                isDataLoaded.current = true;
+                
+                // Background: Load Heavy Data (Non-blocking)
+                fetchInitialData().then(() => {
+                   isDataLoaded.current = true;
+                });
+                
             } catch (err) {
                 console.error("Erreur lors du chargement initial:", err);
             } finally {
@@ -92,9 +97,8 @@ const App: React.FC = () => {
 
   const fetchUserProfile = async (userId: string) => {
     try {
-        // Wait slightly in case the SQL Trigger is still running the merge upon creation
-        await new Promise(r => setTimeout(r, 500));
-
+        // OPTIMIZATION: Removed the artificial 500ms delay.
+        
         const { data, error } = await supabase
         .from('users')
         .select('*')
@@ -115,7 +119,6 @@ const App: React.FC = () => {
             setCurrentUser(user);
         } else {
             // FIX: Handle missing public profile by creating one from Auth data
-            console.warn("Profile not found in public table. Attempting to create...");
             const { data: { user: authUser } } = await supabase.auth.getUser();
             
             if (authUser) {
@@ -132,7 +135,7 @@ const App: React.FC = () => {
                     status: 'active'
                 };
 
-                const { error: insertError } = await supabase.from('users').insert([newProfile]); // Use upsert if possible but insert is fine for fallback
+                const { error: insertError } = await supabase.from('users').insert([newProfile]); 
                 
                 if (!insertError) {
                     const user: User = {
@@ -147,8 +150,6 @@ const App: React.FC = () => {
                     setCurrentUser(user);
                 } else {
                     console.error("Failed to create missing profile:", insertError);
-                    // Ne pas bloquer l'UI, on permet de réessayer ou de contacter le support
-                    addNotification('Erreur Profil', 'Impossible de charger le profil. Veuillez recharger.', 'urgent');
                 }
             }
         }
@@ -159,9 +160,16 @@ const App: React.FC = () => {
 
   const fetchInitialData = async () => {
     try {
-        const { data: usersData } = await supabase.from('users').select('*');
-        if (usersData) {
-            setUsers(usersData.map(u => ({
+        // OPTIMIZATION: Parallel Fetching with Promise.all
+        const [usersResult, channelsResult, messagesResult, tasksResult] = await Promise.all([
+            supabase.from('users').select('*'),
+            supabase.from('channels').select('*'),
+            supabase.from('messages').select('*').order('created_at', { ascending: true }),
+            supabase.from('tasks').select('*')
+        ]);
+
+        if (usersResult.data) {
+            setUsers(usersResult.data.map(u => ({
                 id: u.id,
                 name: u.name,
                 email: u.email,
@@ -173,26 +181,44 @@ const App: React.FC = () => {
             })));
         }
 
-        const { data: tasksData } = await supabase.from('tasks').select('*');
-        if (tasksData) {
-            // Use a resilient mapping that handles errors in sub-fetches
-            const mappedTasks: Task[] = [];
-            for (const t of tasksData) {
+        if (channelsResult.data) {
+            setChannels(channelsResult.data.map(c => ({
+                id: c.id,
+                name: c.name,
+                type: c.type,
+                unread: c.unread_count
+            })));
+        }
+
+        if (messagesResult.data) {
+            setMessages(messagesResult.data.map(m => ({
+                id: m.id,
+                userId: m.user_id,
+                channelId: m.channel_id,
+                content: m.content,
+                timestamp: new Date(m.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+            })));
+        }
+
+        if (tasksResult.data) {
+            // OPTIMIZATION: Parallel processing of task details
+            const mappedTasks = await Promise.all(tasksResult.data.map(async (t) => {
                 try {
-                    // Fetch comments
-                    const { data: commentsData } = await supabase.from('task_comments').select('*').eq('task_id', t.id);
-                    const comments = commentsData ? commentsData.map(c => ({
+                    const [commentsRes, attachmentsRes] = await Promise.all([
+                        supabase.from('task_comments').select('*').eq('task_id', t.id),
+                        supabase.from('task_attachments').select('*').eq('task_id', t.id)
+                    ]);
+
+                    const comments = commentsRes.data ? commentsRes.data.map(c => ({
                         id: c.id,
                         userId: c.user_id,
                         content: c.content,
                         timestamp: new Date(c.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
                     })) : [];
 
-                    // Fetch attachments
-                    const { data: attachmentsData } = await supabase.from('task_attachments').select('*').eq('task_id', t.id);
-                    const attachments = attachmentsData ? attachmentsData.map(a => a.file_name) : [];
+                    const attachments = attachmentsRes.data ? attachmentsRes.data.map(a => a.file_name) : [];
 
-                    mappedTasks.push({
+                    return {
                         id: t.id,
                         title: t.title,
                         description: t.description,
@@ -204,11 +230,9 @@ const App: React.FC = () => {
                         price: t.price,
                         comments: comments,
                         attachments: attachments
-                    });
+                    };
                 } catch (err) {
-                    console.warn(`Failed to load details for task ${t.id}`, err);
-                    // Push basic task if details fail
-                    mappedTasks.push({
+                    return {
                         id: t.id,
                         title: t.title,
                         description: t.description,
@@ -220,31 +244,10 @@ const App: React.FC = () => {
                         price: t.price,
                         comments: [],
                         attachments: []
-                    });
+                    };
                 }
-            }
+            }));
             setTasks(mappedTasks);
-        }
-
-        const { data: channelsData } = await supabase.from('channels').select('*');
-        if (channelsData) {
-            setChannels(channelsData.map(c => ({
-                id: c.id,
-                name: c.name,
-                type: c.type,
-                unread: c.unread_count
-            })));
-        }
-
-        const { data: msgData } = await supabase.from('messages').select('*').order('created_at', { ascending: true });
-        if (msgData) {
-            setMessages(msgData.map(m => ({
-                id: m.id,
-                userId: m.user_id,
-                channelId: m.channel_id,
-                content: m.content,
-                timestamp: new Date(m.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
-            })));
         }
 
     } catch (error) {
@@ -268,8 +271,6 @@ const App: React.FC = () => {
         addNotification('Erreur de connexion', error.message, 'urgent');
         setIsAuthProcessing(false);
     } else {
-        // Auth state listener will handle the fetch and redirection
-        // We keep isAuthProcessing true to show spinning button until component unmounts
         addNotification('Bienvenue', 'Connexion réussie.', 'success');
     }
   };
@@ -303,7 +304,6 @@ const App: React.FC = () => {
     if (authData.user) {
         if (authData.session) {
              addNotification('Compte créé !', 'Bienvenue sur iVISION.', 'success');
-             // Listener handles loading logic
         } else {
              addNotification('Vérifiez vos emails', 'Un lien de confirmation a été envoyé.', 'info');
              setIsAuthProcessing(false);
@@ -315,7 +315,6 @@ const App: React.FC = () => {
 
   const handleLogout = async () => {
       await supabase.auth.signOut();
-      // Listener handles the rest, immediate visual feedback via view switch
   };
 
   // --- TASK ACTIONS ---
@@ -496,7 +495,7 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="animate-in slide-in-from-right duration-500 ease-out h-full">
+    <div className="animate-in slide-in-from-right duration-300 ease-out h-full">
       <Layout currentUser={currentUser} currentView={currentView} onNavigate={setCurrentView} onLogout={handleLogout}>
         <ToastContainer notifications={notifications} onDismiss={removeNotification} />
         {currentView === 'dashboard' && <Dashboard currentUser={currentUser} tasks={tasks} messages={messages} notifications={notifications} onNavigate={setCurrentView} />}
