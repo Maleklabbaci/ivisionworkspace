@@ -27,7 +27,8 @@ const App: React.FC = () => {
   const [currentChannelId, setCurrentChannelId] = useState('general');
   
   // Loading States
-  const [isLoading, setIsLoading] = useState(true); // Global initial load
+  // Default to false to show UI immediately (Lazy loading / Optimistic UI)
+  const [isLoading, setIsLoading] = useState(false); 
   const [isAuthProcessing, setIsAuthProcessing] = useState(false); // Button specific load
   
   // Login & Register State
@@ -407,16 +408,6 @@ const App: React.FC = () => {
       );
   }
 
-  // --- LOADING SCREEN ---
-  if (isLoading) {
-      return (
-        <div className="h-screen w-screen flex items-center justify-center bg-slate-50 flex-col">
-            <Loader2 size={48} className="text-primary animate-spin mb-4" />
-            <p className="text-slate-500 font-medium">Chargement iVISION...</p>
-        </div>
-      );
-  }
-
   // --- AUTH SCREEN ---
   if (!currentUser) {
     return (
@@ -505,16 +496,18 @@ const App: React.FC = () => {
   }
 
   return (
-    <Layout currentUser={currentUser} currentView={currentView} onNavigate={setCurrentView} onLogout={handleLogout}>
-      <ToastContainer notifications={notifications} onDismiss={removeNotification} />
-      {currentView === 'dashboard' && <Dashboard currentUser={currentUser} tasks={tasks} messages={messages} notifications={notifications} onNavigate={setCurrentView} />}
-      {currentView === 'reports' && <Reports currentUser={currentUser} tasks={tasks} users={users} />}
-      {currentView === 'tasks' && <Tasks tasks={tasks} users={users.filter(u => u.status === 'active')} currentUser={currentUser} onUpdateStatus={handleUpdateTaskStatus} onAddTask={handleAddTask} onUpdateTask={handleUpdateTask} />}
-      {currentView === 'chat' && <Chat currentUser={currentUser} users={users.filter(u => u.status === 'active')} channels={channels.length > 0 ? channels : [{ id: 'general', name: 'Général', type: 'global' }]} currentChannelId={currentChannelId} messages={messages} onChannelChange={setCurrentChannelId} onSendMessage={handleSendMessage} />}
-      {currentView === 'files' && currentUser && <Files tasks={tasks} messages={messages} currentUser={currentUser} />}
-      {currentView === 'team' && <Team currentUser={currentUser} users={users} tasks={tasks} activities={[]} onAddUser={handleAddUser} onRemoveUser={handleRemoveUser} onUpdateRole={(userId, role) => handleUpdateMember(userId, { role })} onApproveUser={handleApproveUser} onUpdateMember={handleUpdateMember} />}
-      {currentView === 'settings' && <Settings currentUser={currentUser} onUpdateProfile={handleUpdateProfile} />}
-    </Layout>
+    <div className="animate-in slide-in-from-right duration-500 ease-out h-full">
+      <Layout currentUser={currentUser} currentView={currentView} onNavigate={setCurrentView} onLogout={handleLogout}>
+        <ToastContainer notifications={notifications} onDismiss={removeNotification} />
+        {currentView === 'dashboard' && <Dashboard currentUser={currentUser} tasks={tasks} messages={messages} notifications={notifications} onNavigate={setCurrentView} />}
+        {currentView === 'reports' && <Reports currentUser={currentUser} tasks={tasks} users={users} />}
+        {currentView === 'tasks' && <Tasks tasks={tasks} users={users.filter(u => u.status === 'active')} currentUser={currentUser} onUpdateStatus={handleUpdateTaskStatus} onAddTask={handleAddTask} onUpdateTask={handleUpdateTask} />}
+        {currentView === 'chat' && <Chat currentUser={currentUser} users={users.filter(u => u.status === 'active')} channels={channels.length > 0 ? channels : [{ id: 'general', name: 'Général', type: 'global' }]} currentChannelId={currentChannelId} messages={messages} onChannelChange={setCurrentChannelId} onSendMessage={handleSendMessage} />}
+        {currentView === 'files' && currentUser && <Files tasks={tasks} messages={messages} currentUser={currentUser} />}
+        {currentView === 'team' && <Team currentUser={currentUser} users={users} tasks={tasks} activities={[]} onAddUser={handleAddUser} onRemoveUser={handleRemoveUser} onUpdateRole={(userId, role) => handleUpdateMember(userId, { role })} onApproveUser={handleApproveUser} onUpdateMember={handleUpdateMember} />}
+        {currentView === 'settings' && <Settings currentUser={currentUser} onUpdateProfile={handleUpdateProfile} />}
+      </Layout>
+    </div>
   );
 };
 
