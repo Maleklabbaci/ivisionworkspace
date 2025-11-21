@@ -197,32 +197,31 @@ const App: React.FC = () => {
       setUsers(users.map(u => u.id === userId ? { ...u, role } : u));
   };
 
-  // Login Screen (DARK MODE REDESIGN v2.1)
+  // Login Screen (LIGHT THEME RESTORED)
   if (!currentUser) {
     return (
-      <div className="min-h-[100dvh] bg-gradient-to-br from-[#0f172a] to-[#1e293b] flex items-center justify-center p-4 overflow-y-auto">
+      <div className="min-h-[100dvh] bg-slate-50 flex items-center justify-center p-4 overflow-y-auto">
         <ToastContainer notifications={notifications} onDismiss={removeNotification} />
         
-        {/* Dark Theme Card */}
-        <div className="bg-[#1e293b]/90 backdrop-blur-xl p-8 rounded-2xl shadow-2xl max-w-md w-full border border-slate-700/50 ring-1 ring-white/5 animate-in fade-in zoom-in duration-500">
+        {/* Light Theme Card */}
+        <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full border border-slate-200 animate-in fade-in zoom-in duration-500">
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">
+            <h1 className="text-3xl font-bold text-slate-900 mb-2 tracking-tight">
               <span className="text-primary">i</span>VISION AGENCY
             </h1>
-            <p className="text-slate-400">Espace Membre Sécurisé</p>
+            <p className="text-slate-500">Espace Membre Sécurisé</p>
           </div>
           
           <form onSubmit={handleLogin} className="space-y-6">
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Email professionnel</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Email professionnel</label>
               <div className="relative group">
                 <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" size={18} />
-                {/* FIXED: Background is now #0f172a to match the autofill color exactly */}
                 <input 
                   type="email" 
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-[#0f172a] text-white border border-slate-700 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all placeholder-slate-500 font-medium"
+                  className="w-full pl-10 pr-4 py-3 bg-white text-slate-900 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all placeholder-slate-400 font-medium"
                   placeholder="nom@ivision.com"
                   required
                   autoComplete="email"
@@ -232,17 +231,16 @@ const App: React.FC = () => {
             
             <div>
               <div className="flex justify-between items-center mb-1">
-                <label className="block text-sm font-medium text-slate-300">Mot de passe</label>
-                <a href="#" className="text-xs text-primary hover:text-blue-400 hover:underline">Oublié ?</a>
+                <label className="block text-sm font-medium text-slate-700">Mot de passe</label>
+                <a href="#" className="text-xs text-primary hover:text-blue-600 hover:underline">Oublié ?</a>
               </div>
               <div className="relative group">
                 <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" size={18} />
-                {/* FIXED: Background is now #0f172a to match the autofill color exactly */}
                 <input 
                   type="password" 
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-[#0f172a] text-white border border-slate-700 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all placeholder-slate-500 font-medium"
+                  className="w-full pl-10 pr-4 py-3 bg-white text-slate-900 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all placeholder-slate-400 font-medium"
                   placeholder="••••••••"
                   autoComplete="current-password"
                 />
@@ -251,7 +249,7 @@ const App: React.FC = () => {
 
             <button 
               type="submit"
-              className="w-full bg-primary hover:bg-blue-600 text-white font-medium py-2.5 rounded-lg transition-all transform hover:scale-[1.02] active:scale-95 flex items-center justify-center space-x-2 shadow-lg shadow-primary/30"
+              className="w-full bg-primary hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-all transform hover:scale-[1.02] active:scale-95 flex items-center justify-center space-x-2 shadow-lg shadow-primary/20"
             >
               <LogIn size={18} />
               <span>Connexion</span>
@@ -259,25 +257,24 @@ const App: React.FC = () => {
           </form>
 
           {/* Demo Quick Access */}
-          <div className="mt-8 pt-6 border-t border-slate-700">
-            <p className="text-xs text-slate-500 uppercase font-bold tracking-wider text-center mb-4">Accès Rapide (Demo)</p>
+          <div className="mt-8 pt-6 border-t border-slate-100">
+            <p className="text-xs text-slate-400 uppercase font-bold tracking-wider text-center mb-4">Accès Rapide (Demo)</p>
             <div className="grid grid-cols-3 gap-3">
               {MOCK_USERS.map(user => (
                 <button
                   key={user.id}
                   onClick={() => handleDemoLogin(user)}
-                  className="flex flex-col items-center p-3 rounded-lg hover:bg-slate-800 transition-all group border border-transparent hover:border-slate-600 transform hover:-translate-y-1"
+                  className="flex flex-col items-center p-3 rounded-lg hover:bg-slate-50 transition-all group border border-transparent hover:border-slate-200 transform hover:-translate-y-1"
                 >
-                  <img src={user.avatar} alt={user.name} className="w-10 h-10 rounded-full mb-2 opacity-80 group-hover:opacity-100 transition-opacity shadow-sm border border-slate-600" />
-                  <span className="text-[10px] text-slate-400 font-medium text-center leading-tight group-hover:text-slate-200">{user.name.split(' ')[0]}<br/><span className="opacity-50 font-normal">{user.role}</span></span>
+                  <img src={user.avatar} alt={user.name} className="w-10 h-10 rounded-full mb-2 opacity-90 group-hover:opacity-100 transition-opacity shadow-sm border border-slate-200" />
+                  <span className="text-[10px] text-slate-500 font-medium text-center leading-tight group-hover:text-slate-800">{user.name.split(' ')[0]}<br/><span className="opacity-50 font-normal">{user.role}</span></span>
                 </button>
               ))}
             </div>
           </div>
           
-          {/* Version Indicator for Debugging */}
           <div className="mt-4 text-center">
-             <span className="text-[10px] text-slate-600 font-mono">v2.1 • Secure Environment</span>
+             <span className="text-[10px] text-slate-400 font-mono">v2.2 • Light Theme</span>
           </div>
         </div>
       </div>

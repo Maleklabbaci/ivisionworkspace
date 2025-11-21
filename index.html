@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#0f172a">
+    <meta name="theme-color" content="#ffffff">
     
     <!-- Cache Busting Meta Tags -->
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
@@ -26,35 +26,34 @@
               urgent: '#EF4444',
               success: '#10B981',
               darkbg: '#0f172a', // Slate 900
-              cardbg: '#1e293b', // Slate 800
+              cardbg: '#ffffff', // White for Light Mode
             }
           }
         }
       }
     </script>
     <style>
-      /* 1. FORCE DARK BACKGROUND IMMEDIATELY */
+      /* 1. FORCE LIGHT BACKGROUND */
       html, body {
-        background-color: #0f172a !important; /* Force Slate-900 */
-        color: #f8fafc;
+        background-color: #f8fafc !important; /* Slate-50 */
+        color: #0f172a;
         height: 100%;
         margin: 0;
       }
       
       :root {
-        color-scheme: dark; 
+        color-scheme: light; 
       }
 
-      /* 2. FIX AUTOFILL WHITE BACKGROUND (AGGRESSIVE) */
-      /* Use a large inset box-shadow to cover the white browser background */
-      /* MATCHING EXACTLY THE INPUT BACKGROUND IN APP.TSX (#0f172a) */
+      /* 2. FIX AUTOFILL WHITE BACKGROUND */
+      /* Match the input background which is usually white or very light gray */
       input:-webkit-autofill,
       input:-webkit-autofill:hover, 
       input:-webkit-autofill:focus, 
       input:-webkit-autofill:active {
-          -webkit-box-shadow: 0 0 0 1000px #0f172a inset !important; /* Slate-950 matches App inputs */
-          -webkit-text-fill-color: white !important;
-          caret-color: white !important;
+          -webkit-box-shadow: 0 0 0 1000px white inset !important;
+          -webkit-text-fill-color: #0f172a !important;
+          caret-color: #0f172a !important;
           transition: background-color 5000s ease-in-out 0s;
       }
 
@@ -64,14 +63,14 @@
         height: 6px;
       }
       ::-webkit-scrollbar-track {
-        background: #0f172a; 
+        background: #f1f5f9; 
       }
       ::-webkit-scrollbar-thumb {
-        background: #334155;
+        background: #cbd5e1;
         border-radius: 3px;
       }
       ::-webkit-scrollbar-thumb:hover {
-        background: #475569;
+        background: #94a3b8;
       }
       
       /* Loading Screen Animation */
@@ -99,14 +98,13 @@
 </head>
   <body>
     <div id="root">
-      <!-- PRE-REACT LOADING SCREEN -->
-      <!-- This shows instantly while React loads, preventing white flash -->
-      <div style="height: 100vh; width: 100vw; background-color: #0f172a; display: flex; justify-content: center; align-items: center; flex-direction: column; font-family: 'Inter', sans-serif;">
-        <div style="font-size: 2.5rem; font-weight: 800; letter-spacing: -0.05em; color: white;">
+      <!-- PRE-REACT LOADING SCREEN (LIGHT MODE) -->
+      <div style="height: 100vh; width: 100vw; background-color: #ffffff; display: flex; justify-content: center; align-items: center; flex-direction: column; font-family: 'Inter', sans-serif;">
+        <div style="font-size: 2.5rem; font-weight: 800; letter-spacing: -0.05em; color: #0f172a;">
           <span style="color: #1D4ED8;">i</span>VISION
         </div>
         <div class="loading-pulse" style="margin-top: 1rem; font-size: 0.875rem; color: #64748b; font-weight: 500;">
-          Chargement de l'espace de travail v2.1...
+          Chargement de l'espace de travail...
         </div>
       </div>
     </div>
