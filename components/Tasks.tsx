@@ -26,6 +26,7 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
   
   // Calendar State
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null); // DRAG & DROP STATE
   
   // New Task State
   const [newTask, setNewTask] = useState<Partial<Task>>({
@@ -39,8 +40,11 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
     price: 0
   });
 
-  // Helper: Check if user can delete
-  const canDelete = (user: User) => user.role === UserRole.ADMIN || user.role === UserRole.PROJECT_MANAGER;
+  // Helper: Check if user can delete (Case insensitive robust check)
+  const canDelete = (user: User) => {
+      const role = user.role?.toString().toLowerCase();
+      return role === 'admin' || role === 'chef de projet' || user.role === UserRole.ADMIN || user.role === UserRole.PROJECT_MANAGER;
+  };
 
   // Filter tasks based on role
   // ADMIN sees ALL tasks. MEMBERS see ONLY their assigned tasks.
@@ -78,6 +82,30 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
     const day = new Date(year, month, 1).getDay();
     // Convert to Monday = 0, Sunday = 6
     return day === 0 ? 6 : day - 1;
+  };
+
+  // --- Drag & Drop Logic ---
+  const handleDragStart = (e: React.DragEvent, taskId: string) => {
+      setDraggedTaskId(taskId);
+      e.dataTransfer.effectAllowed = "move";
+      // Optional: Set a custom drag image if needed
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+      e.preventDefault(); // Necessary to allow dropping
+      e.dataTransfer.dropEffect = "move";
+  };
+
+  const handleDrop = (e: React.DragEvent, targetDate: string) => {
+      e.preventDefault();
+      if (!draggedTaskId) return;
+
+      const taskToMove = tasks.find(t => t.id === draggedTaskId);
+      if (taskToMove && taskToMove.dueDate !== targetDate) {
+          // Update the task with the new date
+          onUpdateTask({ ...taskToMove, dueDate: targetDate });
+      }
+      setDraggedTaskId(null);
   };
   // -----------------------
 
@@ -140,7 +168,10 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
   const handleDeleteClick = (taskId: string) => {
       if (window.confirm("Êtes-vous sûr de vouloir supprimer cette tâche définitivement ?")) {
           onDeleteTask(taskId);
-          setSelectedTask(null);
+          // If we are in the modal, close it
+          if (selectedTask && selectedTask.id === taskId) {
+              setSelectedTask(null);
+          }
       }
   };
 
@@ -202,11 +233,15 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                         onClick={() => setSelectedTask(task)}
                         className="bg-white p-4 rounded-lg shadow-sm border border-slate-200 hover:border-primary hover:shadow-md transition-all duration-200 cursor-pointer group transform hover:-translate-y-1 relative"
                       >
-                          {/* Quick Delete Button (Visible on Hover) - Admin & PM Only */}
+                          {/* Quick Delete Button - Always visible on mobile, hover on desktop */}
                           {canDelete(currentUser) && (
                               <button 
-                                onClick={(e) => { e.stopPropagation(); handleDeleteClick(task.id); }}
-                                className="absolute top-2 right-2 p-1.5 bg-white text-slate-300 hover:text-urgent hover:bg-red-50 rounded shadow-sm border border-slate-100 opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                                onClick={(e) => { 
+                                    e.preventDefault();
+                                    e.stopPropagation(); 
+                                    handleDeleteClick(task.id); 
+                                }}
+                                className="absolute top-2 right-2 p-1.5 bg-white text-slate-300 hover:text-urgent hover:bg-red-50 rounded shadow-sm border border-slate-100 transition-colors z-10"
                                 title="Supprimer"
                               >
                                   <Trash2 size={14} />
@@ -324,6 +359,7 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                      <div className="flex items-center"><div className="w-2 h-2 bg-blue-500 rounded-full mr-1"></div>Content</div>
                      <div className="flex items-center"><div className="w-2 h-2 bg-green-500 rounded-full mr-1"></div>Ads</div>
                      <div className="flex items-center"><div className="w-2 h-2 bg-purple-500 rounded-full mr-1"></div>Social</div>
+                     <span className="text-slate-400 ml-2 italic flex items-center"><div className="w-3 h-3 border border-slate-300 rounded mr-1"></div> Glisser-déposer pour changer la date</span>
                   </div>
               </div>
 
@@ -358,18 +394,26 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                              const isToday = new Date().toDateString() === new Date(year, month, day).toDateString();
 
                              cells.push(
-                                 <div key={day} className={`min-h-[120px] border-b border-r border-slate-100 p-2 flex flex-col transition-colors hover:bg-slate-50 group relative ${isToday ? 'bg-blue-50/20' : 'bg-white'}`}>
-                                     <div className="flex justify-between items-start mb-2">
+                                 <div 
+                                    key={day} 
+                                    onDragOver={handleDragOver}
+                                    onDrop={(e) => handleDrop(e, dateStr)}
+                                    className={`min-h-[120px] border-b border-r border-slate-100 p-2 flex flex-col transition-colors hover:bg-slate-50 group relative ${isToday ? 'bg-blue-50/20' : 'bg-white'}`}
+                                 >
+                                     <div className="flex justify-between items-start mb-2 pointer-events-none">
                                          <span className={`text-sm font-semibold w-7 h-7 flex items-center justify-center rounded-full ${isToday ? 'bg-primary text-white shadow-md' : 'text-slate-700'}`}>
                                              {day}
                                          </span>
                                          {(currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.PROJECT_MANAGER) && (
                                             <button 
-                                                onClick={() => {
+                                                onClick={(e) => {
+                                                    // Re-enable pointer events for the button
+                                                    // Note: pointer-events-none on parent might block this, moved class to span
+                                                    e.stopPropagation(); // prevent bubbling to drag events if any
                                                     setNewTask({...newTask, dueDate: dateStr});
                                                     setShowModal(true);
                                                 }}
-                                                className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-primary transition-opacity"
+                                                className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-primary transition-opacity pointer-events-auto"
                                             >
                                                 <Plus size={16} />
                                             </button>
@@ -385,12 +429,16 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                                              else if(task.type === 'social') barColor = 'bg-purple-500';
                                              
                                              const assignee = users.find(u => u.id === task.assigneeId);
+                                             const isDragging = draggedTaskId === task.id;
 
                                              return (
                                                  <div 
                                                     key={task.id} 
+                                                    draggable
+                                                    onDragStart={(e) => handleDragStart(e, task.id)}
                                                     onClick={(e) => { e.stopPropagation(); setSelectedTask(task); }}
-                                                    className={`text-[10px] p-1.5 rounded cursor-pointer border shadow-sm transition-transform hover:scale-[1.02] hover:shadow-md flex items-center space-x-1.5 group/task ${
+                                                    className={`text-[10px] p-1.5 rounded cursor-move border shadow-sm transition-all hover:scale-[1.02] hover:shadow-md flex items-center space-x-1.5 group/task ${
+                                                        isDragging ? 'opacity-50 border-dashed border-slate-400 bg-slate-100' : 
                                                         task.status === TaskStatus.DONE ? 'bg-slate-50 text-slate-400 border-slate-200 opacity-70' : 'bg-white text-slate-700 border-slate-200'
                                                     }`}
                                                  >

@@ -376,11 +376,46 @@ const App: React.FC = () => {
       const { error } = await supabase.from('users').delete().eq('id', userId);
       if (!error) { setUsers(users.filter(u => u.id !== userId)); addNotification('Succès', 'Utilisateur supprimé.', 'success'); }
   };
-  const handleUpdateProfile = async (updatedData: Partial<User>) => {
+  
+  // FIXED: Handle both Auth and Public Profile updates
+  const handleUpdateProfile = async (updatedData: Partial<User> & { password?: string }) => {
     if (!currentUser) return;
-    const { error } = await supabase.from('users').update({ name: updatedData.name, email: updatedData.email, phone_number: updatedData.phoneNumber, avatar: updatedData.avatar }).eq('id', currentUser.id);
-    if (!error) { setCurrentUser({ ...currentUser, ...updatedData }); addNotification("Profil mis à jour", "Vos modifications ont été enregistrées.", 'success'); }
+    
+    // 1. Handle Supabase Auth Updates (Password & Email)
+    const authUpdates: any = {};
+    if (updatedData.password && updatedData.password.length > 0) {
+        authUpdates.password = updatedData.password;
+    }
+    if (updatedData.email && updatedData.email !== currentUser.email) {
+        authUpdates.email = updatedData.email;
+    }
+
+    if (Object.keys(authUpdates).length > 0) {
+        const { error: authError } = await supabase.auth.updateUser(authUpdates);
+        if (authError) {
+            addNotification("Erreur Sécurité", authError.message, 'urgent');
+            return; // Stop if auth update fails
+        }
+    }
+
+    // 2. Handle Public Profile Updates (users table)
+    const { error } = await supabase.from('users').update({ 
+        name: updatedData.name, 
+        email: updatedData.email, 
+        phone_number: updatedData.phoneNumber, 
+        avatar: updatedData.avatar 
+    }).eq('id', currentUser.id);
+
+    if (!error) { 
+        // Update local state excluding the password field
+        const { password, ...userFields } = updatedData;
+        setCurrentUser({ ...currentUser, ...userFields }); 
+        addNotification("Profil mis à jour", "Vos modifications ont été enregistrées.", 'success'); 
+    } else {
+        addNotification("Erreur", "Impossible de mettre à jour les informations du profil.", 'urgent');
+    }
   };
+
   const handleApproveUser = async (userId: string) => {
       const { error } = await supabase.from('users').update({ status: 'active' }).eq('id', userId);
       if (!error) { setUsers(users.map(u => u.id === userId ? { ...u, status: 'active' } : u)); addNotification('Succès', 'Compte validé.', 'success'); }

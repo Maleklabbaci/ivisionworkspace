@@ -1,11 +1,11 @@
 
 import React, { useState, useRef } from 'react';
 import { User, UserRole } from '../types';
-import { Camera, Save, Lock, Mail, Phone, User as UserIcon, Shield } from 'lucide-react';
+import { Camera, Save, Lock, Mail, Phone, User as UserIcon, Shield, Loader2 } from 'lucide-react';
 
 interface SettingsProps {
   currentUser: User;
-  onUpdateProfile: (updatedData: Partial<User> & { password?: string }) => void;
+  onUpdateProfile: (updatedData: Partial<User> & { password?: string }) => Promise<void>;
 }
 
 const Settings: React.FC<SettingsProps> = ({ currentUser, onUpdateProfile }) => {
@@ -18,6 +18,7 @@ const Settings: React.FC<SettingsProps> = ({ currentUser, onUpdateProfile }) => 
     confirmPassword: ''
   });
   const [avatarPreview, setAvatarPreview] = useState(currentUser.avatar);
+  const [isSaving, setIsSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -36,7 +37,7 @@ const Settings: React.FC<SettingsProps> = ({ currentUser, onUpdateProfile }) => 
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (formData.newPassword && formData.newPassword !== formData.confirmPassword) {
@@ -44,13 +45,15 @@ const Settings: React.FC<SettingsProps> = ({ currentUser, onUpdateProfile }) => 
       return;
     }
 
-    onUpdateProfile({
+    setIsSaving(true);
+    await onUpdateProfile({
       name: formData.name,
       email: formData.email,
       phoneNumber: formData.phoneNumber,
       avatar: avatarPreview,
       password: formData.newPassword ? formData.newPassword : undefined
     });
+    setIsSaving(false);
   };
 
   return (
@@ -202,10 +205,11 @@ const Settings: React.FC<SettingsProps> = ({ currentUser, onUpdateProfile }) => 
              </button>
              <button 
                 type="submit" 
-                className="px-6 py-2.5 bg-primary text-white rounded-lg font-medium hover:bg-blue-700 shadow-lg shadow-primary/30 transition-all transform hover:scale-[1.02] active:scale-95 flex items-center"
+                disabled={isSaving}
+                className="px-6 py-2.5 bg-primary text-white rounded-lg font-medium hover:bg-blue-700 shadow-lg shadow-primary/30 transition-all transform hover:scale-[1.02] active:scale-95 flex items-center disabled:opacity-70 disabled:cursor-not-allowed"
              >
-                <Save size={18} className="mr-2" />
-                Enregistrer les modifications
+                {isSaving ? <Loader2 className="animate-spin mr-2" size={18} /> : <Save size={18} className="mr-2" />}
+                {isSaving ? 'Enregistrement...' : 'Enregistrer les modifications'}
              </button>
           </div>
         </div>

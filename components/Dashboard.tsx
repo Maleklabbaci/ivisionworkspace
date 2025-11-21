@@ -220,19 +220,23 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks, messages, not
                 {myTasksToday.slice(0, 5).map(task => {
                    const isUrgent = new Date(task.dueDate) <= new Date();
                    return (
-                    <div key={task.id} className="p-4 hover:bg-slate-50 transition-colors flex items-center justify-between group">
+                    <div key={task.id} className={`p-4 transition-all flex items-center justify-between group border-l-4 ${
+                        isUrgent 
+                        ? 'bg-red-50/60 hover:bg-red-100/80 border-urgent' 
+                        : 'hover:bg-slate-50 border-transparent'
+                    }`}>
                       <div className="flex items-start space-x-3">
                         <div className={`w-2 h-2 mt-2 rounded-full flex-shrink-0 ${
                           task.type === 'ads' ? 'bg-success' : task.type === 'content' ? 'bg-primary' : 'bg-purple-500'
                         }`} />
                         <div>
-                          <h4 className="text-sm font-semibold text-slate-800 group-hover:text-primary transition-colors">{task.title}</h4>
-                          <p className="text-xs text-slate-500 truncate max-w-xs">{task.description}</p>
+                          <h4 className={`text-sm font-semibold transition-colors ${isUrgent ? 'text-red-900' : 'text-slate-800 group-hover:text-primary'}`}>{task.title}</h4>
+                          <p className={`text-xs truncate max-w-xs ${isUrgent ? 'text-red-700' : 'text-slate-500'}`}>{task.description}</p>
                         </div>
                       </div>
                       <div className="flex items-center space-x-4">
                          <span className={`text-xs px-2 py-1 rounded font-medium ${
-                           isUrgent ? 'bg-red-50 text-urgent' : 'bg-slate-100 text-slate-500'
+                           isUrgent ? 'bg-white text-urgent border border-red-100' : 'bg-slate-100 text-slate-500'
                          }`}>
                            {isUrgent ? 'Urgent' : task.dueDate}
                          </span>
@@ -245,13 +249,13 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks, messages, not
                              {isAdminOrPM && (
                                  <button 
                                     onClick={(e) => handleDelete(task.id, e)} 
-                                    className="text-slate-300 hover:text-urgent transition-colors p-1"
+                                    className={`transition-colors p-1 ${isUrgent ? 'text-red-400 hover:text-red-600' : 'text-slate-300 hover:text-urgent'}`}
                                     title="Supprimer"
                                  >
                                     <Trash2 size={16} />
                                  </button>
                              )}
-                             <button className="text-slate-300 hover:text-success transition-colors p-1">
+                             <button className={`transition-colors p-1 ${isUrgent ? 'text-red-400 hover:text-success' : 'text-slate-300 hover:text-success'}`}>
                                 <CheckCircle size={18} />
                              </button>
                          </div>
