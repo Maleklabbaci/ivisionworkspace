@@ -197,14 +197,14 @@ const App: React.FC = () => {
       setUsers(users.map(u => u.id === userId ? { ...u, role } : u));
   };
 
-  // Login Screen (DARK MODE REDESIGN v2.0)
+  // Login Screen (DARK MODE REDESIGN v2.1)
   if (!currentUser) {
     return (
       <div className="min-h-[100dvh] bg-gradient-to-br from-[#0f172a] to-[#1e293b] flex items-center justify-center p-4 overflow-y-auto">
         <ToastContainer notifications={notifications} onDismiss={removeNotification} />
         
         {/* Dark Theme Card */}
-        <div className="bg-[#1e293b]/80 backdrop-blur-lg p-8 rounded-2xl shadow-2xl max-w-md w-full border border-slate-700/50 ring-1 ring-white/5 animate-in fade-in zoom-in duration-300">
+        <div className="bg-[#1e293b]/90 backdrop-blur-xl p-8 rounded-2xl shadow-2xl max-w-md w-full border border-slate-700/50 ring-1 ring-white/5 animate-in fade-in zoom-in duration-500">
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">
               <span className="text-primary">i</span>VISION AGENCY
@@ -217,11 +217,12 @@ const App: React.FC = () => {
               <label className="block text-sm font-medium text-slate-300 mb-1">Email professionnel</label>
               <div className="relative group">
                 <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" size={18} />
+                {/* FIXED: Background is now #0f172a to match the autofill color exactly */}
                 <input 
                   type="email" 
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-[#334155] text-white border border-slate-600 rounded-lg focus:bg-[#1e293b] focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all placeholder-slate-400 font-medium"
+                  className="w-full pl-10 pr-4 py-3 bg-[#0f172a] text-white border border-slate-700 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all placeholder-slate-500 font-medium"
                   placeholder="nom@ivision.com"
                   required
                   autoComplete="email"
@@ -236,11 +237,12 @@ const App: React.FC = () => {
               </div>
               <div className="relative group">
                 <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" size={18} />
+                {/* FIXED: Background is now #0f172a to match the autofill color exactly */}
                 <input 
                   type="password" 
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-[#334155] text-white border border-slate-600 rounded-lg focus:bg-[#1e293b] focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all placeholder-slate-400 font-medium"
+                  className="w-full pl-10 pr-4 py-3 bg-[#0f172a] text-white border border-slate-700 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all placeholder-slate-500 font-medium"
                   placeholder="••••••••"
                   autoComplete="current-password"
                 />
@@ -275,7 +277,7 @@ const App: React.FC = () => {
           
           {/* Version Indicator for Debugging */}
           <div className="mt-4 text-center">
-             <span className="text-[10px] text-slate-600 font-mono">v2.0 • Secure Environment</span>
+             <span className="text-[10px] text-slate-600 font-mono">v2.1 • Secure Environment</span>
           </div>
         </div>
       </div>

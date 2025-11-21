@@ -47,11 +47,12 @@
 
       /* 2. FIX AUTOFILL WHITE BACKGROUND (AGGRESSIVE) */
       /* Use a large inset box-shadow to cover the white browser background */
+      /* MATCHING EXACTLY THE INPUT BACKGROUND IN APP.TSX (#0f172a) */
       input:-webkit-autofill,
       input:-webkit-autofill:hover, 
       input:-webkit-autofill:focus, 
       input:-webkit-autofill:active {
-          -webkit-box-shadow: 0 0 0 1000px #334155 inset !important; /* Slate-700 */
+          -webkit-box-shadow: 0 0 0 1000px #0f172a inset !important; /* Slate-950 matches App inputs */
           -webkit-text-fill-color: white !important;
           caret-color: white !important;
           transition: background-color 5000s ease-in-out 0s;
@@ -105,9 +106,11 @@
           <span style="color: #1D4ED8;">i</span>VISION
         </div>
         <div class="loading-pulse" style="margin-top: 1rem; font-size: 0.875rem; color: #64748b; font-weight: 500;">
-          Chargement de l'espace de travail...
+          Chargement de l'espace de travail v2.1...
         </div>
       </div>
     </div>
+    <!-- CRITICAL: Entry point for the React App -->
+    <script type="module" src="./index.tsx"></script>
   </body>
 </html>

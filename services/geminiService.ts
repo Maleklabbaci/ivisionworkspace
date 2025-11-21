@@ -1,10 +1,9 @@
 import { GoogleGenAI } from "@google/genai";
 
-// Initialize the client with the API key from environment variables
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
 export const generateMarketingInsight = async (context: string): Promise<string> => {
   try {
+    // Initialize inside function to avoid top-level crash if env is missing at boot
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const model = 'gemini-2.5-flash';
     
     const prompt = `
@@ -27,6 +26,7 @@ export const generateMarketingInsight = async (context: string): Promise<string>
 
 export const brainstormTaskIdeas = async (topic: string): Promise<string[]> => {
   try {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const model = 'gemini-2.5-flash';
     
     const prompt = `
