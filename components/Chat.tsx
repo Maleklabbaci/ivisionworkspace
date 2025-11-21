@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Paperclip, Smile, Hash, Lock, Search, Bell, MessageSquare, File, Image, Menu, X } from 'lucide-react';
+import { Send, Paperclip, Smile, Hash, Lock, Search, Bell, MessageSquare, File, Image, Menu, X, Plus, Check } from 'lucide-react';
 import { Message, User, Channel, UserRole } from '../types';
 
 interface ChatProps {
@@ -10,11 +11,17 @@ interface ChatProps {
   messages: Message[];
   onChannelChange: (channelId: string) => void;
   onSendMessage: (text: string, channelId: string) => void;
+  onAddChannel: (channel: { name: string; type: 'global' | 'project'; members?: string[] }) => void;
 }
 
-const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChannelId, messages, onChannelChange, onSendMessage }) => {
+const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChannelId, messages, onChannelChange, onSendMessage, onAddChannel }) => {
   const [newMessage, setNewMessage] = useState('');
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
+  const [showAddChannelModal, setShowAddChannelModal] = useState(false);
+  const [newChannelName, setNewChannelName] = useState('');
+  const [newChannelType, setNewChannelType] = useState<'global' | 'project'>('project');
+  const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
+  
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const activeMessages = messages.filter(m => m.channelId === currentChannelId);
@@ -44,6 +51,29 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
   const handleChannelSelect = (id: string) => {
       onChannelChange(id);
       setShowMobileSidebar(false);
+  };
+
+  const handleAddSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if(newChannelName.trim()) {
+        onAddChannel({ 
+            name: newChannelName, 
+            type: newChannelType,
+            members: newChannelType === 'project' ? [currentUser.id, ...selectedMembers] : undefined
+        });
+        setShowAddChannelModal(false);
+        setNewChannelName('');
+        setNewChannelType('project');
+        setSelectedMembers([]);
+    }
+  };
+
+  const toggleMemberSelection = (userId: string) => {
+      if (selectedMembers.includes(userId)) {
+          setSelectedMembers(selectedMembers.filter(id => id !== userId));
+      } else {
+          setSelectedMembers([...selectedMembers, userId]);
+      }
   };
 
   const ChannelList = () => (
@@ -98,6 +128,15 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
       <div className="w-64 bg-slate-50 border-r border-slate-200 flex flex-col hidden md:flex">
         <div className="p-5 border-b border-slate-200 flex justify-between items-center">
             <h2 className="font-bold text-slate-900 text-lg">Discussions</h2>
+            {currentUser.role === UserRole.ADMIN && (
+                <button 
+                    onClick={() => setShowAddChannelModal(true)}
+                    className="text-slate-400 hover:text-primary p-1 rounded hover:bg-slate-100 transition-colors"
+                    title="Ajouter un canal"
+                >
+                    <Plus size={20} />
+                </button>
+            )}
         </div>
         <div className="flex-1 overflow-y-auto p-3 space-y-6">
             <ChannelList />
@@ -116,7 +155,12 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
               <div className="w-64 bg-slate-50 border-r border-slate-200 flex flex-col h-full shadow-2xl animate-in slide-in-from-left duration-300 z-40">
                   <div className="p-5 border-b border-slate-200 flex justify-between items-center bg-slate-50">
                     <h2 className="font-bold text-slate-900 text-lg">Discussions</h2>
-                    <button onClick={() => setShowMobileSidebar(false)} className="text-slate-500"><X size={20}/></button>
+                    <div className="flex items-center space-x-2">
+                        {currentUser.role === UserRole.ADMIN && (
+                            <button onClick={() => setShowAddChannelModal(true)} className="text-slate-400 hover:text-primary"><Plus size={20}/></button>
+                        )}
+                        <button onClick={() => setShowMobileSidebar(false)} className="text-slate-500"><X size={20}/></button>
+                    </div>
                   </div>
                   <div className="flex-1 overflow-y-auto p-3">
                       <ChannelList />
@@ -253,6 +297,98 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
             </div>
         </div>
       </div>
+
+      {/* Add Channel Modal */}
+      {showAddChannelModal && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+                  <div className="p-6 border-b border-slate-100 flex justify-between items-center shrink-0">
+                      <h3 className="text-lg font-bold text-slate-900">Nouveau Canal</h3>
+                      <button onClick={() => setShowAddChannelModal(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
+                  </div>
+                  
+                  <div className="flex-1 overflow-y-auto p-6">
+                      <form id="addChannelForm" onSubmit={handleAddSubmit} className="space-y-5">
+                          <div>
+                              <label className="block text-sm font-medium text-slate-700 mb-1">Nom du canal</label>
+                              <input 
+                                type="text" 
+                                required
+                                value={newChannelName}
+                                onChange={e => setNewChannelName(e.target.value)}
+                                className="w-full p-2.5 bg-gray-200 text-black border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all"
+                                placeholder="Ex: Campagne Hiver 2024"
+                              />
+                          </div>
+                          
+                          <div>
+                              <label className="block text-sm font-medium text-slate-700 mb-1">Type</label>
+                              <select 
+                                value={newChannelType}
+                                onChange={e => setNewChannelType(e.target.value as 'global' | 'project')}
+                                className="w-full p-2.5 bg-gray-200 text-black border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all"
+                              >
+                                  <option value="project">Projet (Privé)</option>
+                                  <option value="global">Global (Public)</option>
+                              </select>
+                          </div>
+
+                          {/* Member Selection for Private Channels */}
+                          {newChannelType === 'project' && (
+                              <div className="animate-in slide-in-from-top-2">
+                                  <label className="block text-sm font-medium text-slate-700 mb-2">Membres assignés</label>
+                                  <div className="border border-gray-300 rounded-lg overflow-hidden bg-gray-50 max-h-48 overflow-y-auto">
+                                      {users.filter(u => u.id !== currentUser.id).map(user => (
+                                          <div 
+                                            key={user.id} 
+                                            onClick={() => toggleMemberSelection(user.id)}
+                                            className="flex items-center justify-between p-3 hover:bg-white border-b border-gray-200 last:border-0 cursor-pointer transition-colors"
+                                          >
+                                              <div className="flex items-center space-x-3">
+                                                  <img src={user.avatar} alt={user.name} className="w-8 h-8 rounded-full" />
+                                                  <div>
+                                                      <p className="text-sm font-medium text-slate-900">{user.name}</p>
+                                                      <p className="text-xs text-slate-500">{user.role}</p>
+                                                  </div>
+                                              </div>
+                                              <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${selectedMembers.includes(user.id) ? 'bg-primary border-primary text-white' : 'border-gray-400 bg-white'}`}>
+                                                  {selectedMembers.includes(user.id) && <Check size={14} />}
+                                              </div>
+                                          </div>
+                                      ))}
+                                      {users.length <= 1 && (
+                                          <div className="p-4 text-center text-slate-500 text-sm">
+                                              Aucun autre membre disponible.
+                                          </div>
+                                      )}
+                                  </div>
+                                  <p className="text-xs text-slate-500 mt-2">Vous serez automatiquement ajouté en tant qu'admin du canal.</p>
+                              </div>
+                          )}
+                      </form>
+                  </div>
+
+                  <div className="p-6 border-t border-slate-100 bg-white shrink-0">
+                      <div className="flex space-x-3">
+                          <button 
+                            type="button"
+                            onClick={() => setShowAddChannelModal(false)}
+                            className="flex-1 py-2.5 text-slate-600 hover:bg-slate-100 rounded-lg font-medium transition-colors"
+                          >
+                              Annuler
+                          </button>
+                          <button 
+                            type="submit"
+                            form="addChannelForm"
+                            className="flex-1 py-2.5 bg-primary text-white rounded-lg font-medium hover:bg-blue-700 shadow-md shadow-primary/20 transition-all"
+                          >
+                              Créer
+                          </button>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      )}
     </div>
   );
 };

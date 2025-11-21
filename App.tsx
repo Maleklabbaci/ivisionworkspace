@@ -371,7 +371,67 @@ const App: React.FC = () => {
       if (error) { console.error(error); addNotification('Erreur', 'Message non envoyé.', 'urgent'); }
   };
 
-  const handleAddUser = async (newUser: User) => { addNotification('Info', "L'utilisateur doit s'inscrire lui-même pour activer l'authentification.", 'info'); };
+  const handleAddChannel = async (newChannel: { name: string; type: 'global' | 'project'; members?: string[] }) => {
+      const tempId = crypto.randomUUID();
+      const channelToAdd: Channel = { id: tempId, name: newChannel.name, type: newChannel.type, unread: 0 };
+      
+      setChannels(prev => [...prev, channelToAdd]);
+      addNotification('Succès', 'Canal créé.', 'success');
+
+      const { error } = await supabase.from('channels').insert([{
+          id: tempId,
+          name: newChannel.name,
+          type: newChannel.type,
+          unread_count: 0
+      }]);
+
+      if (error) {
+          console.error(error);
+          addNotification('Erreur', 'Impossible de sauvegarder le canal.', 'urgent');
+          setChannels(prev => prev.filter(c => c.id !== tempId));
+          return;
+      }
+
+      // Handle Private Channel Members Insertion
+      if (newChannel.type === 'project' && newChannel.members && newChannel.members.length > 0) {
+           const memberInserts = newChannel.members.map(uid => ({
+               channel_id: tempId,
+               user_id: uid
+           }));
+           
+           const { error: membersError } = await supabase.from('channel_members').insert(memberInserts);
+           
+           if (membersError) {
+               console.error("Error adding members to channel", membersError);
+               addNotification('Attention', 'Canal créé mais erreur lors de l\'ajout des membres.', 'urgent');
+           }
+      }
+  };
+
+  // UPDATE: Insert real user into DB
+  const handleAddUser = async (newUser: User) => {
+      const tempId = crypto.randomUUID();
+      const dbUser = {
+          id: tempId,
+          name: newUser.name,
+          email: newUser.email,
+          role: newUser.role,
+          avatar: newUser.avatar,
+          notification_pref: 'all',
+          status: 'active'
+      };
+
+      setUsers(prev => [...prev, { ...newUser, id: tempId }]);
+      addNotification('Succès', 'Membre ajouté à l\'espace de travail.', 'success');
+
+      const { error } = await supabase.from('users').insert([dbUser]);
+      if (error) {
+          console.error(error);
+          addNotification('Erreur', "Impossible d'enregistrer le membre.", 'urgent');
+          setUsers(prev => prev.filter(u => u.email !== newUser.email)); // Revert
+      }
+  };
+
   const handleRemoveUser = async (userId: string) => {
       const { error } = await supabase.from('users').delete().eq('id', userId);
       if (!error) { setUsers(users.filter(u => u.id !== userId)); addNotification('Succès', 'Utilisateur supprimé.', 'success'); }
@@ -535,7 +595,7 @@ const App: React.FC = () => {
         {currentView === 'dashboard' && <Dashboard currentUser={currentUser} tasks={tasks} messages={messages} notifications={notifications} onNavigate={setCurrentView} onDeleteTask={handleDeleteTask} />}
         {currentView === 'reports' && <Reports currentUser={currentUser} tasks={tasks} users={users} />}
         {currentView === 'tasks' && <Tasks tasks={tasks} users={users.filter(u => u.status === 'active')} currentUser={currentUser} onUpdateStatus={handleUpdateTaskStatus} onAddTask={handleAddTask} onUpdateTask={handleUpdateTask} onDeleteTask={handleDeleteTask} />}
-        {currentView === 'chat' && <Chat currentUser={currentUser} users={users.filter(u => u.status === 'active')} channels={channels.length > 0 ? channels : [{ id: 'general', name: 'Général', type: 'global' }]} currentChannelId={currentChannelId} messages={messages} onChannelChange={setCurrentChannelId} onSendMessage={handleSendMessage} />}
+        {currentView === 'chat' && <Chat currentUser={currentUser} users={users.filter(u => u.status === 'active')} channels={channels.length > 0 ? channels : [{ id: 'general', name: 'Général', type: 'global' }]} currentChannelId={currentChannelId} messages={messages} onChannelChange={setCurrentChannelId} onSendMessage={handleSendMessage} onAddChannel={handleAddChannel} />}
         {currentView === 'files' && currentUser && <Files tasks={tasks} messages={messages} currentUser={currentUser} />}
         {currentView === 'team' && <Team currentUser={currentUser} users={users} tasks={tasks} activities={[]} onAddUser={handleAddUser} onRemoveUser={handleRemoveUser} onUpdateRole={(userId, role) => handleUpdateMember(userId, { role })} onApproveUser={handleApproveUser} onUpdateMember={handleUpdateMember} />}
         {currentView === 'settings' && <Settings currentUser={currentUser} onUpdateProfile={handleUpdateProfile} />}
