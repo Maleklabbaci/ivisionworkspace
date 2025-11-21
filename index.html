@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0f172a">
     <title>iVISION AGENCY - Plateforme de Gestion</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -24,22 +25,38 @@
       }
     </script>
     <style>
-      /* Fond sombre par défaut pour éviter le flash blanc au chargement */
-      body {
-        background-color: #0f172a; /* Slate-900 (Dark Blue) */
+      /* Force full dark background on html/body to prevent white bounce/scroll areas */
+      html, body {
+        background-color: #0f172a; /* Slate-900 */
         color: #f8fafc;
+        height: 100%;
+        margin: 0;
       }
-      /* Force light scheme for date inputs to ensure black text/icons */
+      
+      /* Force light scheme for date inputs to ensure black text/icons when system is dark */
       :root {
         color-scheme: dark; 
       }
+
+      /* FIX: Override Browser Autofill White Background on Inputs */
+      /* This targets the "Log in barre" (input bars) turning white */
+      input:-webkit-autofill,
+      input:-webkit-autofill:hover, 
+      input:-webkit-autofill:focus, 
+      input:-webkit-autofill:active {
+          -webkit-box-shadow: 0 0 0 30px #334155 inset !important; /* Matches Slate-700 input bg */
+          -webkit-text-fill-color: white !important;
+          transition: background-color 5000s ease-in-out 0s;
+          caret-color: white;
+      }
+
       /* Minimalist Scrollbar */
       ::-webkit-scrollbar {
         width: 6px;
         height: 6px;
       }
       ::-webkit-scrollbar-track {
-        background: transparent;
+        background: #0f172a; 
       }
       ::-webkit-scrollbar-thumb {
         background: #334155;
