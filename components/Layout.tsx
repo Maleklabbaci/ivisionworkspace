@@ -37,7 +37,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, currentView, onN
           <span className="text-primary">i</span>VISION AGENCY
         </h1>
         {/* Mobile Close Button */}
-        <button onClick={() => setIsMobileMenuOpen(false)} className="md:hidden text-slate-400">
+        <button onClick={() => setIsMobileMenuOpen(false)} className="md:hidden text-slate-400 hover:text-slate-600">
           <X size={24} />
         </button>
       </div>
@@ -106,7 +106,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, currentView, onN
       <div className="flex-1 flex flex-col h-screen overflow-hidden bg-[#F3F4F6]">
         {/* Mobile Header */}
         <header className="md:hidden bg-white border-b border-slate-200 p-4 flex justify-between items-center z-10 shadow-sm sticky top-0">
-          <button onClick={() => setIsMobileMenuOpen(true)} className="text-slate-500 hover:text-primary transition-colors">
+          <button onClick={() => setIsMobileMenuOpen(true)} className="text-slate-500 hover:text-primary transition-colors p-1">
              <Menu size={24} />
           </button>
           <span className="font-bold text-secondary text-lg">
