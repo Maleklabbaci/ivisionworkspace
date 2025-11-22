@@ -1,6 +1,6 @@
 
-import React, { useState } from 'react';
-import { Plus, Calendar as CalendarIcon, Clock, Sparkles, Filter, LayoutGrid, List, AlertCircle, Paperclip, Send, X, FileText, Trash2, DollarSign, ChevronLeft, ChevronRight, Lock } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Plus, Calendar as CalendarIcon, Clock, Sparkles, Filter, LayoutGrid, List, AlertCircle, Paperclip, Send, X, FileText, Trash2, DollarSign, ChevronLeft, ChevronRight, Lock, CheckCircle, MessageSquare, User as UserIcon } from 'lucide-react';
 import { Task, TaskStatus, User, Comment, UserRole } from '../types';
 import { brainstormTaskIdeas } from '../services/geminiService';
 
@@ -66,21 +66,20 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
           case TaskStatus.DONE: return { width: '100%', color: 'bg-green-500', text: '100%' };
           case TaskStatus.IN_PROGRESS: return { width: '40%', color: 'bg-blue-500', text: '40%' };
           case TaskStatus.BLOCKED: return { width: '15%', color: 'bg-red-500', text: 'Bloqué' };
-          default: return { width: '0%', color: 'bg-slate-200', text: '0%' }; // TODO
+          default: return { width: '0%', color: 'bg-slate-200', text: '0%' }; 
       }
   };
 
   // Filter tasks based on role
-  // ADMIN sees ALL tasks. MEMBERS see ONLY their assigned tasks unless they have specific permissions or are PMs.
   const visibleTasks = (currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.PROJECT_MANAGER || currentUser.permissions?.canCreateTasks)
     ? tasks 
     : tasks.filter(t => t.assigneeId === currentUser.id);
 
   const handleTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-      const newType = e.target.value as any;
+      const newType = String(e.target.value);
       setNewTask({ 
           ...newTask, 
-          type: newType
+          type: newType as any
       });
   };
 
@@ -102,9 +101,7 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
   };
 
   const getFirstDayOfMonth = (year: number, month: number) => {
-    // 0 = Sunday, 1 = Monday...
     const day = new Date(year, month, 1).getDay();
-    // Convert to Monday = 0, Sunday = 6
     return day === 0 ? 6 : day - 1;
   };
 
@@ -112,12 +109,11 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
   const handleDragStart = (e: React.DragEvent, taskId: string) => {
       setDraggedTaskId(taskId);
       e.dataTransfer.effectAllowed = "move";
-      e.dataTransfer.setData("text/plain", taskId); // Compatibility
-      // Optional: Set a custom drag image if needed
+      e.dataTransfer.setData("text/plain", taskId);
   };
 
   const handleDragOver = (e: React.DragEvent, dateStr: string) => {
-      e.preventDefault(); // Necessary to allow dropping
+      e.preventDefault();
       e.dataTransfer.dropEffect = "move";
       if (dragOverDate !== dateStr) {
           setDragOverDate(dateStr);
@@ -126,18 +122,16 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
 
   const handleDragLeave = (e: React.DragEvent) => {
       e.preventDefault();
-      // We don't strictly clear here to avoid flickering when moving over children elements
   };
 
   const handleDrop = (e: React.DragEvent, targetDate: string) => {
       e.preventDefault();
-      setDragOverDate(null); // Clear visual feedback
+      setDragOverDate(null);
 
       if (!draggedTaskId) return;
 
       const taskToMove = tasks.find(t => t.id === draggedTaskId);
       if (taskToMove && taskToMove.dueDate !== targetDate) {
-          // Update the task with the new date
           onUpdateTask({ ...taskToMove, dueDate: targetDate });
       }
       setDraggedTaskId(null);
@@ -158,18 +152,28 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
       e.preventDefault();
       if (!newTask.title || !newTask.assigneeId || !newTask.dueDate) return;
 
+      // Ensure string conversions to prevent [object Object]
+      const taskTitle = String(newTask.title || '');
+      const taskDesc = String(newTask.description || '');
+      const taskAssignee = String(newTask.assigneeId);
+      const taskDate = String(newTask.dueDate);
+      const taskType = String(newTask.type || 'content') as any;
+      const taskPriority = String(newTask.priority || 'medium') as any;
+      const taskPrice = Number(newTask.price) || 0;
+      const taskAttachments = Array.isArray(newTask.attachments) ? newTask.attachments.map(String) : [];
+
       const task: Task = {
           id: Date.now().toString(),
-          title: newTask.title!,
-          description: newTask.description || '',
-          assigneeId: newTask.assigneeId!,
-          dueDate: newTask.dueDate!,
+          title: taskTitle,
+          description: taskDesc,
+          assigneeId: taskAssignee,
+          dueDate: taskDate,
           status: TaskStatus.TODO,
-          type: newTask.type as any,
-          priority: newTask.priority as any,
+          type: taskType,
+          priority: taskPriority,
           comments: [],
-          attachments: newTask.attachments || [],
-          price: newTask.price // Price defined by admin (or 0 if not set)
+          attachments: taskAttachments,
+          price: taskPrice
       };
 
       onAddTask(task);
@@ -203,7 +207,6 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
   const handleDeleteClick = (taskId: string) => {
       if (window.confirm("Êtes-vous sûr de vouloir supprimer cette tâche définitivement ?")) {
           onDeleteTask(taskId);
-          // If we are in the modal, close it
           if (selectedTask && selectedTask.id === taskId) {
               setSelectedTask(null);
           }
@@ -211,7 +214,6 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
   };
 
   const handleFileUpload = () => {
-     // Simulate upload
      const fakeFiles = ['brief_v2.pdf', 'assets_graphiques.zip'];
      const file = fakeFiles[Math.floor(Math.random() * fakeFiles.length)];
      
@@ -237,8 +239,8 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
 
   const getTypeColor = (type: string) => {
       switch(type) {
-          case 'content': return 'bg-blue-100 text-blue-700'; // Blue for Content
-          case 'ads': return 'bg-green-100 text-green-700'; // Green for Ads
+          case 'content': return 'bg-blue-100 text-blue-700';
+          case 'ads': return 'bg-green-100 text-green-700';
           case 'social': return 'bg-purple-100 text-purple-700';
           case 'seo': return 'bg-yellow-100 text-yellow-700';
           default: return 'bg-slate-100 text-slate-600';
@@ -273,7 +275,6 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                         onClick={() => setSelectedTask(task)}
                         className="bg-white p-4 rounded-lg shadow-sm border border-slate-200 hover:border-primary hover:shadow-md transition-all duration-200 cursor-pointer group transform hover:-translate-y-1 relative"
                       >
-                          {/* Quick Delete Button - Always visible on mobile, hover on desktop */}
                           {canDeleteTask() && (
                               <button 
                                 onClick={(e) => { 
@@ -296,7 +297,7 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                           <h4 className="font-bold text-slate-800 mb-1 text-sm leading-snug group-hover:text-primary transition-colors">{task.title}</h4>
                           
                           {/* Admin or Permission: Price Badge */}
-                          {canViewFinancials() && task.price && task.price > 0 && (
+                          {canViewFinancials() && typeof task.price === 'number' && task.price > 0 && (
                              <div className="mb-2">
                                <span className="text-[10px] font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border border-slate-200">
                                  {task.price} DA
@@ -405,7 +406,6 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                       </div>
                   </div>
                   
-                  {/* Legend */}
                   <div className="hidden md:flex items-center space-x-3 text-[10px]">
                      <div className="flex items-center"><div className="w-2 h-2 bg-blue-500 rounded-full mr-1"></div>Content</div>
                      <div className="flex items-center"><div className="w-2 h-2 bg-green-500 rounded-full mr-1"></div>Ads</div>
@@ -429,16 +429,14 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                          const year = currentDate.getFullYear();
                          const month = currentDate.getMonth();
                          const daysInMonth = getDaysInMonth(year, month);
-                         const startDay = getFirstDayOfMonth(year, month); // 0 (Mon) to 6 (Sun)
+                         const startDay = getFirstDayOfMonth(year, month); 
                          const totalSlots = Math.ceil((daysInMonth + startDay) / 7) * 7;
                          const cells = [];
 
-                         // Empty cells for previous month
                          for (let i = 0; i < startDay; i++) {
                              cells.push(<div key={`empty-${i}`} className="bg-slate-50/30 border-b border-r border-slate-100"></div>);
                          }
 
-                         // Days of current month
                          for (let day = 1; day <= daysInMonth; day++) {
                              const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                              const dayTasks = visibleTasks.filter(t => t.dueDate === dateStr);
@@ -463,8 +461,7 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                                          {canCreateTask() && (
                                             <button 
                                                 onClick={(e) => {
-                                                    // Re-enable pointer events for the button
-                                                    e.stopPropagation(); // prevent bubbling to drag events if any
+                                                    e.stopPropagation(); 
                                                     setNewTask({...newTask, dueDate: dateStr});
                                                     setShowModal(true);
                                                 }}
@@ -477,7 +474,6 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                                      
                                      <div className="flex-1 space-y-1.5 overflow-y-auto custom-scrollbar max-h-[100px]">
                                          {dayTasks.map(task => {
-                                             // Determine color bar based on type
                                              let barColor = 'bg-slate-400';
                                              if(task.type === 'content') barColor = 'bg-blue-500';
                                              else if(task.type === 'ads') barColor = 'bg-green-500';
@@ -498,7 +494,6 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                                                     }`}
                                                  >
                                                      <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${barColor}`}></div>
-                                                     {/* Assignee Avatar (for Admin/Team view clarity) */}
                                                      {assignee && (
                                                         <img 
                                                             src={assignee.avatar} 
@@ -516,7 +511,6 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                              );
                          }
 
-                         // Fill remaining slots
                          const remainingSlots = totalSlots - (startDay + daysInMonth);
                          for (let i = 0; i < remainingSlots; i++) {
                               cells.push(<div key={`empty-end-${i}`} className="bg-slate-50/30 border-b border-r border-slate-100"></div>);
@@ -611,8 +605,8 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                                             min="0"
                                             className="w-full p-2.5 pl-4 bg-gray-200 text-black border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all font-medium"
                                             placeholder="0"
-                                            value={newTask.price}
-                                            onChange={e => setNewTask({...newTask, price: Number(e.target.value)})}
+                                            value={newTask.price || ''}
+                                            onChange={e => setNewTask({...newTask, price: parseFloat(e.target.value) || 0})}
                                         />
                                         <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-500 text-xs font-bold">DA</span>
                                     </div>
@@ -659,7 +653,6 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                                   ></textarea>
                               </div>
                               
-                              {/* Attachments Area */}
                               <div className="col-span-2">
                                   <label className="block text-sm font-medium text-slate-700 mb-1">Pièces jointes</label>
                                   <div className="border-2 border-dashed border-slate-200 rounded-lg p-4 flex flex-col items-center justify-center text-slate-400 hover:bg-slate-50 transition-colors cursor-pointer" onClick={handleFileUpload}>
@@ -670,7 +663,7 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                                       <div className="mt-2 flex flex-wrap gap-2">
                                           {newTask.attachments.map((file, idx) => (
                                               <div key={idx} className="bg-slate-100 text-slate-700 text-xs px-2 py-1 rounded flex items-center border border-slate-200">
-                                                  <FileText size={10} className="mr-1"/> {file}
+                                                  <FileText size={10} className="mr-1"/> {String(file)}
                                               </div>
                                           ))}
                                       </div>
@@ -687,11 +680,11 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
           </div>
       )}
 
-      {/* Task Detail Modal */}
+      {/* Task Detail Modal (FULLY RESTORED) */}
       {selectedTask && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl h-[80vh] overflow-hidden flex flex-col md:flex-row animate-in fade-in zoom-in-95 duration-200">
-                  {/* Left: Task Details */}
+              <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl h-[85vh] overflow-hidden flex flex-col md:flex-row animate-in fade-in zoom-in-95 duration-200">
+                  {/* Left Column: Content */}
                   <div className="flex-1 p-6 overflow-y-auto border-b md:border-b-0 md:border-r border-slate-200 relative">
                        <div className="flex justify-between items-start mb-4">
                            <span className={`text-xs font-bold px-2 py-1 rounded uppercase ${getTypeColor(selectedTask.type)}`}>{selectedTask.type}</span>
@@ -700,148 +693,170 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                        
                        <h2 className="text-2xl font-bold text-slate-900 mb-2">{selectedTask.title}</h2>
                        
-                       {/* Admin or Permission Price View */}
-                       {canViewFinancials() && (
+                       {/* Price Display (Admin/Permission only) */}
+                       {canViewFinancials() && typeof selectedTask.price === 'number' && (
                            <div className="mb-4 flex items-center">
                                <div className="bg-slate-100 text-slate-700 px-3 py-1 rounded-lg border border-slate-200 text-sm font-medium flex items-center">
                                    <DollarSign size={14} className="mr-1 text-slate-400" />
-                                   Budget : {selectedTask.price || 0} DA
+                                   Budget : {selectedTask.price} DA
                                </div>
                            </div>
                        )}
 
                        <div className="flex items-center space-x-4 mb-6 text-sm text-slate-600">
-                           <div className="flex items-center">
-                               <Clock size={16} className="mr-2" />
+                           {users.filter(u => u.id === selectedTask.assigneeId).map(u => (
+                               <div key={u.id} className="flex items-center space-x-2">
+                                   <img src={u.avatar} className="w-6 h-6 rounded-full" alt={u.name} />
+                                   <span>{u.name}</span>
+                               </div>
+                           ))}
+                           <div className="flex items-center space-x-1">
+                               <CalendarIcon size={16} />
                                <span>{selectedTask.dueDate}</span>
                            </div>
-                           <div className="flex items-center">
-                               <div className={`w-2 h-2 rounded-full mr-2 ${
-                                   selectedTask.priority === 'high' ? 'bg-urgent' : 
-                                   selectedTask.priority === 'medium' ? 'bg-orange-500' : 'bg-slate-400'
-                               }`} />
-                               <span className="capitalize">{selectedTask.priority} priority</span>
-                           </div>
                        </div>
 
-                       <div className="mt-8 mb-6">
-                           <h4 className="text-sm font-bold text-slate-900 mb-2">Statut</h4>
-                           <div className="flex space-x-2 flex-wrap gap-2 mb-4">
-                               {Object.values(TaskStatus).map(status => (
-                                   <button
-                                    key={status}
-                                    onClick={() => onUpdateStatus(selectedTask.id, status)}
-                                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
-                                        selectedTask.status === status 
-                                        ? 'bg-slate-800 text-white border-slate-800' 
-                                        : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400'
-                                    }`}
-                                   >
-                                       {status}
-                                   </button>
-                               ))}
-                           </div>
-
-                           {/* Modal Progress Bar */}
-                           {(() => {
-                               const modalProgress = getProgressConfig(selectedTask.status);
-                               return (
-                                <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
-                                    <div className="flex justify-between text-xs text-slate-500 mb-1.5 font-medium">
-                                        <span>Progression</span>
-                                        <span className={selectedTask.status === TaskStatus.DONE ? 'text-green-600' : ''}>{modalProgress.text}</span>
-                                    </div>
-                                    <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
-                                        <div 
-                                            className={`h-full rounded-full transition-all duration-500 ease-out ${modalProgress.color}`} 
-                                            style={{ width: modalProgress.width }}
-                                        ></div>
-                                    </div>
-                                </div>
-                               );
-                           })()}
+                       <div className="prose prose-sm text-slate-600 mb-8">
+                           <p className="whitespace-pre-wrap">{selectedTask.description}</p>
                        </div>
 
-                       <div className="mb-6">
-                           <h4 className="text-sm font-bold text-slate-900 mb-2">Description</h4>
-                           <p className="text-slate-600 text-sm leading-relaxed whitespace-pre-line">{selectedTask.description}</p>
-                       </div>
-
-                       <div className="mb-6">
-                           <h4 className="text-sm font-bold text-slate-900 mb-2">Pièces jointes</h4>
-                           <div className="grid grid-cols-2 gap-2">
-                               {selectedTask.attachments?.map((file, idx) => (
-                                   <div key={idx} className="flex items-center p-3 rounded-lg border border-slate-200 bg-slate-50 text-sm text-slate-700">
-                                       <FileText size={16} className="mr-2 text-primary" />
-                                       <span className="truncate">{file}</span>
-                                   </div>
-                               ))}
-                               <button onClick={handleFileUpload} className="flex items-center justify-center p-3 rounded-lg border border-dashed border-slate-300 text-sm text-slate-500 hover:bg-slate-50 hover:text-primary transition-colors">
-                                   <Plus size={16} className="mr-2" /> Ajouter
-                               </button>
-                           </div>
-                       </div>
-
-                       {/* DELETE BUTTON - Admin & PM Only or Permission */}
-                       {canDeleteTask() && (
-                           <div className="mt-8 pt-6 border-t border-slate-100">
-                               <button 
-                                onClick={() => handleDeleteClick(selectedTask.id)}
-                                className="text-red-500 hover:text-red-700 text-sm font-medium flex items-center transition-colors hover:bg-red-50 px-3 py-2 rounded-lg -ml-3"
-                               >
-                                   <Trash2 size={16} className="mr-2" />
-                                   Supprimer la tâche
-                               </button>
+                       {selectedTask.attachments && selectedTask.attachments.length > 0 && (
+                           <div className="mb-8">
+                               <h4 className="font-bold text-slate-800 mb-3 flex items-center"><Paperclip size={16} className="mr-2"/> Pièces jointes</h4>
+                               <div className="grid grid-cols-2 gap-2">
+                                   {selectedTask.attachments.map((file, i) => (
+                                       <div key={i} className="p-3 border border-slate-200 rounded-lg flex items-center justify-between hover:bg-slate-50 transition-colors">
+                                           <div className="flex items-center space-x-2 truncate">
+                                               <FileText size={16} className="text-slate-400" />
+                                               <span className="text-sm truncate">{file}</span>
+                                           </div>
+                                           <button className="text-primary text-xs font-bold hover:underline">Télécharger</button>
+                                       </div>
+                                   ))}
+                               </div>
                            </div>
                        )}
-                  </div>
 
-                  {/* Right: Chat & Activity */}
-                  <div className="w-full md:w-96 bg-slate-50 flex flex-col h-full">
-                       <div className="p-4 border-b border-slate-200 bg-white flex justify-between items-center shrink-0">
-                           <h3 className="font-bold text-slate-800">Commentaires</h3>
-                           <button onClick={() => setSelectedTask(null)} className="text-slate-400 hover:text-slate-600 hidden md:block float-right"><X size={20}/></button>
-                       </div>
-                       
-                       <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
-                           {selectedTask.comments?.map(comment => {
-                               const author = users.find(u => u.id === comment.userId);
-                               return (
-                                   <div key={comment.id} className="flex space-x-3 animate-in fade-in slide-in-from-bottom-1">
-                                       <img src={author?.avatar} className="w-8 h-8 rounded-full" />
-                                       <div>
-                                           <div className="bg-white p-3 rounded-2xl rounded-tl-none shadow-sm border border-slate-200">
-                                               <p className="text-xs font-bold text-slate-900 mb-0.5">{author?.name}</p>
-                                               <p className="text-sm text-slate-700">{comment.content}</p>
+                       {/* Comments Section */}
+                       <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+                           <h4 className="font-bold text-slate-800 mb-4 flex items-center"><MessageSquare size={16} className="mr-2"/> Commentaires</h4>
+                           <div className="space-y-4 mb-4 max-h-60 overflow-y-auto">
+                               {selectedTask.comments?.length === 0 ? (
+                                   <p className="text-slate-400 text-sm italic">Aucun commentaire pour le moment.</p>
+                               ) : (
+                                   selectedTask.comments?.map(comment => {
+                                       const user = users.find(u => u.id === comment.userId);
+                                       return (
+                                           <div key={comment.id} className="flex space-x-3">
+                                               <img src={user?.avatar} className="w-8 h-8 rounded-full mt-1" alt="Avatar" />
+                                               <div className="bg-white p-3 rounded-lg border border-slate-200 flex-1 shadow-sm">
+                                                   <div className="flex justify-between items-center mb-1">
+                                                       <span className="font-bold text-sm text-slate-900">{user?.name}</span>
+                                                       <span className="text-xs text-slate-400">{comment.timestamp}</span>
+                                                   </div>
+                                                   <p className="text-sm text-slate-700">{comment.content}</p>
+                                               </div>
                                            </div>
-                                           <span className="text-[10px] text-slate-400 ml-1">{comment.timestamp}</span>
-                                       </div>
-                                   </div>
-                               )
-                           })}
-                           {(!selectedTask.comments || selectedTask.comments.length === 0) && (
-                               <div className="text-center text-slate-400 text-sm py-8">Aucun commentaire pour l'instant.</div>
-                           )}
-                       </div>
-
-                       <div className="p-4 bg-white border-t border-slate-200 shrink-0">
+                                       );
+                                   })
+                               )}
+                           </div>
                            <div className="flex items-center space-x-2">
-                               <input 
-                                 type="text" 
-                                 className="flex-1 bg-gray-200 text-black border border-gray-300 rounded-full px-4 py-2 text-sm focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all placeholder-gray-500 font-medium"
-                                 placeholder="Écrire un commentaire..."
-                                 value={taskComment}
-                                 onChange={e => setTaskComment(e.target.value)}
-                                 onKeyDown={e => e.key === 'Enter' && handleAddComment()}
-                               />
-                               <button 
-                                onClick={handleAddComment}
-                                className="p-2 bg-primary text-white rounded-full hover:bg-blue-700 transition-transform hover:scale-105"
-                               >
-                                   <Send size={16} />
-                               </button>
+                               <img src={currentUser.avatar} className="w-8 h-8 rounded-full" alt="Me" />
+                               <div className="flex-1 relative">
+                                   <input 
+                                     type="text" 
+                                     placeholder="Écrire un commentaire..." 
+                                     className="w-full pl-4 pr-10 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
+                                     value={taskComment}
+                                     onChange={(e) => setTaskComment(e.target.value)}
+                                     onKeyDown={(e) => e.key === 'Enter' && handleAddComment()}
+                                   />
+                                   <button 
+                                     onClick={handleAddComment}
+                                     disabled={!taskComment.trim()}
+                                     className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-primary disabled:opacity-50"
+                                   >
+                                       <Send size={16} />
+                                   </button>
+                               </div>
                            </div>
                        </div>
+                  </div>
+
+                  {/* Right Column: Sidebar Actions */}
+                  <div className="w-full md:w-72 bg-slate-50 p-6 flex flex-col shrink-0">
+                      <div className="flex justify-end mb-6 hidden md:block">
+                          <button onClick={() => setSelectedTask(null)} className="text-slate-400 hover:text-slate-600"><X size={24}/></button>
+                      </div>
+
+                      <div className="space-y-6">
+                          <div>
+                              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Statut</label>
+                              <div className="space-y-2">
+                                  {Object.values(TaskStatus).map(status => (
+                                      <button 
+                                        key={status}
+                                        onClick={() => onUpdateStatus(selectedTask.id, status)}
+                                        className={`w-full flex items-center justify-between p-2.5 rounded-lg text-sm font-medium transition-all border ${
+                                            selectedTask.status === status 
+                                            ? 'bg-white border-primary text-primary shadow-sm' 
+                                            : 'bg-transparent border-transparent hover:bg-white text-slate-600'
+                                        }`}
+                                      >
+                                          <div className="flex items-center">
+                                            <div className={`w-2 h-2 rounded-full mr-2 ${
+                                                status === TaskStatus.DONE ? 'bg-green-500' : 
+                                                status === TaskStatus.IN_PROGRESS ? 'bg-blue-500' : 
+                                                status === TaskStatus.BLOCKED ? 'bg-red-500' : 'bg-slate-400'
+                                            }`} />
+                                            {status}
+                                          </div>
+                                          {selectedTask.status === status && <CheckCircle size={16} />}
+                                      </button>
+                                  ))}
+                              </div>
+                          </div>
+                          
+                          <div>
+                              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Priorité</label>
+                              <div className="flex space-x-2">
+                                  {(['low', 'medium', 'high'] as const).map(p => (
+                                      <button
+                                        key={p}
+                                        onClick={() => onUpdateTask({...selectedTask, priority: p})}
+                                        className={`flex-1 py-1.5 text-xs font-bold rounded uppercase border transition-all ${
+                                            selectedTask.priority === p 
+                                            ? getPriorityColor(p) + ' ring-1 ring-offset-1 ring-slate-300' 
+                                            : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
+                                        }`}
+                                      >
+                                          {p === 'low' ? 'Basse' : p === 'medium' ? 'Moy.' : 'Haute'}
+                                      </button>
+                                  ))}
+                              </div>
+                          </div>
+
+                          <div>
+                               <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Actions</label>
+                               <button 
+                                 className="w-full flex items-center space-x-2 p-2 text-sm text-slate-600 hover:bg-white rounded-lg transition-colors mb-2"
+                                 onClick={handleFileUpload}
+                               >
+                                   <Paperclip size={16} />
+                                   <span>Ajouter un fichier</span>
+                               </button>
+                               {canDeleteTask() && (
+                                   <button 
+                                     onClick={() => handleDeleteClick(selectedTask.id)}
+                                     className="w-full flex items-center space-x-2 p-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                   >
+                                       <Trash2 size={16} />
+                                       <span>Supprimer la tâche</span>
+                                   </button>
+                               )}
+                          </div>
+                      </div>
                   </div>
               </div>
           </div>

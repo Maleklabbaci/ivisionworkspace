@@ -40,6 +40,24 @@ const App: React.FC = () => {
   // Ref to track if user data has been loaded
   const isDataLoaded = useRef(false);
 
+  // Helper for UUID generation (Robust Polyfill)
+  const generateUUID = () => {
+    try {
+      // Check if secure context and randomUUID is available
+      if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID();
+      }
+    } catch (e) {
+      // Fallback if security restriction prevents access
+    }
+    
+    // Robust fallback for non-secure contexts
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  };
+
   const addNotification = (title: string, message: string, type: 'info' | 'success' | 'urgent' = 'info') => {
     const id = Date.now().toString() + Math.random();
     setNotifications(prev => [...prev, { id, title, message, type }]);
@@ -319,7 +337,8 @@ const App: React.FC = () => {
         if (tasksResult.data) {
             const mappedTasks = await Promise.all(tasksResult.data.map(async (t) => {
                 const comments = []; 
-                const attachments = t.attachments || []; // Ensure attachments are loaded
+                // Handle missing attachments column gracefully
+                const attachments = t.attachments || [];
 
                 return {
                     id: t.id,
@@ -382,7 +401,7 @@ const App: React.FC = () => {
         options: {
             data: {
                 name: registerName,
-                avatar: `https://ui-avatars.com/api/?name=${registerName.replace(' ', '+')}&background=random`
+                avatar: `https://ui-avatars.com/api/?name=${registerName.replace(/\s+/g, '+')}&background=random`
             }
         }
     });
@@ -429,7 +448,7 @@ const App: React.FC = () => {
                 name: registerName,
                 email: registeredEmail,
                 role: inheritedRole || UserRole.MEMBER, 
-                avatar: `https://ui-avatars.com/api/?name=${registerName.replace(' ', '+')}&background=random`,
+                avatar: `https://ui-avatars.com/api/?name=${registerName.replace(/\s+/g, '+')}&background=random`,
                 notification_pref: 'all',
                 status: inheritedStatus || 'active', // Garde le statut défini par l'admin
                 permissions: inheritedPermissions || {} 
@@ -463,6 +482,7 @@ const App: React.FC = () => {
   };
   
   const handleUpdateTask = async (updatedTask: Task) => {
+    // Remove attachments from update payload to avoid schema error
     const { error } = await supabase.from('tasks').update({
         title: updatedTask.title,
         description: updatedTask.description,
@@ -470,35 +490,49 @@ const App: React.FC = () => {
         due_date: updatedTask.dueDate,
         assignee_id: updatedTask.assigneeId,
         type: updatedTask.type,
-        price: updatedTask.price,
-        attachments: updatedTask.attachments // Ensure attachments are saved
+        price: updatedTask.price
+        // attachments: updatedTask.attachments // REMOVED until column exists
     }).eq('id', updatedTask.id);
-    if (error) { addNotification('Erreur', 'Mise à jour échouée.', 'urgent'); return; }
+
+    if (error) { 
+        console.error("Update error:", error);
+        addNotification('Erreur', 'Mise à jour échouée.', 'urgent'); 
+        return; 
+    }
     setTasks(prev => prev.map(t => t.id === updatedTask.id ? updatedTask : t));
   };
 
   const handleAddTask = async (newTask: Task) => {
+      // Use the robust UUID generator
+      const dbId = generateUUID();
+      
+      // Prepare strictly typed DB object - EXCLUDING attachments to fix error
       const dbTask = {
-          id: crypto.randomUUID(),
-          title: newTask.title,
-          description: newTask.description,
+          id: dbId,
+          title: newTask.title || 'Sans titre',
+          description: newTask.description || '',
           assignee_id: newTask.assigneeId,
           due_date: newTask.dueDate,
-          status: newTask.status,
-          type: newTask.type,
-          priority: newTask.priority,
-          price: newTask.price,
-          attachments: newTask.attachments
+          status: newTask.status || TaskStatus.TODO,
+          type: newTask.type || 'content',
+          priority: newTask.priority || 'medium',
+          price: Number(newTask.price) || 0
+          // attachments: Array.isArray(newTask.attachments) ? newTask.attachments : [] // REMOVED
       };
-      const addedTask = { ...newTask, id: dbTask.id };
+
+      // Optimistic UI Update
+      const addedTask = { ...newTask, id: dbId, price: dbTask.price, attachments: newTask.attachments || [] };
       setTasks(prev => [...prev, addedTask]);
       addNotification('Succès', 'Tâche créée.', 'success');
 
+      // DB Insert
       const { error } = await supabase.from('tasks').insert([dbTask]);
+      
       if (error) { 
-          console.error(error); 
-          addNotification('Erreur', 'Synchronisation échouée.', 'urgent');
-          setTasks(prev => prev.filter(t => t.id !== dbTask.id)); 
+          console.error("DB Insert Error:", error); 
+          addNotification('Erreur', `Échec de la création: ${error.message}`, 'urgent');
+          // Rollback optimistic update
+          setTasks(prev => prev.filter(t => t.id !== dbId)); 
       } 
   };
 
@@ -520,7 +554,7 @@ const App: React.FC = () => {
   const handleSendMessage = async (text: string, channelId: string, attachments: string[] = []) => {
       if (!currentUser) return;
       
-      const newMessageId = crypto.randomUUID();
+      const newMessageId = generateUUID();
       const now = new Date();
       
       const displayMessage: Message = { 
@@ -555,7 +589,7 @@ const App: React.FC = () => {
   };
 
   const handleAddChannel = async (newChannel: { name: string; type: 'global' | 'project'; members?: string[] }) => {
-      const tempId = crypto.randomUUID();
+      const tempId = generateUUID();
       const channelToAdd: Channel = { id: tempId, name: newChannel.name, type: newChannel.type, unread: 0 };
       
       setChannels(prev => [...prev, channelToAdd]);
@@ -606,7 +640,7 @@ const App: React.FC = () => {
 
   // --- MEMBER ACTIONS ---
   const handleAddUser = async (newUser: User) => {
-      const tempId = crypto.randomUUID();
+      const tempId = generateUUID();
       const dbUser = {
           id: tempId,
           name: newUser.name,

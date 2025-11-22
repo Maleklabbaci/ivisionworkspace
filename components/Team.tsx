@@ -15,6 +15,43 @@ interface TeamProps {
   onUpdateMember: (userId: string, updatedData: Partial<User>) => void;
 }
 
+// Helper for Icon in empty modal (Renamed to TeamInfoIcon to avoid collisions)
+function TeamInfoIcon({ className, size }: { className?: string, size?: number }) {
+    return (
+        <svg xmlns="http://www.w3.org/2000/svg" width={size || 24} height={size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+    );
+}
+
+const PermissionToggle = ({ label, desc, active, onToggle, icon: Icon, color }: any) => (
+    <div 
+        onClick={onToggle}
+        className={`flex items-start space-x-3 p-3 rounded-lg border cursor-pointer transition-all ${active ? 'bg-white border-primary shadow-sm' : 'bg-slate-50 border-transparent hover:bg-white hover:border-slate-200'}`}
+    >
+        <div className={`mt-0.5 p-1.5 rounded-md ${active ? 'bg-primary text-white' : 'bg-slate-200 text-slate-400'}`}>
+            <Icon size={14} />
+        </div>
+        <div>
+            <p className={`text-sm font-semibold ${active ? (color || 'text-primary') : 'text-slate-600'}`}>{label}</p>
+            <p className="text-[11px] text-slate-400 leading-tight mt-0.5">{desc}</p>
+        </div>
+    </div>
+);
+
+const PermissionBadge = ({ icon: Icon, color, title }: any) => {
+    const colorClasses: any = {
+        blue: 'bg-blue-50 text-blue-700 border-blue-100',
+        purple: 'bg-purple-50 text-purple-700 border-purple-100',
+        green: 'bg-green-50 text-green-700 border-green-100',
+        orange: 'bg-orange-50 text-orange-700 border-orange-100',
+        indigo: 'bg-indigo-50 text-indigo-700 border-indigo-100',
+    };
+    return (
+        <span className={`px-1.5 py-0.5 rounded text-[9px] border flex items-center ${colorClasses[color] || colorClasses.blue}`} title={title}>
+            <Icon size={10} />
+        </span>
+    );
+};
+
 const Team: React.FC<TeamProps> = ({ currentUser, users, tasks, activities, onAddUser, onRemoveUser, onUpdateRole, onApproveUser, onUpdateMember }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -192,7 +229,7 @@ const Team: React.FC<TeamProps> = ({ currentUser, users, tasks, activities, onAd
                                           {user.role}
                                       </span>
                                       <div className="flex space-x-1">
-                                        {/* Icons for Special Permissions */}
+                                        {/* Icons for Special Permissions - Safe Rendering */}
                                         {user.permissions?.canCreateTasks && <PermissionBadge icon={CheckSquare} color="blue" title="Créer Tâches" />}
                                         {user.permissions?.canViewFiles && <PermissionBadge icon={FolderOpen} color="purple" title="Fichiers" />}
                                         {user.permissions?.canViewFinancials && <PermissionBadge icon={DollarSign} color="green" title="Finances" />}
@@ -297,7 +334,7 @@ const Team: React.FC<TeamProps> = ({ currentUser, users, tasks, activities, onAd
                       </div>
                       
                       <div className="bg-blue-50 p-3 rounded-lg flex items-start space-x-2">
-                          <Info className="text-primary flex-shrink-0 mt-0.5" size={16} />
+                          <TeamInfoIcon className="text-primary flex-shrink-0 mt-0.5" size={16} />
                           <p className="text-xs text-blue-700">
                               Ce membre sera ajouté à la liste immédiatement avec un statut "Actif". Il devra s'inscrire avec cet email pour récupérer automatiquement ce profil et ses accès.
                           </p>
@@ -493,44 +530,5 @@ const Team: React.FC<TeamProps> = ({ currentUser, users, tasks, activities, onAd
     </div>
   );
 };
-
-// UI Components for cleanliness
-
-const PermissionToggle = ({ label, desc, active, onToggle, icon: Icon, color }: any) => (
-    <div 
-        onClick={onToggle}
-        className={`flex items-start space-x-3 p-3 rounded-lg border cursor-pointer transition-all ${active ? 'bg-white border-primary shadow-sm' : 'bg-slate-50 border-transparent hover:bg-white hover:border-slate-200'}`}
-    >
-        <div className={`mt-0.5 p-1.5 rounded-md ${active ? 'bg-primary text-white' : 'bg-slate-200 text-slate-400'}`}>
-            <Icon size={14} />
-        </div>
-        <div>
-            <p className={`text-sm font-semibold ${active ? (color || 'text-primary') : 'text-slate-600'}`}>{label}</p>
-            <p className="text-[11px] text-slate-400 leading-tight mt-0.5">{desc}</p>
-        </div>
-    </div>
-);
-
-const PermissionBadge = ({ icon: Icon, color, title }: any) => {
-    const colorClasses: any = {
-        blue: 'bg-blue-50 text-blue-700 border-blue-100',
-        purple: 'bg-purple-50 text-purple-700 border-purple-100',
-        green: 'bg-green-50 text-green-700 border-green-100',
-        orange: 'bg-orange-50 text-orange-700 border-orange-100',
-        indigo: 'bg-indigo-50 text-indigo-700 border-indigo-100',
-    };
-    return (
-        <span className={`px-1.5 py-0.5 rounded text-[9px] border flex items-center ${colorClasses[color] || colorClasses.blue}`} title={title}>
-            <Icon size={10} />
-        </span>
-    );
-};
-
-// Helper for Icon in empty modal
-function Info({ className, size }: { className?: string, size?: number }) {
-    return (
-        <svg xmlns="http://www.w3.org/2000/svg" width={size || 24} height={size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-    );
-}
 
 export default Team;
