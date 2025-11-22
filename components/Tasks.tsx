@@ -55,6 +55,21 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
              currentUser.permissions?.canDeleteTasks === true;
   };
 
+  const canViewFinancials = () => {
+      return currentUser.role === UserRole.ADMIN || 
+             currentUser.permissions?.canViewFinancials === true;
+  };
+
+  // Helper for Progress Bar logic
+  const getProgressConfig = (status: TaskStatus) => {
+      switch(status) {
+          case TaskStatus.DONE: return { width: '100%', color: 'bg-green-500', text: '100%' };
+          case TaskStatus.IN_PROGRESS: return { width: '40%', color: 'bg-blue-500', text: '40%' };
+          case TaskStatus.BLOCKED: return { width: '15%', color: 'bg-red-500', text: 'Bloqué' };
+          default: return { width: '0%', color: 'bg-slate-200', text: '0%' }; // TODO
+      }
+  };
+
   // Filter tasks based on role
   // ADMIN sees ALL tasks. MEMBERS see ONLY their assigned tasks unless they have specific permissions or are PMs.
   const visibleTasks = (currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.PROJECT_MANAGER || currentUser.permissions?.canCreateTasks)
@@ -247,7 +262,10 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                   <span className="text-xs font-medium text-slate-400 bg-white px-2 py-0.5 rounded-full border border-slate-200">{columnTasks.length}</span>
               </div>
               <div className="space-y-3 overflow-y-auto pr-1 custom-scrollbar flex-1">
-                  {columnTasks.map(task => (
+                  {columnTasks.map(task => {
+                      const progress = getProgressConfig(task.status);
+                      
+                      return (
                       <div 
                         key={task.id} 
                         draggable
@@ -277,16 +295,24 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                           
                           <h4 className="font-bold text-slate-800 mb-1 text-sm leading-snug group-hover:text-primary transition-colors">{task.title}</h4>
                           
-                          {/* Admin Only: Price Badge */}
-                          {currentUser.role === UserRole.ADMIN && task.price && task.price > 0 && (
+                          {/* Admin or Permission: Price Badge */}
+                          {canViewFinancials() && task.price && task.price > 0 && (
                              <div className="mb-2">
                                <span className="text-[10px] font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border border-slate-200">
                                  {task.price} DA
                                </span>
                              </div>
                           )}
+                          
+                          {/* Visual Progress Bar (Kanban Card) */}
+                          <div className="w-full bg-slate-100 h-1.5 rounded-full mt-3 mb-3 overflow-hidden">
+                              <div 
+                                className={`h-full rounded-full transition-all duration-500 ${progress.color}`} 
+                                style={{ width: progress.width }}
+                              ></div>
+                          </div>
 
-                          <div className="flex items-center justify-between mt-3">
+                          <div className="flex items-center justify-between">
                               <div className="flex -space-x-2">
                                   {users.filter(u => u.id === task.assigneeId).map(u => (
                                       <img key={u.id} src={u.avatar} alt={u.name} className="w-6 h-6 rounded-full border-2 border-white" title={u.name} />
@@ -297,7 +323,7 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                               </span>
                           </div>
                       </div>
-                  ))}
+                  )})}
               </div>
           </div>
       );
@@ -572,12 +598,12 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                                   </select>
                               </div>
                               
-                              {/* Price - Admin Only */}
-                              {currentUser.role === UserRole.ADMIN && (
+                              {/* Price - Admin or Permission Only */}
+                              {canViewFinancials() && (
                                 <div className="col-span-2">
                                     <label className="block text-sm font-medium text-slate-700 mb-1 flex items-center">
                                         <DollarSign size={14} className="mr-1.5 text-slate-400"/>
-                                        Prix / Budget (Visible uniquement par Admin)
+                                        Prix / Budget (Visible uniquement par Admin/Finance)
                                     </label>
                                     <div className="relative">
                                         <input 
@@ -674,8 +700,8 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                        
                        <h2 className="text-2xl font-bold text-slate-900 mb-2">{selectedTask.title}</h2>
                        
-                       {/* Admin Only Price View */}
-                       {currentUser.role === UserRole.ADMIN && (
+                       {/* Admin or Permission Price View */}
+                       {canViewFinancials() && (
                            <div className="mb-4 flex items-center">
                                <div className="bg-slate-100 text-slate-700 px-3 py-1 rounded-lg border border-slate-200 text-sm font-medium flex items-center">
                                    <DollarSign size={14} className="mr-1 text-slate-400" />
@@ -698,6 +724,44 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                            </div>
                        </div>
 
+                       <div className="mt-8 mb-6">
+                           <h4 className="text-sm font-bold text-slate-900 mb-2">Statut</h4>
+                           <div className="flex space-x-2 flex-wrap gap-2 mb-4">
+                               {Object.values(TaskStatus).map(status => (
+                                   <button
+                                    key={status}
+                                    onClick={() => onUpdateStatus(selectedTask.id, status)}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                                        selectedTask.status === status 
+                                        ? 'bg-slate-800 text-white border-slate-800' 
+                                        : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400'
+                                    }`}
+                                   >
+                                       {status}
+                                   </button>
+                               ))}
+                           </div>
+
+                           {/* Modal Progress Bar */}
+                           {(() => {
+                               const modalProgress = getProgressConfig(selectedTask.status);
+                               return (
+                                <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
+                                    <div className="flex justify-between text-xs text-slate-500 mb-1.5 font-medium">
+                                        <span>Progression</span>
+                                        <span className={selectedTask.status === TaskStatus.DONE ? 'text-green-600' : ''}>{modalProgress.text}</span>
+                                    </div>
+                                    <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
+                                        <div 
+                                            className={`h-full rounded-full transition-all duration-500 ease-out ${modalProgress.color}`} 
+                                            style={{ width: modalProgress.width }}
+                                        ></div>
+                                    </div>
+                                </div>
+                               );
+                           })()}
+                       </div>
+
                        <div className="mb-6">
                            <h4 className="text-sm font-bold text-slate-900 mb-2">Description</h4>
                            <p className="text-slate-600 text-sm leading-relaxed whitespace-pre-line">{selectedTask.description}</p>
@@ -715,25 +779,6 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                                <button onClick={handleFileUpload} className="flex items-center justify-center p-3 rounded-lg border border-dashed border-slate-300 text-sm text-slate-500 hover:bg-slate-50 hover:text-primary transition-colors">
                                    <Plus size={16} className="mr-2" /> Ajouter
                                </button>
-                           </div>
-                       </div>
-
-                       <div className="mt-8">
-                           <h4 className="text-sm font-bold text-slate-900 mb-2">Statut</h4>
-                           <div className="flex space-x-2 flex-wrap gap-2">
-                               {Object.values(TaskStatus).map(status => (
-                                   <button
-                                    key={status}
-                                    onClick={() => onUpdateStatus(selectedTask.id, status)}
-                                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
-                                        selectedTask.status === status 
-                                        ? 'bg-slate-800 text-white border-slate-800' 
-                                        : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400'
-                                    }`}
-                                   >
-                                       {status}
-                                   </button>
-                               ))}
                            </div>
                        </div>
 

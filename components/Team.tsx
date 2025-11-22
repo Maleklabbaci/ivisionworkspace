@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { User, UserRole, ActivityLog, Task, TaskStatus, UserPermissions } from '../types';
-import { MoreHorizontal, Mail, Shield, Trash2, UserPlus, History, Briefcase, Bell, Lock, X, CheckCircle, AlertCircle, Edit2, Save, CheckSquare, MessageSquare } from 'lucide-react';
+import { MoreHorizontal, Mail, Shield, Trash2, UserPlus, History, Briefcase, Bell, Lock, X, CheckCircle, AlertCircle, Edit2, Save, CheckSquare, MessageSquare, FolderOpen, DollarSign, Users, Hash, BarChart3 } from 'lucide-react';
 
 interface TeamProps {
   currentUser: User;
@@ -32,6 +32,9 @@ const Team: React.FC<TeamProps> = ({ currentUser, users, tasks, activities, onAd
   const [editUser, setEditUser] = useState<Partial<User>>({});
   const [editPermissions, setEditPermissions] = useState<UserPermissions>({});
 
+  // Access Control: Admin OR 'canManageTeam'
+  const canManageTeam = currentUser.role === UserRole.ADMIN || currentUser.permissions?.canManageTeam;
+
   const handleAddSubmit = (e: React.FormEvent) => {
       e.preventDefault();
       if (!newUser.name || !newUser.email) return;
@@ -53,6 +56,12 @@ const Team: React.FC<TeamProps> = ({ currentUser, users, tasks, activities, onAd
   };
 
   const openEditModal = (user: User) => {
+      // Security Check: Don't allow non-admin to edit admin
+      if (user.role === UserRole.ADMIN && currentUser.role !== UserRole.ADMIN) {
+          alert("Vous ne pouvez pas modifier un Administrateur.");
+          return;
+      }
+
       setSelectedMember(user);
       setEditUser({ name: user.name, email: user.email, role: user.role, status: user.status });
       // Initialize permissions from user object or default to false
@@ -60,6 +69,11 @@ const Team: React.FC<TeamProps> = ({ currentUser, users, tasks, activities, onAd
           canCreateTasks: user.permissions?.canCreateTasks || false,
           canDeleteTasks: user.permissions?.canDeleteTasks || false,
           canManageChat: user.permissions?.canManageChat || false,
+          canViewFiles: user.permissions?.canViewFiles || false,
+          canViewFinancials: user.permissions?.canViewFinancials || false,
+          canManageTeam: user.permissions?.canManageTeam || false,
+          canManageChannels: user.permissions?.canManageChannels || false,
+          canViewReports: user.permissions?.canViewReports || false
       });
       setShowEditModal(true);
   };
@@ -106,7 +120,7 @@ const Team: React.FC<TeamProps> = ({ currentUser, users, tasks, activities, onAd
           <h2 className="text-2xl font-bold text-slate-900">Équipe & Rôles</h2>
           <p className="text-slate-500 text-sm">Gérez les membres, les accès et suivez l'activité.</p>
         </div>
-        {currentUser.role === UserRole.ADMIN && (
+        {canManageTeam && (
             <button 
                 onClick={() => setShowAddModal(true)}
                 className="flex items-center space-x-2 px-4 py-2.5 bg-primary text-white rounded-lg hover:bg-blue-700 transition-colors shadow-md shadow-primary/20 font-medium"
@@ -177,11 +191,14 @@ const Team: React.FC<TeamProps> = ({ currentUser, users, tasks, activities, onAd
                                       <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${getRoleBadgeColor(user.role)}`}>
                                           {user.role}
                                       </span>
-                                      {user.permissions?.canCreateTasks && (
-                                          <span className="px-2 py-0.5 rounded text-[10px] bg-blue-50 text-blue-700 border border-blue-100 flex items-center" title="Autorisé à créer des tâches">
-                                              <CheckSquare size={10} className="mr-1"/> Tâches
-                                          </span>
-                                      )}
+                                      <div className="flex space-x-1">
+                                        {/* Icons for Special Permissions */}
+                                        {user.permissions?.canCreateTasks && <PermissionBadge icon={CheckSquare} color="blue" title="Créer Tâches" />}
+                                        {user.permissions?.canViewFiles && <PermissionBadge icon={FolderOpen} color="purple" title="Fichiers" />}
+                                        {user.permissions?.canViewFinancials && <PermissionBadge icon={DollarSign} color="green" title="Finances" />}
+                                        {user.permissions?.canManageTeam && <PermissionBadge icon={Users} color="orange" title="Gestion Équipe" />}
+                                        {user.permissions?.canViewReports && <PermissionBadge icon={BarChart3} color="indigo" title="Rapports" />}
+                                      </div>
                                   </div>
                               </div>
                           </div>
@@ -199,7 +216,7 @@ const Team: React.FC<TeamProps> = ({ currentUser, users, tasks, activities, onAd
                               </div>
 
                               {/* Actions */}
-                              {currentUser.role === UserRole.ADMIN && user.id !== currentUser.id && (
+                              {canManageTeam && user.id !== currentUser.id && user.role !== UserRole.ADMIN && (
                                   <div className="flex items-center space-x-2 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
                                       <button 
                                           onClick={() => openEditModal(user)}
@@ -220,6 +237,11 @@ const Team: React.FC<TeamProps> = ({ currentUser, users, tasks, activities, onAd
                                           <Trash2 size={16} />
                                       </button>
                                   </div>
+                              )}
+                              
+                              {/* Admin Self-Edit Override or View Mode if Admin editing another Admin */}
+                              {canManageTeam && user.role === UserRole.ADMIN && user.id !== currentUser.id && (
+                                  <span className="text-xs text-slate-400 italic">Admin (Protégé)</span>
                               )}
                           </div>
                       </div>
@@ -270,7 +292,7 @@ const Team: React.FC<TeamProps> = ({ currentUser, users, tasks, activities, onAd
                               <option value={UserRole.PROJECT_MANAGER}>Chef de Projet</option>
                               <option value={UserRole.COMMUNITY_MANAGER}>Community Manager</option>
                               <option value={UserRole.ANALYST}>Analyste</option>
-                              <option value={UserRole.ADMIN}>Admin</option>
+                              {currentUser.role === UserRole.ADMIN && <option value={UserRole.ADMIN}>Admin</option>}
                           </select>
                       </div>
                       
@@ -304,89 +326,146 @@ const Team: React.FC<TeamProps> = ({ currentUser, users, tasks, activities, onAd
       {/* Edit Member Modal */}
       {showEditModal && selectedMember && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-                  <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+              <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
+                  <div className="p-6 border-b border-slate-100 flex justify-between items-center shrink-0">
                       <h3 className="text-lg font-bold text-slate-900">Modifier {selectedMember.name}</h3>
                       <button onClick={() => setShowEditModal(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
                   </div>
-                  <form onSubmit={handleEditSubmit} className="p-6 space-y-5">
-                      <div>
-                          <label className="block text-sm font-medium text-slate-700 mb-1">Nom complet</label>
-                          <input 
-                            type="text" 
-                            value={editUser.name || ''}
-                            onChange={e => setEditUser({...editUser, name: e.target.value})}
-                            className="w-full p-2.5 bg-gray-200 text-black border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all"
-                          />
-                      </div>
-                      <div>
-                          <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
-                          <input 
-                            type="email" 
-                            value={editUser.email || ''}
-                            onChange={e => setEditUser({...editUser, email: e.target.value})}
-                            className="w-full p-2.5 bg-gray-200 text-black border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all"
-                          />
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                          <div>
-                              <label className="block text-sm font-medium text-slate-700 mb-1">Rôle Principal</label>
-                              <select 
+                  <div className="overflow-y-auto flex-1">
+                  <form onSubmit={handleEditSubmit} className="p-6 space-y-6">
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Nom complet</label>
+                            <input 
+                                type="text" 
+                                value={editUser.name || ''}
+                                onChange={e => setEditUser({...editUser, name: e.target.value})}
+                                className="w-full p-2.5 bg-gray-200 text-black border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+                            <input 
+                                type="email" 
+                                value={editUser.email || ''}
+                                onChange={e => setEditUser({...editUser, email: e.target.value})}
+                                className="w-full p-2.5 bg-gray-200 text-black border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Rôle Principal</label>
+                            <select 
                                 value={editUser.role || UserRole.MEMBER}
                                 onChange={e => setEditUser({...editUser, role: e.target.value as UserRole})}
                                 className="w-full p-2.5 bg-gray-200 text-black border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all"
-                              >
-                                  <option value={UserRole.MEMBER}>Membre</option>
-                                  <option value={UserRole.PROJECT_MANAGER}>Chef de Projet</option>
-                                  <option value={UserRole.COMMUNITY_MANAGER}>Comm. Manager</option>
-                                  <option value={UserRole.ANALYST}>Analyste</option>
-                                  <option value={UserRole.ADMIN}>Admin</option>
-                              </select>
-                          </div>
-                          <div>
-                              <label className="block text-sm font-medium text-slate-700 mb-1">Statut du Compte</label>
-                              <select 
+                            >
+                                <option value={UserRole.MEMBER}>Membre</option>
+                                <option value={UserRole.PROJECT_MANAGER}>Chef de Projet</option>
+                                <option value={UserRole.COMMUNITY_MANAGER}>Comm. Manager</option>
+                                <option value={UserRole.ANALYST}>Analyste</option>
+                                {currentUser.role === UserRole.ADMIN && <option value={UserRole.ADMIN}>Admin</option>}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Statut du Compte</label>
+                            <select 
                                 value={editUser.status || 'active'}
                                 onChange={e => setEditUser({...editUser, status: e.target.value as any})}
                                 className={`w-full p-2.5 border rounded-lg focus:ring-2 outline-none transition-all font-medium ${editUser.status === 'active' ? 'bg-green-50 text-green-800 border-green-200' : 'bg-red-50 text-red-800 border-red-200'}`}
-                              >
-                                  <option value="active">Actif</option>
-                                  <option value="pending">En attente</option>
-                                  <option value="suspended">Suspendu</option>
-                              </select>
-                          </div>
+                            >
+                                <option value="active">Actif</option>
+                                <option value="pending">En attente</option>
+                                <option value="suspended">Suspendu</option>
+                            </select>
+                        </div>
                       </div>
 
-                      <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
-                          <h4 className="text-xs font-bold text-slate-400 uppercase mb-3 flex items-center">
-                              <Lock size={12} className="mr-1"/> Permissions Spéciales
+                      {/* Extended Permissions Grid */}
+                      <div className="bg-slate-50 p-5 rounded-lg border border-slate-200">
+                          <h4 className="text-xs font-bold text-slate-500 uppercase mb-4 flex items-center tracking-wide">
+                              <Shield size={12} className="mr-2 text-primary"/> Permissions Spéciales
                           </h4>
-                          <div className="space-y-3">
-                              <label className="flex items-center space-x-3 cursor-pointer group select-none">
-                                  <div 
-                                    className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${editPermissions.canCreateTasks ? 'bg-primary border-primary text-white' : 'bg-white border-slate-300'}`}
-                                    onClick={(e) => { e.preventDefault(); togglePermission('canCreateTasks'); }}
-                                  >
-                                      {editPermissions.canCreateTasks && <CheckSquare size={14} />}
-                                  </div>
-                                  <div onClick={() => togglePermission('canCreateTasks')} className="flex-1">
-                                      <p className="text-sm font-medium text-slate-700 group-hover:text-primary transition-colors">Créer des tâches</p>
-                                      <p className="text-xs text-slate-400">Autoriser ce membre à créer de nouvelles tâches.</p>
-                                  </div>
-                              </label>
+                          
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                              {/* --- Section Tâches --- */}
+                              <div className="col-span-full mb-1">
+                                  <span className="text-[10px] font-bold text-slate-400 uppercase">Gestion des Tâches</span>
+                              </div>
 
-                              <label className="flex items-center space-x-3 cursor-pointer group select-none">
-                                  <div 
-                                    className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${editPermissions.canDeleteTasks ? 'bg-primary border-primary text-white' : 'bg-white border-slate-300'}`}
-                                    onClick={(e) => { e.preventDefault(); togglePermission('canDeleteTasks'); }}
-                                  >
-                                      {editPermissions.canDeleteTasks && <Trash2 size={14} />}
-                                  </div>
-                                  <div onClick={() => togglePermission('canDeleteTasks')} className="flex-1">
-                                      <p className="text-sm font-medium text-slate-700 group-hover:text-primary transition-colors">Supprimer des tâches</p>
-                                      <p className="text-xs text-slate-400">Autoriser la suppression définitive de contenu.</p>
-                                  </div>
-                              </label>
+                              <PermissionToggle 
+                                label="Créer des tâches" 
+                                desc="Autoriser la création." 
+                                active={editPermissions.canCreateTasks} 
+                                onToggle={() => togglePermission('canCreateTasks')} 
+                                icon={CheckSquare}
+                              />
+                              <PermissionToggle 
+                                label="Supprimer des tâches" 
+                                desc="Suppression définitive." 
+                                active={editPermissions.canDeleteTasks} 
+                                onToggle={() => togglePermission('canDeleteTasks')} 
+                                icon={Trash2}
+                              />
+
+                               {/* --- Section Données --- */}
+                               <div className="col-span-full mb-1 mt-2">
+                                  <span className="text-[10px] font-bold text-slate-400 uppercase">Accès Données & Finance</span>
+                              </div>
+
+                              <PermissionToggle 
+                                label="Vue Fichiers" 
+                                desc="Accès à l'onglet Fichiers." 
+                                active={editPermissions.canViewFiles} 
+                                onToggle={() => togglePermission('canViewFiles')} 
+                                icon={FolderOpen}
+                              />
+                              <PermissionToggle 
+                                label="Vue Financière" 
+                                desc="Voir CA et budgets." 
+                                active={editPermissions.canViewFinancials} 
+                                onToggle={() => togglePermission('canViewFinancials')} 
+                                icon={DollarSign}
+                              />
+                              <PermissionToggle 
+                                label="Vue Rapports" 
+                                desc="Accès à l'onglet Rapports." 
+                                active={editPermissions.canViewReports} 
+                                onToggle={() => togglePermission('canViewReports')} 
+                                icon={BarChart3}
+                              />
+
+                              {/* --- Section Management --- */}
+                              <div className="col-span-full mb-1 mt-2">
+                                  <span className="text-[10px] font-bold text-slate-400 uppercase">Management Avancé</span>
+                              </div>
+                              
+                              <PermissionToggle 
+                                label="Gestion Équipe" 
+                                desc="Ajouter/Modifier membres." 
+                                active={editPermissions.canManageTeam} 
+                                onToggle={() => togglePermission('canManageTeam')} 
+                                icon={Users}
+                                color="text-orange-600"
+                              />
+
+                               <PermissionToggle 
+                                label="Gestion Canaux" 
+                                desc="Créer/Supprimer channels." 
+                                active={editPermissions.canManageChannels} 
+                                onToggle={() => togglePermission('canManageChannels')} 
+                                icon={Hash}
+                                color="text-purple-600"
+                              />
+
+                              <PermissionToggle 
+                                label="Gestion Chat" 
+                                desc="Modération des messages." 
+                                active={editPermissions.canManageChat} 
+                                onToggle={() => togglePermission('canManageChat')} 
+                                icon={MessageSquare}
+                                color="text-red-600"
+                              />
                           </div>
                       </div>
 
@@ -407,6 +486,7 @@ const Team: React.FC<TeamProps> = ({ currentUser, users, tasks, activities, onAd
                           </button>
                       </div>
                   </form>
+                  </div>
               </div>
           </div>
       )}
@@ -414,7 +494,37 @@ const Team: React.FC<TeamProps> = ({ currentUser, users, tasks, activities, onAd
   );
 };
 
-export default Team;
+// UI Components for cleanliness
+
+const PermissionToggle = ({ label, desc, active, onToggle, icon: Icon, color }: any) => (
+    <div 
+        onClick={onToggle}
+        className={`flex items-start space-x-3 p-3 rounded-lg border cursor-pointer transition-all ${active ? 'bg-white border-primary shadow-sm' : 'bg-slate-50 border-transparent hover:bg-white hover:border-slate-200'}`}
+    >
+        <div className={`mt-0.5 p-1.5 rounded-md ${active ? 'bg-primary text-white' : 'bg-slate-200 text-slate-400'}`}>
+            <Icon size={14} />
+        </div>
+        <div>
+            <p className={`text-sm font-semibold ${active ? (color || 'text-primary') : 'text-slate-600'}`}>{label}</p>
+            <p className="text-[11px] text-slate-400 leading-tight mt-0.5">{desc}</p>
+        </div>
+    </div>
+);
+
+const PermissionBadge = ({ icon: Icon, color, title }: any) => {
+    const colorClasses: any = {
+        blue: 'bg-blue-50 text-blue-700 border-blue-100',
+        purple: 'bg-purple-50 text-purple-700 border-purple-100',
+        green: 'bg-green-50 text-green-700 border-green-100',
+        orange: 'bg-orange-50 text-orange-700 border-orange-100',
+        indigo: 'bg-indigo-50 text-indigo-700 border-indigo-100',
+    };
+    return (
+        <span className={`px-1.5 py-0.5 rounded text-[9px] border flex items-center ${colorClasses[color] || colorClasses.blue}`} title={title}>
+            <Icon size={10} />
+        </span>
+    );
+};
 
 // Helper for Icon in empty modal
 function Info({ className, size }: { className?: string, size?: number }) {
@@ -422,3 +532,5 @@ function Info({ className, size }: { className?: string, size?: number }) {
         <svg xmlns="http://www.w3.org/2000/svg" width={size || 24} height={size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
     );
 }
+
+export default Team;

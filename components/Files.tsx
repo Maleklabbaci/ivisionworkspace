@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { FileText, Image, Archive, Search, Download, FolderOpen, Lock } from 'lucide-react';
 import { Task, Message, User, UserRole } from '../types';
@@ -21,8 +22,10 @@ const Files: React.FC<FilesProps> = ({ tasks, messages, currentUser }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'pdf' | 'image'>('all');
 
-  // Access Guard
-  if (currentUser.role !== UserRole.ADMIN) {
+  // Access Guard: Admin OR Special Permission 'canViewFiles'
+  const canAccess = currentUser.role === UserRole.ADMIN || currentUser.permissions?.canViewFiles;
+
+  if (!canAccess) {
     return (
         <div className="h-full flex flex-col items-center justify-center text-center p-8">
             <div className="bg-red-50 p-6 rounded-full mb-4">
@@ -30,7 +33,7 @@ const Files: React.FC<FilesProps> = ({ tasks, messages, currentUser }) => {
             </div>
             <h2 className="text-2xl font-bold text-slate-900 mb-2">Accès Restreint</h2>
             <p className="text-slate-500 max-w-md">
-                Cette section contient des données sensibles et est réservée aux administrateurs.
+                Cette section est réservée aux administrateurs ou aux membres disposant d'une permission spéciale.
             </p>
         </div>
     );

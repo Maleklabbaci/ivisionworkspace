@@ -1,4 +1,5 @@
 
+
 export enum UserRole {
   ADMIN = 'Admin',
   MEMBER = 'Membre',
@@ -10,7 +11,12 @@ export enum UserRole {
 export interface UserPermissions {
   canCreateTasks?: boolean;
   canDeleteTasks?: boolean;
-  canManageChat?: boolean;
+  canManageChat?: boolean;       // Supprimer messages
+  canViewFiles?: boolean;        // Accès aux fichiers
+  canViewFinancials?: boolean;   // Accès aux budgets
+  canManageTeam?: boolean;       // Ajouter/Modifier des membres
+  canManageChannels?: boolean;   // Créer/Supprimer des channels
+  canViewReports?: boolean;      // Accès aux rapports
 }
 
 export interface User {

@@ -147,7 +147,8 @@ const App: React.FC = () => {
           channelId: newMsg.channel_id,
           content: newMsg.content,
           timestamp: new Date(newMsg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-          fullTimestamp: newMsg.created_at // ISO String
+          fullTimestamp: newMsg.created_at, // ISO String
+          attachments: newMsg.attachments || []
         };
 
         // 1. Add to message list (Check for duplicates to avoid double entry with optimistic UI)
@@ -164,8 +165,8 @@ const App: React.FC = () => {
                     c.id === newMsg.channel_id ? { ...c, unread: (c.unread || 0) + 1 } : c
                 ));
             } else {
-               // If we are on the channel, update last read time essentially
-               markChannelAsRead(currentChannelId);
+               // If we are on the channel, we DON'T auto-read here to allow the "New Message" line to appear
+               // markChannelAsRead will be called by the Chat component interaction
             }
         }
 
@@ -193,7 +194,17 @@ const App: React.FC = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [currentUser, users, currentChannelId]); // Re-run if currentChannelId changes to update read logic
+  }, [currentUser, users, currentChannelId]);
+
+  // --- DOCUMENT TITLE UPDATE ---
+  useEffect(() => {
+      const totalUnread = channels.reduce((acc, c) => acc + (c.unread || 0), 0);
+      if (totalUnread > 0) {
+          document.title = `(${totalUnread}) iVISION AGENCY`;
+      } else {
+          document.title = `iVISION AGENCY`;
+      }
+  }, [channels]);
 
   // --- DATA FETCHING ---
 
@@ -219,8 +230,6 @@ const App: React.FC = () => {
             };
             setCurrentUser(user);
         } else {
-            // Handle missing public profile -> Create one silently
-            // Note: handleRegister might have already created it, so this is a fallback for direct auth (Google/MagicLink) or legacy.
             const { data: { user: authUser } } = await supabase.auth.getUser();
             
             if (authUser) {
@@ -290,7 +299,8 @@ const App: React.FC = () => {
                 channelId: m.channel_id,
                 content: m.content,
                 timestamp: new Date(m.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-                fullTimestamp: m.created_at // Save ISO for logic
+                fullTimestamp: m.created_at, // Save ISO for logic
+                attachments: m.attachments || []
             }));
             setMessages(fetchedMessages);
         }
@@ -309,7 +319,7 @@ const App: React.FC = () => {
         if (tasksResult.data) {
             const mappedTasks = await Promise.all(tasksResult.data.map(async (t) => {
                 const comments = []; 
-                const attachments = []; 
+                const attachments = t.attachments || []; // Ensure attachments are loaded
 
                 return {
                     id: t.id,
@@ -337,7 +347,7 @@ const App: React.FC = () => {
 
   const handleChannelChange = (channelId: string) => {
       setCurrentChannelId(channelId);
-      markChannelAsRead(channelId);
+      // Note: markChannelAsRead moved to Chat component to allow displaying "New Messages" separator before clearing
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -354,7 +364,6 @@ const App: React.FC = () => {
         setIsAuthProcessing(false);
     } else {
         addNotification('Connexion...', 'Chargement de l\'espace de travail.', 'success');
-        // Note: setIsAuthProcessing(false) will happen in onAuthStateChange via optimistic UI
     }
   };
 
@@ -386,48 +395,50 @@ const App: React.FC = () => {
 
     if (authData.user) {
         // --- MIGRATION DES COMPTES CRÉÉS PAR L'ADMIN ---
-        // Vérifier si un compte "placeholder" existe déjà avec cet email (créé par l'admin via l'interface équipe)
         const registeredEmail = authData.user.email;
         const newAuthId = authData.user.id;
 
+        // Vérifier si un profil a été pré-créé par l'admin (avec un ID temporaire ou différent)
         const { data: existingProfiles } = await supabase
             .from('users')
             .select('*')
             .eq('email', registeredEmail);
         
+        // On cherche un profil qui N'EST PAS celui qu'on vient de créer (cas peu probable avec RLS strict, 
+        // mais utile si l'admin a créé une ligne manuelle sans Auth ID)
+        // Note: Avec Supabase, l'insert via Admin aurait créé une ligne. 
+        // Ici on simule la fusion : si une ligne existe, on met à jour son ID pour correspondre à l'Auth ID.
+        
         const placeholderProfile = existingProfiles?.find(u => u.id !== newAuthId);
 
         if (placeholderProfile) {
             console.log("Compte pré-créé détecté. Migration en cours...");
-            // Le compte existe (créé par admin), on doit migrer ses infos vers le nouvel ID Auth
-            
-            // 1. Récupérer les rôles et permissions définis par l'admin
             const inheritedRole = placeholderProfile.role;
             const inheritedPermissions = placeholderProfile.permissions;
+            const inheritedStatus = placeholderProfile.status;
 
-            // 2. Réassigner les tâches assignées à l'ancien ID vers le nouvel ID
+            // 1. Réassigner les tâches de l'ancien ID (temp) vers le nouvel Auth ID
             await supabase.from('tasks').update({ assignee_id: newAuthId }).eq('assignee_id', placeholderProfile.id);
-
-            // 3. Supprimer l'ancien profil "placeholder" pour éviter les doublons
+            
+            // 2. Supprimer le profil placeholder
             await supabase.from('users').delete().eq('id', placeholderProfile.id);
 
-            // 4. Créer le nouveau profil officiel avec les données héritées
+            // 3. Créer le nouveau profil propre lié à Auth, mais avec les données héritées
             const newProfile = {
                 id: newAuthId,
                 name: registerName,
                 email: registeredEmail,
-                role: inheritedRole || UserRole.MEMBER, // Garder le rôle défini par l'admin
+                role: inheritedRole || UserRole.MEMBER, 
                 avatar: `https://ui-avatars.com/api/?name=${registerName.replace(' ', '+')}&background=random`,
                 notification_pref: 'all',
-                status: 'active',
-                permissions: inheritedPermissions || {} // Garder les permissions définies par l'admin
+                status: inheritedStatus || 'active', // Garde le statut défini par l'admin
+                permissions: inheritedPermissions || {} 
             };
 
             await supabase.from('users').insert([newProfile]);
-            addNotification('Compte lié', 'Votre profil pré-créé par l\'administrateur a été récupéré.', 'success');
+            addNotification('Compte lié', 'Votre profil pré-créé par l\'administrateur a été récupéré avec succès.', 'success');
 
         } else if (authData.session) {
-            // Cas normal : Pas de profil existant, on laisse le fetchUserProfile ou le trigger créer le défaut
              addNotification('Compte créé !', 'Bienvenue sur iVISION.', 'success');
         } else {
              addNotification('Vérifiez vos emails', 'Un lien de confirmation a été envoyé.', 'info');
@@ -440,7 +451,7 @@ const App: React.FC = () => {
 
   const handleLogout = async () => {
       await supabase.auth.signOut();
-      setCurrentUser(null); // Immediate UI clear
+      setCurrentUser(null);
   };
 
   // --- TASK ACTIONS ---
@@ -459,7 +470,8 @@ const App: React.FC = () => {
         due_date: updatedTask.dueDate,
         assignee_id: updatedTask.assigneeId,
         type: updatedTask.type,
-        price: updatedTask.price
+        price: updatedTask.price,
+        attachments: updatedTask.attachments // Ensure attachments are saved
     }).eq('id', updatedTask.id);
     if (error) { addNotification('Erreur', 'Mise à jour échouée.', 'urgent'); return; }
     setTasks(prev => prev.map(t => t.id === updatedTask.id ? updatedTask : t));
@@ -475,9 +487,9 @@ const App: React.FC = () => {
           status: newTask.status,
           type: newTask.type,
           priority: newTask.priority,
-          price: newTask.price
+          price: newTask.price,
+          attachments: newTask.attachments
       };
-      // Optimistic Add
       const addedTask = { ...newTask, id: dbTask.id };
       setTasks(prev => [...prev, addedTask]);
       addNotification('Succès', 'Tâche créée.', 'success');
@@ -486,31 +498,28 @@ const App: React.FC = () => {
       if (error) { 
           console.error(error); 
           addNotification('Erreur', 'Synchronisation échouée.', 'urgent');
-          setTasks(prev => prev.filter(t => t.id !== dbTask.id)); // Revert
+          setTasks(prev => prev.filter(t => t.id !== dbTask.id)); 
       } 
   };
 
   const handleDeleteTask = async (taskId: string) => {
     const previousTasks = [...tasks];
-    // Optimistic Update: Remove immediately from UI
     setTasks(prev => prev.filter(t => t.id !== taskId));
     addNotification('Supprimé', 'Tâche supprimée.', 'success');
 
-    // Sync with DB
     const { error } = await supabase.from('tasks').delete().eq('id', taskId);
     if (error) {
         console.error("Failed to delete task", error);
-        setTasks(previousTasks); // Revert if failed
-        addNotification('Erreur', 'Impossible de supprimer la tâche. Vérifiez votre connexion.', 'urgent');
+        setTasks(previousTasks); 
+        addNotification('Erreur', 'Impossible de supprimer la tâche.', 'urgent');
     }
   };
 
-  // --- CHAT & TEAM ACTIONS ---
+  // --- CHAT ACTIONS ---
 
-  const handleSendMessage = async (text: string, channelId: string) => {
+  const handleSendMessage = async (text: string, channelId: string, attachments: string[] = []) => {
       if (!currentUser) return;
       
-      // We add optimistically for immediate UX
       const newMessageId = crypto.randomUUID();
       const now = new Date();
       
@@ -520,18 +529,28 @@ const App: React.FC = () => {
           channelId, 
           content: text, 
           timestamp: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-          fullTimestamp: now.toISOString()
+          fullTimestamp: now.toISOString(),
+          attachments: attachments
       };
       
       setMessages(prev => [...prev, displayMessage]);
+      
+      // Mark as read immediately for self
+      markChannelAsRead(channelId);
 
-      const dbMessage = { id: newMessageId, channel_id: channelId, user_id: currentUser.id, content: text };
+      const dbMessage = { 
+          id: newMessageId, 
+          channel_id: channelId, 
+          user_id: currentUser.id, 
+          content: text,
+          attachments: attachments 
+      };
       const { error } = await supabase.from('messages').insert([dbMessage]);
       
       if (error) { 
           console.error(error); 
           addNotification('Erreur', 'Message non envoyé.', 'urgent');
-          setMessages(prev => prev.filter(m => m.id !== newMessageId)); // Revert
+          setMessages(prev => prev.filter(m => m.id !== newMessageId)); 
       }
   };
 
@@ -565,7 +584,6 @@ const App: React.FC = () => {
            const { error: membersError } = await supabase.from('channel_members').insert(memberInserts);
            if (membersError) {
                console.error("Error adding members to channel", membersError);
-               addNotification('Attention', 'Canal créé mais erreur lors de l\'ajout des membres.', 'urgent');
            }
       }
   };
@@ -581,11 +599,12 @@ const App: React.FC = () => {
       const { error } = await supabase.from('channels').delete().eq('id', channelId);
       if (error) {
           console.error("Delete channel error", error);
-          setChannels(previousChannels); // Revert
+          setChannels(previousChannels); 
           addNotification('Erreur', 'Impossible de supprimer la conversation.', 'urgent');
       }
   };
 
+  // --- MEMBER ACTIONS ---
   const handleAddUser = async (newUser: User) => {
       const tempId = crypto.randomUUID();
       const dbUser = {
@@ -606,12 +625,11 @@ const App: React.FC = () => {
       if (error) {
           console.error(error);
           addNotification('Erreur', "Impossible d'enregistrer le membre.", 'urgent');
-          setUsers(prev => prev.filter(u => u.email !== newUser.email)); // Revert
+          setUsers(prev => prev.filter(u => u.email !== newUser.email)); 
       }
   };
 
   const handleRemoveUser = async (userId: string) => {
-      // Optimistic Update
       const prevUsers = [...users];
       setUsers(users.filter(u => u.id !== userId));
       addNotification('Succès', 'Utilisateur supprimé.', 'success');
@@ -619,7 +637,7 @@ const App: React.FC = () => {
       const { error } = await supabase.from('users').delete().eq('id', userId);
       if (error) {
           console.error("Delete user error", error);
-          setUsers(prevUsers); // Revert
+          setUsers(prevUsers); 
           addNotification('Erreur', 'Impossible de supprimer l\'utilisateur.', 'urgent');
       }
   };
@@ -639,7 +657,7 @@ const App: React.FC = () => {
         const { error: authError } = await supabase.auth.updateUser(authUpdates);
         if (authError) {
             addNotification("Erreur Sécurité", authError.message, 'urgent');
-            return; // Stop if auth update fails
+            return;
         }
     }
 
@@ -665,7 +683,6 @@ const App: React.FC = () => {
   };
 
   const handleUpdateMember = async (userId: string, updatedData: Partial<User>) => {
-      // Construct payload dynamically
       const updatePayload: any = {};
       if (updatedData.name !== undefined) updatePayload.name = updatedData.name;
       if (updatedData.email !== undefined) updatePayload.email = updatedData.email;
@@ -679,42 +696,10 @@ const App: React.FC = () => {
           setUsers(users.map(u => u.id === userId ? { ...u, ...updatedData } : u)); 
           addNotification('Compte modifié', 'Les informations ont été mises à jour.', 'success'); 
       } else {
-          // Better error handling: Extract message string
-          const errorMsg = error.message || JSON.stringify(error);
-          
-          // FALLBACK: Try updating without permissions if that was the cause
-          if (updatePayload.permissions) {
-              const { permissions, ...fallbackPayload } = updatePayload;
-              if (Object.keys(fallbackPayload).length > 0) {
-                   const { error: fallbackError } = await supabase.from('users').update(fallbackPayload).eq('id', userId);
-                   if (!fallbackError) {
-                        setUsers(users.map(u => u.id === userId ? { ...u, ...updatedData, permissions: undefined } : u));
-                        addNotification('Attention', 'Profil mis à jour, mais les permissions n\'ont pas pu être sauvegardées (Colonne "permissions" manquante en base de données).', 'urgent');
-                        return;
-                   }
-              }
-          }
-
           console.error("Failed update member:", error);
-          addNotification('Erreur', `Échec de la mise à jour: ${errorMsg}`, 'urgent');
+          addNotification('Erreur', `Échec de la mise à jour: ${error.message}`, 'urgent');
       }
   };
-
-  // --- CONFIG CHECK ---
-  if (!isConfigured) {
-      return (
-        <div className="h-screen w-screen flex items-center justify-center bg-slate-50 flex-col p-4 text-center">
-          <div className="bg-white p-8 rounded-2xl shadow-xl max-w-lg w-full border border-slate-200">
-            <div className="w-16 h-16 bg-blue-50 text-primary rounded-full flex items-center justify-center mx-auto mb-6">
-               <AlertCircle size={32} />
-            </div>
-            <h1 className="text-2xl font-bold text-slate-900 mb-3">Configuration Requise</h1>
-            <p className="text-slate-600 mb-6">Pour utiliser iVISION, vous devez connecter votre base de données Supabase.</p>
-            <button onClick={() => window.location.reload()} className="w-full bg-primary hover:bg-blue-700 text-white font-medium py-3 rounded-lg transition-all">Recharger</button>
-          </div>
-        </div>
-      );
-  }
 
   // Total Unread Calculation
   const totalUnreadCount = channels.reduce((acc, c) => acc + (c.unread || 0), 0);
@@ -810,12 +795,64 @@ const App: React.FC = () => {
     <div className="animate-in slide-in-from-right duration-300 ease-out h-full">
       <Layout currentUser={currentUser} currentView={currentView} onNavigate={setCurrentView} onLogout={handleLogout} unreadMessageCount={totalUnreadCount}>
         <ToastContainer notifications={notifications} onDismiss={removeNotification} />
-        {currentView === 'dashboard' && <Dashboard currentUser={currentUser} tasks={tasks} messages={messages} notifications={notifications} onNavigate={setCurrentView} onDeleteTask={handleDeleteTask} unreadMessageCount={totalUnreadCount} />}
+        
+        {currentView === 'dashboard' && (
+            <Dashboard 
+                currentUser={currentUser} 
+                tasks={tasks} 
+                messages={messages} 
+                notifications={notifications} 
+                onNavigate={setCurrentView} 
+                onDeleteTask={handleDeleteTask} 
+                unreadMessageCount={totalUnreadCount} 
+            />
+        )}
+        
         {currentView === 'reports' && <Reports currentUser={currentUser} tasks={tasks} users={users} />}
-        {currentView === 'tasks' && <Tasks tasks={tasks} users={users.filter(u => u.status === 'active')} currentUser={currentUser} onUpdateStatus={handleUpdateTaskStatus} onAddTask={handleAddTask} onUpdateTask={handleUpdateTask} onDeleteTask={handleDeleteTask} />}
-        {currentView === 'chat' && <Chat currentUser={currentUser} users={users.filter(u => u.status === 'active')} channels={channels.length > 0 ? channels : [{ id: 'general', name: 'Général', type: 'global' }]} currentChannelId={currentChannelId} messages={messages} onChannelChange={handleChannelChange} onSendMessage={handleSendMessage} onAddChannel={handleAddChannel} onDeleteChannel={handleDeleteChannel} />}
+        
+        {currentView === 'tasks' && (
+            <Tasks 
+                tasks={tasks} 
+                users={users.filter(u => u.status === 'active')} 
+                currentUser={currentUser} 
+                onUpdateStatus={handleUpdateTaskStatus} 
+                onAddTask={handleAddTask} 
+                onUpdateTask={handleUpdateTask} 
+                onDeleteTask={handleDeleteTask} 
+            />
+        )}
+        
+        {currentView === 'chat' && (
+            <Chat 
+                currentUser={currentUser} 
+                users={users.filter(u => u.status === 'active')} 
+                channels={channels.length > 0 ? channels : [{ id: 'general', name: 'Général', type: 'global' }]} 
+                currentChannelId={currentChannelId} 
+                messages={messages} 
+                onChannelChange={handleChannelChange} 
+                onSendMessage={handleSendMessage} 
+                onAddChannel={handleAddChannel} 
+                onDeleteChannel={handleDeleteChannel} 
+                onReadChannel={markChannelAsRead}
+            />
+        )}
+        
         {currentView === 'files' && currentUser && <Files tasks={tasks} messages={messages} currentUser={currentUser} />}
-        {currentView === 'team' && <Team currentUser={currentUser} users={users} tasks={tasks} activities={[]} onAddUser={handleAddUser} onRemoveUser={handleRemoveUser} onUpdateRole={(userId, role) => handleUpdateMember(userId, { role })} onApproveUser={handleApproveUser} onUpdateMember={handleUpdateMember} />}
+        
+        {currentView === 'team' && (
+            <Team 
+                currentUser={currentUser} 
+                users={users} 
+                tasks={tasks} 
+                activities={[]} 
+                onAddUser={handleAddUser} 
+                onRemoveUser={handleRemoveUser} 
+                onUpdateRole={(userId, role) => handleUpdateMember(userId, { role })} 
+                onApproveUser={handleApproveUser} 
+                onUpdateMember={handleUpdateMember} 
+            />
+        )}
+        
         {currentView === 'settings' && <Settings currentUser={currentUser} onUpdateProfile={handleUpdateProfile} />}
       </Layout>
     </div>

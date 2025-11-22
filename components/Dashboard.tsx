@@ -65,7 +65,13 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks, messages, not
     }
   };
 
-  const isAdminOrPM = currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.PROJECT_MANAGER;
+  // PERMISSION CHECK: Admin, Project Manager, OR Special Permission 'canViewFinancials'
+  const showFinancials = 
+    currentUser.role === UserRole.ADMIN || 
+    currentUser.role === UserRole.PROJECT_MANAGER || 
+    currentUser.permissions?.canViewFinancials;
+
+  const canDeleteTasks = currentUser.role === UserRole.ADMIN || currentUser.permissions?.canDeleteTasks;
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto relative">
@@ -138,7 +144,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks, messages, not
 
       {/* Main KPI Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {isAdminOrPM && (
+        {showFinancials && (
             <>
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 relative group">
                   <div className="flex justify-between items-start mb-4">
@@ -188,9 +194,9 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks, messages, not
             </>
         )}
 
-        <div className={`bg-white p-6 rounded-xl shadow-sm border border-slate-200 ${!isAdminOrPM ? 'md:col-span-3' : ''}`}>
+        <div className={`bg-white p-6 rounded-xl shadow-sm border border-slate-200 ${!showFinancials ? 'md:col-span-3' : ''}`}>
           <div className="flex justify-between items-start mb-4">
-            <p className="text-sm font-medium text-slate-500">Productivité {isAdminOrPM ? 'Globale' : 'Personnelle'}</p>
+            <p className="text-sm font-medium text-slate-500">Productivité {showFinancials ? 'Globale' : 'Personnelle'}</p>
             <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${completionRate > 50 ? 'bg-blue-50 text-primary' : 'bg-orange-50 text-orange-600'}`}>
               {completionRate}% COMPLÉTÉ
             </span>
@@ -245,13 +251,13 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks, messages, not
                          }`}>
                            {isUrgent ? 'Urgent' : task.dueDate}
                          </span>
-                         {isAdminOrPM && task.price && (
+                         {showFinancials && task.price && (
                              <span className="text-xs font-mono text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100">
                                  {task.price} DA
                              </span>
                          )}
                          <div className="flex items-center space-x-2">
-                             {isAdminOrPM && (
+                             {canDeleteTasks && (
                                  <button 
                                     onClick={(e) => handleDelete(task.id, e)} 
                                     className={`transition-colors p-1 ${isUrgent ? 'text-red-400 hover:text-red-600' : 'text-slate-300 hover:text-urgent'}`}

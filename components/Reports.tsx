@@ -1,4 +1,5 @@
 
+
 import React, { useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, AreaChart, Area } from 'recharts';
 import { User, UserRole, Task, TaskStatus } from '../types';
@@ -15,8 +16,14 @@ const COLORS = ['#1D4ED8', '#10B981', '#f59e0b', '#EF4444', '#8b5cf6'];
 
 const Reports: React.FC<ReportsProps> = ({ currentUser, tasks, users }) => {
   
-  // Access Guard
-  if (currentUser.role !== UserRole.ADMIN && currentUser.role !== UserRole.PROJECT_MANAGER && currentUser.role !== UserRole.ANALYST) {
+  // Access Guard: Admin, Project Manager, Analyst OR Special Permission
+  const canAccess = 
+    currentUser.role === UserRole.ADMIN || 
+    currentUser.role === UserRole.PROJECT_MANAGER || 
+    currentUser.role === UserRole.ANALYST ||
+    currentUser.permissions?.canViewReports;
+
+  if (!canAccess) {
       return (
           <div className="h-full flex flex-col items-center justify-center text-center p-8 animate-in fade-in zoom-in duration-300">
               <div className="bg-red-50 p-6 rounded-full mb-4">

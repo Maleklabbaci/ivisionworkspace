@@ -24,7 +24,16 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, currentView, onN
     { id: 'team', label: 'Membres', icon: UsersIcon, roles: [UserRole.ADMIN] },
   ];
 
-  const visibleNavItems = navItems.filter(item => item.roles.includes(currentUser.role));
+  // Filter items based on Role OR Special Permissions
+  const visibleNavItems = navItems.filter(item => {
+    // Special Permissions Override
+    if (item.id === 'files' && currentUser.permissions?.canViewFiles) return true;
+    if (item.id === 'reports' && currentUser.permissions?.canViewReports) return true;
+    if (item.id === 'team' && currentUser.permissions?.canManageTeam) return true;
+    
+    // Default Role Check
+    return item.roles.includes(currentUser.role);
+  });
 
   const handleNavigate = (view: ViewState) => {
     onNavigate(view);
@@ -53,13 +62,18 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, currentView, onN
               <button
                 key={item.id}
                 onClick={() => handleNavigate(item.id as ViewState)}
-                className={`w-full flex items-center justify-between px-3 py-3 rounded-lg transition-all duration-200 text-sm group ${
+                className={`w-full flex items-center justify-between px-3 py-3 rounded-lg transition-all duration-200 text-sm group relative ${
                   isActive 
                     ? 'bg-primary text-white shadow-lg shadow-primary/30 translate-x-1' 
                     : 'text-slate-400 hover:bg-slate-800 hover:text-white hover:translate-x-1'
                 }`}
               >
                 <div className="flex items-center space-x-3">
+                    {/* Indicateur visuel (point vert) devant l'icône pour le chat non lu */}
+                    {isChat && unreadMessageCount > 0 && (
+                       <div className="absolute left-1 w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse shadow-[0_0_5px_rgba(34,197,94,0.8)]"></div>
+                    )}
+                    
                     <Icon size={18} strokeWidth={isActive ? 2.5 : 2} className={`transition-transform duration-200 ${isActive ? 'scale-110' : 'group-hover:scale-110'}`} />
                     <span className="font-medium">{item.label}</span>
                 </div>
