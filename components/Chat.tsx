@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Paperclip, Smile, Hash, Lock, Search, Bell, MessageSquare, File, Image, Menu, X, Plus, Check } from 'lucide-react';
+import { Send, Paperclip, Smile, Hash, Lock, Search, Bell, MessageSquare, File, Image, Menu, X, Plus, Check, Trash2 } from 'lucide-react';
 import { Message, User, Channel, UserRole } from '../types';
 
 interface ChatProps {
@@ -12,9 +12,10 @@ interface ChatProps {
   onChannelChange: (channelId: string) => void;
   onSendMessage: (text: string, channelId: string) => void;
   onAddChannel: (channel: { name: string; type: 'global' | 'project'; members?: string[] }) => void;
+  onDeleteChannel: (channelId: string) => void;
 }
 
-const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChannelId, messages, onChannelChange, onSendMessage, onAddChannel }) => {
+const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChannelId, messages, onChannelChange, onSendMessage, onAddChannel, onDeleteChannel }) => {
   const [newMessage, setNewMessage] = useState('');
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   const [showAddChannelModal, setShowAddChannelModal] = useState(false);
@@ -68,6 +69,13 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
     }
   };
 
+  const handleDeleteClick = (e: React.MouseEvent, channelId: string) => {
+      e.stopPropagation();
+      if (window.confirm("Êtes-vous sûr de vouloir supprimer cette conversation ? Cette action est irréversible.")) {
+          onDeleteChannel(channelId);
+      }
+  };
+
   const toggleMemberSelection = (userId: string) => {
       if (selectedMembers.includes(userId)) {
           setSelectedMembers(selectedMembers.filter(id => id !== userId));
@@ -89,13 +97,24 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
                     <button
                         key={channel.id}
                         onClick={() => handleChannelSelect(channel.id)}
-                        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm transition-all duration-200 ${currentChannelId === channel.id ? 'bg-white text-primary shadow-sm font-medium border border-slate-100 translate-x-1' : 'text-slate-600 hover:bg-white/60 hover:translate-x-1'}`}
+                        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm transition-all duration-200 group ${currentChannelId === channel.id ? 'bg-white text-primary shadow-sm font-medium border border-slate-100 translate-x-1' : 'text-slate-600 hover:bg-white/60 hover:translate-x-1'}`}
                     >
                         <div className="flex items-center truncate">
                             <Lock size={14} className="mr-2 opacity-50 flex-shrink-0" />
                             <span className="truncate">{channel.name}</span>
                         </div>
-                        {channel.unread && <span className="bg-primary text-white text-[10px] px-1.5 py-0.5 rounded-full ml-2 flex-shrink-0">{channel.unread}</span>}
+                        <div className="flex items-center">
+                            {channel.unread && <span className="bg-primary text-white text-[10px] px-1.5 py-0.5 rounded-full ml-2 flex-shrink-0">{channel.unread}</span>}
+                            {currentUser.role === UserRole.ADMIN && (
+                                <div 
+                                    onClick={(e) => handleDeleteClick(e, channel.id)}
+                                    className="ml-2 p-1 text-slate-300 hover:text-urgent hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                                    title="Supprimer"
+                                >
+                                    <Trash2 size={12} />
+                                </div>
+                            )}
+                        </div>
                     </button>
                 ))}
             </div>
@@ -110,10 +129,21 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
                         <button
                             key={channel.id}
                             onClick={() => handleChannelSelect(channel.id)}
-                            className={`w-full flex items-center px-3 py-2.5 rounded-lg text-sm transition-all duration-200 ${currentChannelId === channel.id ? 'bg-white text-primary shadow-sm font-medium border border-slate-100 translate-x-1' : 'text-slate-600 hover:bg-white/60 hover:translate-x-1'}`}
+                            className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm transition-all duration-200 group ${currentChannelId === channel.id ? 'bg-white text-primary shadow-sm font-medium border border-slate-100 translate-x-1' : 'text-slate-600 hover:bg-white/60 hover:translate-x-1'}`}
                         >
-                            <Hash size={14} className="mr-2 opacity-50" />
-                            <span>{channel.name}</span>
+                            <div className="flex items-center">
+                                <Hash size={14} className="mr-2 opacity-50" />
+                                <span>{channel.name}</span>
+                            </div>
+                            {currentUser.role === UserRole.ADMIN && channel.id !== 'general' && (
+                                <div 
+                                    onClick={(e) => handleDeleteClick(e, channel.id)}
+                                    className="ml-2 p-1 text-slate-300 hover:text-urgent hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                                    title="Supprimer"
+                                >
+                                    <Trash2 size={12} />
+                                </div>
+                            )}
                         </button>
                     ))}
                 </div>
