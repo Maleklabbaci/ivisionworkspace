@@ -9,9 +9,10 @@ interface LayoutProps {
   currentView: ViewState;
   onNavigate: (view: ViewState) => void;
   onLogout: () => void;
+  unreadMessageCount?: number;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, currentUser, currentView, onNavigate, onLogout }) => {
+const Layout: React.FC<LayoutProps> = ({ children, currentUser, currentView, onNavigate, onLogout, unreadMessageCount = 0 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const navItems = [
@@ -46,18 +47,27 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, currentView, onN
         {visibleNavItems.map((item) => {
             const Icon = item.icon;
             const isActive = currentView === item.id;
+            const isChat = item.id === 'chat';
+            
             return (
               <button
                 key={item.id}
                 onClick={() => handleNavigate(item.id as ViewState)}
-                className={`w-full flex items-center space-x-3 px-3 py-3 rounded-lg transition-all duration-200 text-sm group ${
+                className={`w-full flex items-center justify-between px-3 py-3 rounded-lg transition-all duration-200 text-sm group ${
                   isActive 
                     ? 'bg-primary text-white shadow-lg shadow-primary/30 translate-x-1' 
                     : 'text-slate-400 hover:bg-slate-800 hover:text-white hover:translate-x-1'
                 }`}
               >
-                <Icon size={18} strokeWidth={isActive ? 2.5 : 2} className={`transition-transform duration-200 ${isActive ? 'scale-110' : 'group-hover:scale-110'}`} />
-                <span className="font-medium">{item.label}</span>
+                <div className="flex items-center space-x-3">
+                    <Icon size={18} strokeWidth={isActive ? 2.5 : 2} className={`transition-transform duration-200 ${isActive ? 'scale-110' : 'group-hover:scale-110'}`} />
+                    <span className="font-medium">{item.label}</span>
+                </div>
+                {isChat && unreadMessageCount > 0 && (
+                    <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full animate-pulse shadow-sm">
+                        {unreadMessageCount}
+                    </span>
+                )}
               </button>
             );
         })}
@@ -117,8 +127,11 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, currentView, onN
       <div className="flex-1 flex flex-col h-screen overflow-hidden bg-slate-50">
         {/* Mobile Header */}
         <header className="md:hidden bg-[#0f172a] border-b border-slate-800 p-4 flex justify-between items-center z-10 shadow-sm sticky top-0">
-          <button onClick={() => setIsMobileMenuOpen(true)} className="text-slate-400 hover:text-white transition-colors p-1">
+          <button onClick={() => setIsMobileMenuOpen(true)} className="text-slate-400 hover:text-white transition-colors p-1 relative">
              <Menu size={24} />
+             {unreadMessageCount > 0 && (
+                 <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-[#0f172a]"></span>
+             )}
           </button>
           <span className="font-bold text-white text-lg">
             <span className="text-primary">i</span>VISION

@@ -1,7 +1,7 @@
 
-import React, { useState } from 'react';
-import { User, UserRole, ActivityLog, Task, TaskStatus } from '../types';
-import { MoreHorizontal, Mail, Shield, Trash2, UserPlus, History, Briefcase, Bell, Lock, X, CheckCircle, AlertCircle, Edit2, Save } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { User, UserRole, ActivityLog, Task, TaskStatus, UserPermissions } from '../types';
+import { MoreHorizontal, Mail, Shield, Trash2, UserPlus, History, Briefcase, Bell, Lock, X, CheckCircle, AlertCircle, Edit2, Save, CheckSquare, MessageSquare } from 'lucide-react';
 
 interface TeamProps {
   currentUser: User;
@@ -30,6 +30,7 @@ const Team: React.FC<TeamProps> = ({ currentUser, users, tasks, activities, onAd
   
   // Edit User State
   const [editUser, setEditUser] = useState<Partial<User>>({});
+  const [editPermissions, setEditPermissions] = useState<UserPermissions>({});
 
   const handleAddSubmit = (e: React.FormEvent) => {
       e.preventDefault();
@@ -53,14 +54,24 @@ const Team: React.FC<TeamProps> = ({ currentUser, users, tasks, activities, onAd
 
   const openEditModal = (user: User) => {
       setSelectedMember(user);
-      setEditUser({ name: user.name, email: user.email, role: user.role });
+      setEditUser({ name: user.name, email: user.email, role: user.role, status: user.status });
+      // Initialize permissions from user object or default to false
+      setEditPermissions({
+          canCreateTasks: user.permissions?.canCreateTasks || false,
+          canDeleteTasks: user.permissions?.canDeleteTasks || false,
+          canManageChat: user.permissions?.canManageChat || false,
+      });
       setShowEditModal(true);
   };
 
   const handleEditSubmit = (e: React.FormEvent) => {
       e.preventDefault();
       if (selectedMember && onUpdateMember) {
-          onUpdateMember(selectedMember.id, editUser);
+          // Explicitly combine the base user data with the permissions object
+          onUpdateMember(selectedMember.id, {
+              ...editUser,
+              permissions: editPermissions
+          });
           setShowEditModal(false);
           setSelectedMember(null);
       }
@@ -73,6 +84,13 @@ const Team: React.FC<TeamProps> = ({ currentUser, users, tasks, activities, onAd
           case UserRole.ANALYST: return 'bg-blue-100 text-blue-700 border-blue-200';
           default: return 'bg-slate-100 text-slate-600 border-slate-200';
       }
+  };
+
+  const togglePermission = (key: keyof UserPermissions) => {
+      setEditPermissions(prev => ({
+          ...prev,
+          [key]: !prev[key]
+      }));
   };
 
   // Stats calculations
@@ -146,18 +164,24 @@ const Team: React.FC<TeamProps> = ({ currentUser, users, tasks, activities, onAd
                           <div className="flex items-center space-x-4 mb-4 md:mb-0">
                               <div className="relative">
                                 <img src={user.avatar} alt={user.name} className="w-12 h-12 rounded-full border-2 border-white shadow-sm" />
-                                <div className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${user.status === 'active' ? 'bg-success' : 'bg-orange-400'}`}></div>
+                                <div className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${user.status === 'active' ? 'bg-success' : 'bg-red-500'}`}></div>
                               </div>
                               <div>
                                   <div className="flex items-center space-x-2">
                                       <h4 className="font-bold text-slate-900">{user.name}</h4>
                                       {user.id === currentUser.id && <span className="text-xs bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded">Vous</span>}
+                                      {user.status !== 'active' && <span className="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-bold uppercase">{user.status}</span>}
                                   </div>
                                   <div className="flex items-center text-sm text-slate-500 space-x-3">
                                       <span className="flex items-center"><Mail size={12} className="mr-1" /> {user.email}</span>
                                       <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${getRoleBadgeColor(user.role)}`}>
                                           {user.role}
                                       </span>
+                                      {user.permissions?.canCreateTasks && (
+                                          <span className="px-2 py-0.5 rounded text-[10px] bg-blue-50 text-blue-700 border border-blue-100 flex items-center" title="Autorisé à créer des tâches">
+                                              <CheckSquare size={10} className="mr-1"/> Tâches
+                                          </span>
+                                      )}
                                   </div>
                               </div>
                           </div>
@@ -180,7 +204,7 @@ const Team: React.FC<TeamProps> = ({ currentUser, users, tasks, activities, onAd
                                       <button 
                                           onClick={() => openEditModal(user)}
                                           className="p-2 text-slate-400 hover:text-primary hover:bg-blue-50 rounded-lg transition-colors"
-                                          title="Modifier"
+                                          title="Modifier les accès"
                                       >
                                           <Edit2 size={16} />
                                       </button>
@@ -253,7 +277,7 @@ const Team: React.FC<TeamProps> = ({ currentUser, users, tasks, activities, onAd
                       <div className="bg-blue-50 p-3 rounded-lg flex items-start space-x-2">
                           <Info className="text-primary flex-shrink-0 mt-0.5" size={16} />
                           <p className="text-xs text-blue-700">
-                              Ce membre sera ajouté à la liste immédiatement. Il devra créer son compte avec cet email pour se connecter.
+                              Ce membre sera ajouté à la liste immédiatement avec un statut "Actif". Il devra s'inscrire avec cet email pour récupérer automatiquement ce profil et ses accès.
                           </p>
                       </div>
 
@@ -285,7 +309,7 @@ const Team: React.FC<TeamProps> = ({ currentUser, users, tasks, activities, onAd
                       <h3 className="text-lg font-bold text-slate-900">Modifier {selectedMember.name}</h3>
                       <button onClick={() => setShowEditModal(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
                   </div>
-                  <form onSubmit={handleEditSubmit} className="p-6 space-y-4">
+                  <form onSubmit={handleEditSubmit} className="p-6 space-y-5">
                       <div>
                           <label className="block text-sm font-medium text-slate-700 mb-1">Nom complet</label>
                           <input 
@@ -304,19 +328,66 @@ const Team: React.FC<TeamProps> = ({ currentUser, users, tasks, activities, onAd
                             className="w-full p-2.5 bg-gray-200 text-black border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all"
                           />
                       </div>
-                      <div>
-                          <label className="block text-sm font-medium text-slate-700 mb-1">Rôle</label>
-                          <select 
-                            value={editUser.role || UserRole.MEMBER}
-                            onChange={e => setEditUser({...editUser, role: e.target.value as UserRole})}
-                            className="w-full p-2.5 bg-gray-200 text-black border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all"
-                          >
-                              <option value={UserRole.MEMBER}>Membre</option>
-                              <option value={UserRole.PROJECT_MANAGER}>Chef de Projet</option>
-                              <option value={UserRole.COMMUNITY_MANAGER}>Community Manager</option>
-                              <option value={UserRole.ANALYST}>Analyste</option>
-                              <option value={UserRole.ADMIN}>Admin</option>
-                          </select>
+                      <div className="grid grid-cols-2 gap-4">
+                          <div>
+                              <label className="block text-sm font-medium text-slate-700 mb-1">Rôle Principal</label>
+                              <select 
+                                value={editUser.role || UserRole.MEMBER}
+                                onChange={e => setEditUser({...editUser, role: e.target.value as UserRole})}
+                                className="w-full p-2.5 bg-gray-200 text-black border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all"
+                              >
+                                  <option value={UserRole.MEMBER}>Membre</option>
+                                  <option value={UserRole.PROJECT_MANAGER}>Chef de Projet</option>
+                                  <option value={UserRole.COMMUNITY_MANAGER}>Comm. Manager</option>
+                                  <option value={UserRole.ANALYST}>Analyste</option>
+                                  <option value={UserRole.ADMIN}>Admin</option>
+                              </select>
+                          </div>
+                          <div>
+                              <label className="block text-sm font-medium text-slate-700 mb-1">Statut du Compte</label>
+                              <select 
+                                value={editUser.status || 'active'}
+                                onChange={e => setEditUser({...editUser, status: e.target.value as any})}
+                                className={`w-full p-2.5 border rounded-lg focus:ring-2 outline-none transition-all font-medium ${editUser.status === 'active' ? 'bg-green-50 text-green-800 border-green-200' : 'bg-red-50 text-red-800 border-red-200'}`}
+                              >
+                                  <option value="active">Actif</option>
+                                  <option value="pending">En attente</option>
+                                  <option value="suspended">Suspendu</option>
+                              </select>
+                          </div>
+                      </div>
+
+                      <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                          <h4 className="text-xs font-bold text-slate-400 uppercase mb-3 flex items-center">
+                              <Lock size={12} className="mr-1"/> Permissions Spéciales
+                          </h4>
+                          <div className="space-y-3">
+                              <label className="flex items-center space-x-3 cursor-pointer group select-none">
+                                  <div 
+                                    className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${editPermissions.canCreateTasks ? 'bg-primary border-primary text-white' : 'bg-white border-slate-300'}`}
+                                    onClick={(e) => { e.preventDefault(); togglePermission('canCreateTasks'); }}
+                                  >
+                                      {editPermissions.canCreateTasks && <CheckSquare size={14} />}
+                                  </div>
+                                  <div onClick={() => togglePermission('canCreateTasks')} className="flex-1">
+                                      <p className="text-sm font-medium text-slate-700 group-hover:text-primary transition-colors">Créer des tâches</p>
+                                      <p className="text-xs text-slate-400">Autoriser ce membre à créer de nouvelles tâches.</p>
+                                  </div>
+                              </label>
+
+                              <label className="flex items-center space-x-3 cursor-pointer group select-none">
+                                  <div 
+                                    className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${editPermissions.canDeleteTasks ? 'bg-primary border-primary text-white' : 'bg-white border-slate-300'}`}
+                                    onClick={(e) => { e.preventDefault(); togglePermission('canDeleteTasks'); }}
+                                  >
+                                      {editPermissions.canDeleteTasks && <Trash2 size={14} />}
+                                  </div>
+                                  <div onClick={() => togglePermission('canDeleteTasks')} className="flex-1">
+                                      <p className="text-sm font-medium text-slate-700 group-hover:text-primary transition-colors">Supprimer des tâches</p>
+                                      <p className="text-xs text-slate-400">Autoriser la suppression définitive de contenu.</p>
+                                  </div>
+                              </label>
+                          </div>
                       </div>
 
                       <div className="pt-4 flex space-x-3">
@@ -345,7 +416,7 @@ const Team: React.FC<TeamProps> = ({ currentUser, users, tasks, activities, onAd
 
 export default Team;
 
-// Helper for Icon in empty modal (needed if I missed importing it above, but I added Lucide imports)
+// Helper for Icon in empty modal
 function Info({ className, size }: { className?: string, size?: number }) {
     return (
         <svg xmlns="http://www.w3.org/2000/svg" width={size || 24} height={size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>

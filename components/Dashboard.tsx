@@ -11,9 +11,10 @@ interface DashboardProps {
   notifications: ToastNotification[];
   onNavigate: (view: ViewState) => void;
   onDeleteTask: (taskId: string) => void;
+  unreadMessageCount: number;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks, messages, notifications, onNavigate, onDeleteTask }) => {
+const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks, messages, notifications, onNavigate, onDeleteTask, unreadMessageCount }) => {
   const [aiInsight, setAiInsight] = useState<string>("");
   const [loadingAi, setLoadingAi] = useState(false);
 
@@ -33,11 +34,6 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks, messages, not
 
   // Sort tasks by date
   myTasksToday.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
-
-  // Dynamic Message Count (e.g., messages from the last 24 hours)
-  const recentMessages = messages.filter(m => {
-      return true; 
-  }).length;
 
   // Tasks due this week for calendar button
   const tasksDueThisWeek = tasks.filter(t => {
@@ -119,15 +115,24 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks, messages, not
 
         <button 
           onClick={() => onNavigate('chat')}
-          className="bg-white text-slate-700 border border-slate-200 p-5 rounded-xl hover:border-primary hover:text-primary transition-all flex items-center justify-between group shadow-sm"
+          className={`bg-white p-5 rounded-xl border transition-all flex items-center justify-between group shadow-sm ${unreadMessageCount > 0 ? 'border-orange-200 bg-orange-50' : 'border-slate-200'}`}
         >
           <div className="flex flex-col items-start">
-            <span className="font-bold">Chat Équipe</span>
-            <span className="text-xs text-slate-400">
-                {recentMessages > 0 ? `${recentMessages} messages totaux` : "Accéder aux discussions"}
+            <span className={`font-bold ${unreadMessageCount > 0 ? 'text-orange-700' : 'text-slate-700'}`}>
+                Chat Équipe
+            </span>
+            <span className={`text-xs ${unreadMessageCount > 0 ? 'text-orange-600 font-semibold' : 'text-slate-400'}`}>
+                {unreadMessageCount > 0 ? `${unreadMessageCount} messages non lus` : "Aucun nouveau message"}
             </span>
           </div>
-          <MessageCircle className="text-slate-400 group-hover:text-primary transition-colors" />
+          <div className="relative">
+             <MessageCircle className={`${unreadMessageCount > 0 ? 'text-orange-500' : 'text-slate-400'} group-hover:text-primary transition-colors`} />
+             {unreadMessageCount > 0 && (
+                 <span className="absolute -top-2 -right-2 bg-urgent text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full font-bold border-2 border-white">
+                     {unreadMessageCount}
+                 </span>
+             )}
+          </div>
         </button>
       </div>
 

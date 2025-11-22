@@ -7,6 +7,12 @@ export enum UserRole {
   ANALYST = 'Analyste Marketing',
 }
 
+export interface UserPermissions {
+  canCreateTasks?: boolean;
+  canDeleteTasks?: boolean;
+  canManageChat?: boolean;
+}
+
 export interface User {
   id: string;
   name: string;
@@ -16,6 +22,7 @@ export interface User {
   phoneNumber?: string;
   notificationPref: 'push' | 'all';
   status: 'active' | 'pending';
+  permissions?: UserPermissions;
 }
 
 export interface ActivityLog {
@@ -68,6 +75,7 @@ export interface Message {
   channelId: string;
   content: string;
   timestamp: string;
+  fullTimestamp: string; // ISO Date string for comparison
   attachments?: string[];
 }
 

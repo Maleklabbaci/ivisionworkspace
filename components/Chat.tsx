@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Paperclip, Smile, Hash, Lock, Search, Bell, MessageSquare, File, Image, Menu, X, Plus, Check, Trash2 } from 'lucide-react';
+import { Send, Paperclip, Smile, Hash, Lock, Search, Bell, MessageSquare, File, Image, Menu, X, Plus, Check, Trash2, AtSign } from 'lucide-react';
 import { Message, User, Channel, UserRole } from '../types';
 
 interface ChatProps {
@@ -23,7 +23,13 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
   const [newChannelType, setNewChannelType] = useState<'global' | 'project'>('project');
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   
+  // Mention State
+  const [showMentions, setShowMentions] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState('');
+  const [mentionCursorIndex, setMentionCursorIndex] = useState(0);
+  
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const activeMessages = messages.filter(m => m.channelId === currentChannelId);
   const activeChannel = channels.find(c => c.id === currentChannelId);
@@ -40,13 +46,87 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
     if (!newMessage.trim()) return;
     onSendMessage(newMessage, currentChannelId);
     setNewMessage('');
+    setShowMentions(false);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (showMentions) {
+        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+            e.preventDefault();
+            // Could add navigation inside mention list here
+        } else if (e.key === 'Enter' || e.key === 'Tab') {
+             e.preventDefault();
+             const filtered = users.filter(u => u.name.toLowerCase().includes(mentionQuery.toLowerCase()));
+             if (filtered.length > 0) {
+                 insertMention(filtered[0]);
+             }
+        } else if (e.key === 'Escape') {
+            setShowMentions(false);
+        }
+        return; // Let other keys type normally
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      const val = e.target.value;
+      setNewMessage(val);
+
+      // Mention Logic
+      const cursor = e.target.selectionStart;
+      // Find the text before cursor
+      const textBeforeCursor = val.substring(0, cursor);
+      // Get last word
+      const words = textBeforeCursor.split(/\s+/);
+      const lastWord = words[words.length - 1];
+
+      if (lastWord.startsWith('@')) {
+          const query = lastWord.slice(1);
+          setMentionQuery(query);
+          setShowMentions(true);
+          setMentionCursorIndex(cursor);
+      } else {
+          setShowMentions(false);
+      }
+  };
+
+  const insertMention = (user: User) => {
+      // Create mention tag (e.g. @JeanDupont) - removing spaces for the tag
+      const mentionTag = `@${user.name.replace(/\s+/g, '')} `;
+      
+      const cursor = inputRef.current?.selectionStart || newMessage.length;
+      const textBeforeCursor = newMessage.substring(0, cursor);
+      const textAfterCursor = newMessage.substring(cursor);
+      
+      const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+      const newTextBefore = textBeforeCursor.substring(0, lastAtIndex);
+      
+      const newValue = newTextBefore + mentionTag + textAfterCursor;
+      
+      setNewMessage(newValue);
+      setShowMentions(false);
+      
+      // Reset focus
+      if (inputRef.current) {
+          inputRef.current.focus();
+      }
+  };
+
+  const formatMessageContent = (content: string) => {
+      // Regex to find mentions starting with @ followed by word characters
+      const parts = content.split(/(@\w+)/g);
+      
+      return parts.map((part, index) => {
+          if (part.startsWith('@')) {
+              // Simply style the tag if it looks like a mention
+              return <span key={index} className="font-bold text-blue-600 bg-blue-50 rounded px-1 mx-0.5">{part}</span>;
+          }
+          return part;
+      });
   };
 
   const handleChannelSelect = (id: string) => {
@@ -84,6 +164,11 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
       }
   };
 
+  // Filter users for mentions
+  const filteredUsersForMention = users.filter(u => 
+      u.name.toLowerCase().replace(/\s+/g, '').includes(mentionQuery.toLowerCase())
+  );
+
   const ChannelList = () => (
     <>
         {/* Projects - Visible to Everyone */}
@@ -93,30 +178,44 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
                 <span className="text-[10px] bg-slate-200 px-1.5 rounded-full text-slate-600">{channels.filter(c => c.type === 'project').length}</span>
             </h3>
             <div className="space-y-1">
-                {channels.filter(c => c.type === 'project').map(channel => (
-                    <button
-                        key={channel.id}
-                        onClick={() => handleChannelSelect(channel.id)}
-                        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm transition-all duration-200 group ${currentChannelId === channel.id ? 'bg-white text-primary shadow-sm font-medium border border-slate-100 translate-x-1' : 'text-slate-600 hover:bg-white/60 hover:translate-x-1'}`}
-                    >
-                        <div className="flex items-center truncate">
-                            <Lock size={14} className="mr-2 opacity-50 flex-shrink-0" />
-                            <span className="truncate">{channel.name}</span>
-                        </div>
-                        <div className="flex items-center">
-                            {channel.unread && <span className="bg-primary text-white text-[10px] px-1.5 py-0.5 rounded-full ml-2 flex-shrink-0">{channel.unread}</span>}
-                            {currentUser.role === UserRole.ADMIN && (
-                                <div 
-                                    onClick={(e) => handleDeleteClick(e, channel.id)}
-                                    className="ml-2 p-1 text-slate-300 hover:text-urgent hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-opacity"
-                                    title="Supprimer"
-                                >
-                                    <Trash2 size={12} />
-                                </div>
-                            )}
-                        </div>
-                    </button>
-                ))}
+                {channels.filter(c => c.type === 'project').map(channel => {
+                    const isUnread = (channel.unread || 0) > 0;
+                    const isActive = currentChannelId === channel.id;
+                    return (
+                        <button
+                            key={channel.id}
+                            onClick={() => handleChannelSelect(channel.id)}
+                            className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm transition-all duration-200 group ${
+                                isActive 
+                                ? 'bg-white text-primary shadow-sm font-medium border border-slate-100 translate-x-1' 
+                                : isUnread
+                                    ? 'text-slate-900 bg-white/50 font-bold hover:bg-white/80'
+                                    : 'text-slate-600 hover:bg-white/60 hover:translate-x-1'
+                            }`}
+                        >
+                            <div className="flex items-center truncate">
+                                <Lock size={14} className={`mr-2 flex-shrink-0 ${isUnread ? 'text-primary' : 'opacity-50'}`} />
+                                <span className="truncate">{channel.name}</span>
+                            </div>
+                            <div className="flex items-center">
+                                {isUnread && (
+                                    <span className="bg-urgent text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-2 flex-shrink-0 animate-pulse shadow-sm">
+                                        {channel.unread}
+                                    </span>
+                                )}
+                                {currentUser.role === UserRole.ADMIN && (
+                                    <div 
+                                        onClick={(e) => handleDeleteClick(e, channel.id)}
+                                        className="ml-2 p-1 text-slate-300 hover:text-urgent hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                                        title="Supprimer"
+                                    >
+                                        <Trash2 size={12} />
+                                    </div>
+                                )}
+                            </div>
+                        </button>
+                    );
+                })}
             </div>
         </div>
 
@@ -125,27 +224,44 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
             <div className="mt-6">
                 <h3 className="text-xs font-bold text-slate-400 uppercase mb-2 px-2 tracking-wider">Global</h3>
                 <div className="space-y-1">
-                    {channels.filter(c => c.type === 'global').map(channel => (
-                        <button
-                            key={channel.id}
-                            onClick={() => handleChannelSelect(channel.id)}
-                            className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm transition-all duration-200 group ${currentChannelId === channel.id ? 'bg-white text-primary shadow-sm font-medium border border-slate-100 translate-x-1' : 'text-slate-600 hover:bg-white/60 hover:translate-x-1'}`}
-                        >
-                            <div className="flex items-center">
-                                <Hash size={14} className="mr-2 opacity-50" />
-                                <span>{channel.name}</span>
-                            </div>
-                            {currentUser.role === UserRole.ADMIN && channel.id !== 'general' && (
-                                <div 
-                                    onClick={(e) => handleDeleteClick(e, channel.id)}
-                                    className="ml-2 p-1 text-slate-300 hover:text-urgent hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-opacity"
-                                    title="Supprimer"
-                                >
-                                    <Trash2 size={12} />
+                    {channels.filter(c => c.type === 'global').map(channel => {
+                        const isUnread = (channel.unread || 0) > 0;
+                        const isActive = currentChannelId === channel.id;
+                        return (
+                            <button
+                                key={channel.id}
+                                onClick={() => handleChannelSelect(channel.id)}
+                                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm transition-all duration-200 group ${
+                                    isActive 
+                                    ? 'bg-white text-primary shadow-sm font-medium border border-slate-100 translate-x-1' 
+                                    : isUnread
+                                        ? 'text-slate-900 bg-white/50 font-bold hover:bg-white/80'
+                                        : 'text-slate-600 hover:bg-white/60 hover:translate-x-1'
+                                }`}
+                            >
+                                <div className="flex items-center">
+                                    <Hash size={14} className={`mr-2 ${isUnread ? 'text-primary' : 'opacity-50'}`} />
+                                    <span>{channel.name}</span>
                                 </div>
-                            )}
-                        </button>
-                    ))}
+                                <div className="flex items-center">
+                                    {isUnread && (
+                                        <span className="bg-urgent text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-2 flex-shrink-0 animate-pulse shadow-sm">
+                                            {channel.unread}
+                                        </span>
+                                    )}
+                                    {currentUser.role === UserRole.ADMIN && channel.id !== 'general' && (
+                                        <div 
+                                            onClick={(e) => handleDeleteClick(e, channel.id)}
+                                            className="ml-2 p-1 text-slate-300 hover:text-urgent hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                                            title="Supprimer"
+                                        >
+                                            <Trash2 size={12} />
+                                        </div>
+                                    )}
+                                </div>
+                            </button>
+                        );
+                    })}
                 </div>
             </div>
         )}
@@ -201,7 +317,7 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
       )}
 
       {/* Chat Area */}
-      <div className="flex-1 flex flex-col min-w-0 bg-white h-full">
+      <div className="flex-1 flex flex-col min-w-0 bg-white h-full relative">
         {/* Chat Header */}
         <div className="p-4 border-b border-slate-200 flex justify-between items-center bg-white z-20 shrink-0">
             <div className="flex items-center">
@@ -266,7 +382,7 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
                                       ? 'bg-primary text-white rounded-tr-none' 
                                       : 'bg-slate-50 text-slate-800 border border-slate-200 rounded-tl-none'
                                   }`}>
-                                      {msg.content}
+                                      {formatMessageContent(msg.content)}
                                   </div>
                                   
                                   {/* Attachments in Chat */}
@@ -293,17 +409,40 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
             <div ref={messagesEndRef} />
         </div>
 
+        {/* Mention Autocomplete Popover */}
+        {showMentions && filteredUsersForMention.length > 0 && (
+             <div className="absolute bottom-20 left-4 bg-white rounded-xl shadow-xl border border-slate-200 p-2 z-50 w-64 animate-in slide-in-from-bottom-2">
+                 <h4 className="text-xs font-bold text-slate-400 px-2 py-1 uppercase mb-1 flex items-center">
+                     <AtSign size={12} className="mr-1"/>Membres
+                 </h4>
+                 <div className="max-h-48 overflow-y-auto">
+                     {filteredUsersForMention.map(user => (
+                         <button 
+                             key={user.id}
+                             onClick={() => insertMention(user)}
+                             className="w-full flex items-center space-x-3 p-2 hover:bg-slate-100 rounded-lg transition-colors text-left"
+                         >
+                             <img src={user.avatar} className="w-6 h-6 rounded-full" />
+                             <span className="text-sm font-medium text-slate-800">{user.name}</span>
+                             <span className="text-xs text-slate-400 ml-auto">@{user.name.replace(/\s+/g, '')}</span>
+                         </button>
+                     ))}
+                 </div>
+             </div>
+        )}
+
         {/* Input Area */}
-        <div className="p-4 bg-white border-t border-slate-200 shrink-0">
+        <div className="p-4 bg-white border-t border-slate-200 shrink-0 relative">
             <div className="bg-gray-200 rounded-xl border border-gray-300 p-2 flex items-end shadow-inner focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary transition-all duration-200">
                 <button className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-300/50 rounded-lg transition-colors">
                     <Paperclip size={20} />
                 </button>
                 <textarea 
+                    ref={inputRef}
                     value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
+                    onChange={handleInputChange}
                     onKeyDown={handleKeyDown}
-                    placeholder={`Envoyer un message...`}
+                    placeholder={`Envoyer un message... (Tapez @ pour mentionner)`}
                     className="flex-1 bg-transparent border-none focus:ring-0 text-sm text-black placeholder-gray-500 resize-none py-2.5 px-2 max-h-32 font-medium"
                     rows={1}
                     style={{ minHeight: '44px' }}

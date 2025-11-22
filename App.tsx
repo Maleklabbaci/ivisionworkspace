@@ -49,6 +49,37 @@ const App: React.FC = () => {
     setNotifications(prev => prev.filter(n => n.id !== id));
   };
 
+  // --- UNREAD MESSAGES LOGIC (Using LocalStorage) ---
+  const getLastReadTimestamp = (channelId: string): string => {
+      if (!currentUser) return new Date().toISOString();
+      const storageKey = `ivision_last_read_${currentUser.id}`;
+      const storage = JSON.parse(localStorage.getItem(storageKey) || '{}');
+      return storage[channelId] || '1970-01-01T00:00:00.000Z';
+  };
+
+  const markChannelAsRead = (channelId: string) => {
+      if (!currentUser) return;
+      const storageKey = `ivision_last_read_${currentUser.id}`;
+      const storage = JSON.parse(localStorage.getItem(storageKey) || '{}');
+      storage[channelId] = new Date().toISOString();
+      localStorage.setItem(storageKey, JSON.stringify(storage));
+      
+      // Update UI state locally to remove unread badge immediately
+      setChannels(prev => prev.map(c => c.id === channelId ? { ...c, unread: 0 } : c));
+  };
+
+  const calculateUnreadCounts = (channelsList: Channel[], allMessages: Message[]) => {
+      return channelsList.map(channel => {
+          const lastRead = getLastReadTimestamp(channel.id);
+          const unreadCount = allMessages.filter(m => 
+              m.channelId === channel.id && 
+              m.userId !== currentUser?.id && // Don't count own messages
+              new Date(m.fullTimestamp) > new Date(lastRead)
+          ).length;
+          return { ...channel, unread: unreadCount };
+      });
+  };
+
   // --- INITIALIZATION & AUTH CHECK ---
 
   useEffect(() => {
@@ -67,8 +98,6 @@ const App: React.FC = () => {
         setIsLoading(false);
       } else if (session?.user) {
         // OPTIMISATION MAJEURE : Chargement Optimiste (Lazy Loading)
-        // On affiche l'interface IMMÉDIATEMENT avec les infos de session
-        // sans attendre la DB. Cela rend le login instantané.
         
         if (!isDataLoaded.current && !currentUser) {
              const optimisticUser: User = {
@@ -101,6 +130,71 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, []);
 
+  // --- REALTIME SUBSCRIPTION FOR MESSAGES & MENTIONS ---
+  useEffect(() => {
+    if (!currentUser) return;
+
+    // Subscribe to new messages in the database
+    const channel = supabase
+      .channel('public:messages')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
+        const newMsg = payload.new;
+        
+        // Convert DB model to UI model
+        const displayMsg: Message = {
+          id: newMsg.id,
+          userId: newMsg.user_id,
+          channelId: newMsg.channel_id,
+          content: newMsg.content,
+          timestamp: new Date(newMsg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+          fullTimestamp: newMsg.created_at // ISO String
+        };
+
+        // 1. Add to message list (Check for duplicates to avoid double entry with optimistic UI)
+        setMessages((prev) => {
+          if (prev.some(m => m.id === displayMsg.id)) return prev;
+          return [...prev, displayMsg];
+        });
+
+        // 2. Update Unread Counts
+        if (newMsg.user_id !== currentUser.id) {
+            // If the message is for a channel different than the current one, increment unread
+            if (newMsg.channel_id !== currentChannelId) {
+                setChannels(prev => prev.map(c => 
+                    c.id === newMsg.channel_id ? { ...c, unread: (c.unread || 0) + 1 } : c
+                ));
+            } else {
+               // If we are on the channel, update last read time essentially
+               markChannelAsRead(currentChannelId);
+            }
+        }
+
+        // 3. CHECK FOR MENTIONS (@User)
+        // We only notify if the sender is NOT the current user
+        if (newMsg.user_id !== currentUser.id) {
+           // Create the tag we are looking for: @NameWithoutSpaces (e.g. @JeanDupont)
+           const myMentionTag = `@${currentUser.name.replace(/\s+/g, '')}`;
+           
+           if (newMsg.content.includes(myMentionTag)) {
+              // Find sender name for better notification
+              const sender = users.find(u => u.id === newMsg.user_id);
+              const senderName = sender ? sender.name : "Quelqu'un";
+              
+              addNotification(
+                  "Nouvelle mention !", 
+                  `${senderName} vous a mentionné dans le chat.`, 
+                  "info"
+              );
+           }
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentUser, users, currentChannelId]); // Re-run if currentChannelId changes to update read logic
+
   // --- DATA FETCHING ---
 
   const fetchUserProfile = async (userId: string) => {
@@ -120,11 +214,13 @@ const App: React.FC = () => {
                 avatar: data.avatar,
                 phoneNumber: data.phone_number,
                 notificationPref: data.notification_pref,
-                status: data.status
+                status: data.status,
+                permissions: data.permissions || {} // Load permissions
             };
             setCurrentUser(user);
         } else {
             // Handle missing public profile -> Create one silently
+            // Note: handleRegister might have already created it, so this is a fallback for direct auth (Google/MagicLink) or legacy.
             const { data: { user: authUser } } = await supabase.auth.getUser();
             
             if (authUser) {
@@ -181,35 +277,38 @@ const App: React.FC = () => {
                 avatar: u.avatar,
                 phoneNumber: u.phone_number,
                 notificationPref: u.notification_pref,
-                status: u.status
+                status: u.status,
+                permissions: u.permissions || {} // Important for team view
             })));
         }
 
-        if (channelsResult.data) {
-            setChannels(channelsResult.data.map(c => ({
-                id: c.id,
-                name: c.name,
-                type: c.type,
-                unread: c.unread_count
-            })));
-        }
-
+        let fetchedMessages: Message[] = [];
         if (messagesResult.data) {
-            setMessages(messagesResult.data.map(m => ({
+            fetchedMessages = messagesResult.data.map(m => ({
                 id: m.id,
                 userId: m.user_id,
                 channelId: m.channel_id,
                 content: m.content,
-                timestamp: new Date(m.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
-            })));
+                timestamp: new Date(m.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+                fullTimestamp: m.created_at // Save ISO for logic
+            }));
+            setMessages(fetchedMessages);
+        }
+
+        if (channelsResult.data) {
+            // Calculate Unread Count
+            const mappedChannels = channelsResult.data.map(c => ({
+                id: c.id,
+                name: c.name,
+                type: c.type,
+                unread: 0 // Default, updated below
+            }));
+            setChannels(calculateUnreadCounts(mappedChannels, fetchedMessages));
         }
 
         if (tasksResult.data) {
             const mappedTasks = await Promise.all(tasksResult.data.map(async (t) => {
-                // Simple optimization: don't fetch deep relations if lists are huge, but okay for now
-                // For super lazy loading, we would fetch comments only when task is opened.
-                // Keeping it for now as dataset is small.
-                const comments = []; // Lazy load comments later if needed
+                const comments = []; 
                 const attachments = []; 
 
                 return {
@@ -222,7 +321,7 @@ const App: React.FC = () => {
                     type: t.type,
                     priority: t.priority,
                     price: t.price,
-                    comments: comments, // Initialize empty for speed
+                    comments: comments,
                     attachments: attachments
                 };
             }));
@@ -235,6 +334,11 @@ const App: React.FC = () => {
   };
 
   // --- ACTIONS ---
+
+  const handleChannelChange = (channelId: string) => {
+      setCurrentChannelId(channelId);
+      markChannelAsRead(channelId);
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -281,7 +385,49 @@ const App: React.FC = () => {
     }
 
     if (authData.user) {
-        if (authData.session) {
+        // --- MIGRATION DES COMPTES CRÉÉS PAR L'ADMIN ---
+        // Vérifier si un compte "placeholder" existe déjà avec cet email (créé par l'admin via l'interface équipe)
+        const registeredEmail = authData.user.email;
+        const newAuthId = authData.user.id;
+
+        const { data: existingProfiles } = await supabase
+            .from('users')
+            .select('*')
+            .eq('email', registeredEmail);
+        
+        const placeholderProfile = existingProfiles?.find(u => u.id !== newAuthId);
+
+        if (placeholderProfile) {
+            console.log("Compte pré-créé détecté. Migration en cours...");
+            // Le compte existe (créé par admin), on doit migrer ses infos vers le nouvel ID Auth
+            
+            // 1. Récupérer les rôles et permissions définis par l'admin
+            const inheritedRole = placeholderProfile.role;
+            const inheritedPermissions = placeholderProfile.permissions;
+
+            // 2. Réassigner les tâches assignées à l'ancien ID vers le nouvel ID
+            await supabase.from('tasks').update({ assignee_id: newAuthId }).eq('assignee_id', placeholderProfile.id);
+
+            // 3. Supprimer l'ancien profil "placeholder" pour éviter les doublons
+            await supabase.from('users').delete().eq('id', placeholderProfile.id);
+
+            // 4. Créer le nouveau profil officiel avec les données héritées
+            const newProfile = {
+                id: newAuthId,
+                name: registerName,
+                email: registeredEmail,
+                role: inheritedRole || UserRole.MEMBER, // Garder le rôle défini par l'admin
+                avatar: `https://ui-avatars.com/api/?name=${registerName.replace(' ', '+')}&background=random`,
+                notification_pref: 'all',
+                status: 'active',
+                permissions: inheritedPermissions || {} // Garder les permissions définies par l'admin
+            };
+
+            await supabase.from('users').insert([newProfile]);
+            addNotification('Compte lié', 'Votre profil pré-créé par l\'administrateur a été récupéré.', 'success');
+
+        } else if (authData.session) {
+            // Cas normal : Pas de profil existant, on laisse le fetchUserProfile ou le trigger créer le défaut
              addNotification('Compte créé !', 'Bienvenue sur iVISION.', 'success');
         } else {
              addNotification('Vérifiez vos emails', 'Un lien de confirmation a été envoyé.', 'info');
@@ -363,12 +509,30 @@ const App: React.FC = () => {
 
   const handleSendMessage = async (text: string, channelId: string) => {
       if (!currentUser) return;
+      
+      // We add optimistically for immediate UX
       const newMessageId = crypto.randomUUID();
-      const dbMessage = { id: newMessageId, channel_id: channelId, user_id: currentUser.id, content: text };
-      const displayMessage: Message = { id: newMessageId, userId: currentUser.id, channelId, content: text, timestamp: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) };
+      const now = new Date();
+      
+      const displayMessage: Message = { 
+          id: newMessageId, 
+          userId: currentUser.id, 
+          channelId, 
+          content: text, 
+          timestamp: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+          fullTimestamp: now.toISOString()
+      };
+      
       setMessages(prev => [...prev, displayMessage]);
+
+      const dbMessage = { id: newMessageId, channel_id: channelId, user_id: currentUser.id, content: text };
       const { error } = await supabase.from('messages').insert([dbMessage]);
-      if (error) { console.error(error); addNotification('Erreur', 'Message non envoyé.', 'urgent'); }
+      
+      if (error) { 
+          console.error(error); 
+          addNotification('Erreur', 'Message non envoyé.', 'urgent');
+          setMessages(prev => prev.filter(m => m.id !== newMessageId)); // Revert
+      }
   };
 
   const handleAddChannel = async (newChannel: { name: string; type: 'global' | 'project'; members?: string[] }) => {
@@ -392,7 +556,6 @@ const App: React.FC = () => {
           return;
       }
 
-      // Handle Private Channel Members Insertion
       if (newChannel.type === 'project' && newChannel.members && newChannel.members.length > 0) {
            const memberInserts = newChannel.members.map(uid => ({
                channel_id: tempId,
@@ -400,7 +563,6 @@ const App: React.FC = () => {
            }));
            
            const { error: membersError } = await supabase.from('channel_members').insert(memberInserts);
-           
            if (membersError) {
                console.error("Error adding members to channel", membersError);
                addNotification('Attention', 'Canal créé mais erreur lors de l\'ajout des membres.', 'urgent');
@@ -410,18 +572,13 @@ const App: React.FC = () => {
 
   const handleDeleteChannel = async (channelId: string) => {
       const previousChannels = [...channels];
-      
-      // Optimistic update
       setChannels(prev => prev.filter(c => c.id !== channelId));
-      
-      // If we deleted the active channel, switch to general or first available
       if (currentChannelId === channelId) {
           setCurrentChannelId('general');
       }
       addNotification('Succès', 'Conversation supprimée.', 'success');
 
       const { error } = await supabase.from('channels').delete().eq('id', channelId);
-      
       if (error) {
           console.error("Delete channel error", error);
           setChannels(previousChannels); // Revert
@@ -429,7 +586,6 @@ const App: React.FC = () => {
       }
   };
 
-  // UPDATE: Insert real user into DB
   const handleAddUser = async (newUser: User) => {
       const tempId = crypto.randomUUID();
       const dbUser = {
@@ -439,11 +595,12 @@ const App: React.FC = () => {
           role: newUser.role,
           avatar: newUser.avatar,
           notification_pref: 'all',
-          status: 'active'
+          status: 'active',
+          permissions: newUser.permissions || {}
       };
 
       setUsers(prev => [...prev, { ...newUser, id: tempId }]);
-      addNotification('Succès', 'Membre ajouté à l\'espace de travail.', 'success');
+      addNotification('Succès', 'Membre ajouté (En attente d\'inscription).', 'success');
 
       const { error } = await supabase.from('users').insert([dbUser]);
       if (error) {
@@ -454,15 +611,22 @@ const App: React.FC = () => {
   };
 
   const handleRemoveUser = async (userId: string) => {
+      // Optimistic Update
+      const prevUsers = [...users];
+      setUsers(users.filter(u => u.id !== userId));
+      addNotification('Succès', 'Utilisateur supprimé.', 'success');
+
       const { error } = await supabase.from('users').delete().eq('id', userId);
-      if (!error) { setUsers(users.filter(u => u.id !== userId)); addNotification('Succès', 'Utilisateur supprimé.', 'success'); }
+      if (error) {
+          console.error("Delete user error", error);
+          setUsers(prevUsers); // Revert
+          addNotification('Erreur', 'Impossible de supprimer l\'utilisateur.', 'urgent');
+      }
   };
   
-  // FIXED: Handle both Auth and Public Profile updates
   const handleUpdateProfile = async (updatedData: Partial<User> & { password?: string }) => {
     if (!currentUser) return;
     
-    // 1. Handle Supabase Auth Updates (Password & Email)
     const authUpdates: any = {};
     if (updatedData.password && updatedData.password.length > 0) {
         authUpdates.password = updatedData.password;
@@ -479,7 +643,6 @@ const App: React.FC = () => {
         }
     }
 
-    // 2. Handle Public Profile Updates (users table)
     const { error } = await supabase.from('users').update({ 
         name: updatedData.name, 
         email: updatedData.email, 
@@ -488,7 +651,6 @@ const App: React.FC = () => {
     }).eq('id', currentUser.id);
 
     if (!error) { 
-        // Update local state excluding the password field
         const { password, ...userFields } = updatedData;
         setCurrentUser({ ...currentUser, ...userFields }); 
         addNotification("Profil mis à jour", "Vos modifications ont été enregistrées.", 'success'); 
@@ -501,9 +663,41 @@ const App: React.FC = () => {
       const { error } = await supabase.from('users').update({ status: 'active' }).eq('id', userId);
       if (!error) { setUsers(users.map(u => u.id === userId ? { ...u, status: 'active' } : u)); addNotification('Succès', 'Compte validé.', 'success'); }
   };
+
   const handleUpdateMember = async (userId: string, updatedData: Partial<User>) => {
-      const { error } = await supabase.from('users').update({ role: updatedData.role, name: updatedData.name, email: updatedData.email }).eq('id', userId);
-      if(!error) { setUsers(users.map(u => u.id === userId ? { ...u, ...updatedData } : u)); addNotification('Compte modifié', 'Les informations ont été mises à jour.', 'success'); }
+      // Construct payload dynamically
+      const updatePayload: any = {};
+      if (updatedData.name !== undefined) updatePayload.name = updatedData.name;
+      if (updatedData.email !== undefined) updatePayload.email = updatedData.email;
+      if (updatedData.role !== undefined) updatePayload.role = updatedData.role;
+      if (updatedData.status !== undefined) updatePayload.status = updatedData.status;
+      if (updatedData.permissions !== undefined) updatePayload.permissions = updatedData.permissions;
+
+      const { error } = await supabase.from('users').update(updatePayload).eq('id', userId);
+      
+      if(!error) { 
+          setUsers(users.map(u => u.id === userId ? { ...u, ...updatedData } : u)); 
+          addNotification('Compte modifié', 'Les informations ont été mises à jour.', 'success'); 
+      } else {
+          // Better error handling: Extract message string
+          const errorMsg = error.message || JSON.stringify(error);
+          
+          // FALLBACK: Try updating without permissions if that was the cause
+          if (updatePayload.permissions) {
+              const { permissions, ...fallbackPayload } = updatePayload;
+              if (Object.keys(fallbackPayload).length > 0) {
+                   const { error: fallbackError } = await supabase.from('users').update(fallbackPayload).eq('id', userId);
+                   if (!fallbackError) {
+                        setUsers(users.map(u => u.id === userId ? { ...u, ...updatedData, permissions: undefined } : u));
+                        addNotification('Attention', 'Profil mis à jour, mais les permissions n\'ont pas pu être sauvegardées (Colonne "permissions" manquante en base de données).', 'urgent');
+                        return;
+                   }
+              }
+          }
+
+          console.error("Failed update member:", error);
+          addNotification('Erreur', `Échec de la mise à jour: ${errorMsg}`, 'urgent');
+      }
   };
 
   // --- CONFIG CHECK ---
@@ -521,6 +715,9 @@ const App: React.FC = () => {
         </div>
       );
   }
+
+  // Total Unread Calculation
+  const totalUnreadCount = channels.reduce((acc, c) => acc + (c.unread || 0), 0);
 
   // --- AUTH SCREEN ---
   if (!currentUser) {
@@ -611,12 +808,12 @@ const App: React.FC = () => {
 
   return (
     <div className="animate-in slide-in-from-right duration-300 ease-out h-full">
-      <Layout currentUser={currentUser} currentView={currentView} onNavigate={setCurrentView} onLogout={handleLogout}>
+      <Layout currentUser={currentUser} currentView={currentView} onNavigate={setCurrentView} onLogout={handleLogout} unreadMessageCount={totalUnreadCount}>
         <ToastContainer notifications={notifications} onDismiss={removeNotification} />
-        {currentView === 'dashboard' && <Dashboard currentUser={currentUser} tasks={tasks} messages={messages} notifications={notifications} onNavigate={setCurrentView} onDeleteTask={handleDeleteTask} />}
+        {currentView === 'dashboard' && <Dashboard currentUser={currentUser} tasks={tasks} messages={messages} notifications={notifications} onNavigate={setCurrentView} onDeleteTask={handleDeleteTask} unreadMessageCount={totalUnreadCount} />}
         {currentView === 'reports' && <Reports currentUser={currentUser} tasks={tasks} users={users} />}
         {currentView === 'tasks' && <Tasks tasks={tasks} users={users.filter(u => u.status === 'active')} currentUser={currentUser} onUpdateStatus={handleUpdateTaskStatus} onAddTask={handleAddTask} onUpdateTask={handleUpdateTask} onDeleteTask={handleDeleteTask} />}
-        {currentView === 'chat' && <Chat currentUser={currentUser} users={users.filter(u => u.status === 'active')} channels={channels.length > 0 ? channels : [{ id: 'general', name: 'Général', type: 'global' }]} currentChannelId={currentChannelId} messages={messages} onChannelChange={setCurrentChannelId} onSendMessage={handleSendMessage} onAddChannel={handleAddChannel} onDeleteChannel={handleDeleteChannel} />}
+        {currentView === 'chat' && <Chat currentUser={currentUser} users={users.filter(u => u.status === 'active')} channels={channels.length > 0 ? channels : [{ id: 'general', name: 'Général', type: 'global' }]} currentChannelId={currentChannelId} messages={messages} onChannelChange={handleChannelChange} onSendMessage={handleSendMessage} onAddChannel={handleAddChannel} onDeleteChannel={handleDeleteChannel} />}
         {currentView === 'files' && currentUser && <Files tasks={tasks} messages={messages} currentUser={currentUser} />}
         {currentView === 'team' && <Team currentUser={currentUser} users={users} tasks={tasks} activities={[]} onAddUser={handleAddUser} onRemoveUser={handleRemoveUser} onUpdateRole={(userId, role) => handleUpdateMember(userId, { role })} onApproveUser={handleApproveUser} onUpdateMember={handleUpdateMember} />}
         {currentView === 'settings' && <Settings currentUser={currentUser} onUpdateProfile={handleUpdateProfile} />}
