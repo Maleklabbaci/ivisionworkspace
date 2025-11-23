@@ -65,10 +65,10 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks, messages, not
     }
   };
 
-  // PERMISSION CHECK: Admin, Project Manager, OR Special Permission 'canViewFinancials'
+  // PERMISSION CHECK: Admin OR Special Permission 'canViewFinancials'
+  // MODIFICATION: Suppression de UserRole.PROJECT_MANAGER des accès par défaut pour renforcer la sécurité.
   const showFinancials = 
     currentUser.role === UserRole.ADMIN || 
-    currentUser.role === UserRole.PROJECT_MANAGER || 
     currentUser.permissions?.canViewFinancials;
 
   const canDeleteTasks = currentUser.role === UserRole.ADMIN || currentUser.permissions?.canDeleteTasks;

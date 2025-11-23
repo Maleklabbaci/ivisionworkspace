@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Calendar as CalendarIcon, Clock, Sparkles, Filter, LayoutGrid, List, AlertCircle, Paperclip, Send, X, FileText, Trash2, DollarSign, ChevronLeft, ChevronRight, Lock, CheckCircle, MessageSquare, User as UserIcon } from 'lucide-react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { Plus, Calendar as CalendarIcon, Clock, Sparkles, Filter, LayoutGrid, List, AlertCircle, Paperclip, Send, X, FileText, Trash2, DollarSign, ChevronLeft, ChevronRight, Lock, CheckCircle, MessageSquare, User as UserIcon, Link as LinkIcon, ExternalLink } from 'lucide-react';
 import { Task, TaskStatus, User, Comment, UserRole } from '../types';
 import { brainstormTaskIdeas } from '../services/geminiService';
 
@@ -12,14 +12,24 @@ interface TasksProps {
   onAddTask: (task: Task) => void;
   onUpdateTask: (task: Task) => void;
   onDeleteTask: (taskId: string) => void;
+  onAddComment: (taskId: string, content: string) => void;
 }
 
 type ViewMode = 'board' | 'calendar';
 
-const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus, onAddTask, onUpdateTask, onDeleteTask }) => {
+const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus, onAddTask, onUpdateTask, onDeleteTask, onAddComment }) => {
   const [viewMode, setViewMode] = useState<ViewMode>('board');
   const [showModal, setShowModal] = useState(false);
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  
+  // Link Modal State
+  const [showLinkModal, setShowLinkModal] = useState(false);
+  const [linkName, setLinkName] = useState('');
+  const [linkUrl, setLinkUrl] = useState('');
+  
+  // Refactor: Use ID for selection to ensure realtime updates propagate to the modal
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const selectedTask = useMemo(() => tasks.find(t => t.id === selectedTaskId) || null, [tasks, selectedTaskId]);
+
   const [brainstormTopic, setBrainstormTopic] = useState('');
   const [isBrainstorming, setIsBrainstorming] = useState(false);
   const [taskComment, setTaskComment] = useState('');
@@ -188,21 +198,9 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
   const handleAddComment = () => {
     if(!selectedTask || !taskComment.trim()) return;
     
-    // Fix: Generate a robust ID locally just in case, though server handles it usually.
-    const newComment: Comment = {
-        id: Math.random().toString(36).substr(2, 9),
-        userId: currentUser.id,
-        content: taskComment,
-        timestamp: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
-    };
-
-    const updatedTask = {
-        ...selectedTask,
-        comments: [...(selectedTask.comments || []), newComment]
-    };
-
-    onUpdateTask(updatedTask);
-    setSelectedTask(updatedTask);
+    // Calls the parent function which inserts into task_comments table
+    onAddComment(selectedTask.id, taskComment);
+    
     setTaskComment('');
   };
 
@@ -210,26 +208,41 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
       if (window.confirm("Êtes-vous sûr de vouloir supprimer cette tâche définitivement ?")) {
           onDeleteTask(taskId);
           if (selectedTask && selectedTask.id === taskId) {
-              setSelectedTask(null);
+              setSelectedTaskId(null);
           }
       }
   };
 
-  const handleFileUpload = () => {
-     const fakeFiles = ['brief_v2.pdf', 'assets_graphiques.zip'];
-     const file = fakeFiles[Math.floor(Math.random() * fakeFiles.length)];
-     
-     if (showModal) {
-         setNewTask(prev => ({ ...prev, attachments: [...(prev.attachments || []), file] }));
-     } else if (selectedTask) {
+  const handleOpenLinkModal = () => {
+      setShowLinkModal(true);
+  };
+
+  const handleSaveLink = (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!linkUrl) return;
+
+      // We store just the URL for now as attachments is string[].
+      // In the future, we could store JSON string for name+url
+      const fileToAdd = linkUrl; 
+      
+      if (showModal) {
+         // Create Mode
+         setNewTask(prev => ({ ...prev, attachments: [...(prev.attachments || []), fileToAdd] }));
+      } else if (selectedTask) {
+         // Edit Mode
          const updatedTask = {
              ...selectedTask,
-             attachments: [...(selectedTask.attachments || []), file]
+             attachments: [...(selectedTask.attachments || []), fileToAdd]
          };
          onUpdateTask(updatedTask);
-         setSelectedTask(updatedTask);
-     }
+      }
+      
+      setShowLinkModal(false);
+      setLinkName('');
+      setLinkUrl('');
   };
+
+  const isLink = (str: string) => str.startsWith('http://') || str.startsWith('https://');
 
   const getPriorityColor = (p?: string) => {
       switch(p) {
@@ -274,7 +287,7 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                         key={task.id} 
                         draggable
                         onDragStart={(e) => handleDragStart(e, task.id)}
-                        onClick={() => setSelectedTask(task)}
+                        onClick={() => setSelectedTaskId(task.id)}
                         className="bg-white p-4 rounded-lg shadow-sm border border-slate-200 hover:border-primary hover:shadow-md transition-all duration-200 cursor-pointer group transform hover:-translate-y-1 relative"
                       >
                           {canDeleteTask() && (
@@ -506,7 +519,7 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                                                     key={task.id} 
                                                     draggable
                                                     onDragStart={(e) => handleDragStart(e, task.id)}
-                                                    onClick={(e) => { e.stopPropagation(); setSelectedTask(task); }}
+                                                    onClick={(e) => { e.stopPropagation(); setSelectedTaskId(task.id); }}
                                                     className={`px-2 py-1.5 rounded-md cursor-pointer border text-xs font-medium shadow-sm transition-all hover:scale-[1.02] hover:shadow-md flex items-center space-x-1.5 group/task ${
                                                         isDragging ? 'opacity-50 border-dashed border-primary bg-slate-100' : 
                                                         getCalendarChipStyle(task.type, task.status)
@@ -673,15 +686,16 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                               
                               <div className="col-span-2">
                                   <label className="block text-sm font-medium text-slate-700 mb-1">Pièces jointes</label>
-                                  <div className="border-2 border-dashed border-slate-200 rounded-lg p-4 flex flex-col items-center justify-center text-slate-400 hover:bg-slate-50 transition-colors cursor-pointer" onClick={handleFileUpload}>
+                                  <div className="border-2 border-dashed border-slate-200 rounded-lg p-4 flex flex-col items-center justify-center text-slate-400 hover:bg-slate-50 transition-colors cursor-pointer" onClick={handleOpenLinkModal}>
                                       <Paperclip size={20} className="mb-2" />
-                                      <span className="text-xs">Cliquer pour ajouter un fichier (Simulation)</span>
+                                      <span className="text-xs">Cliquer pour ajouter un lien Google Drive</span>
                                   </div>
                                   {newTask.attachments && newTask.attachments.length > 0 && (
                                       <div className="mt-2 flex flex-wrap gap-2">
                                           {newTask.attachments.map((file, idx) => (
-                                              <div key={idx} className="bg-slate-100 text-slate-700 text-xs px-2 py-1 rounded flex items-center border border-slate-200">
-                                                  <FileText size={10} className="mr-1"/> {String(file)}
+                                              <div key={idx} className="bg-slate-100 text-slate-700 text-xs px-2 py-1 rounded flex items-center border border-slate-200 max-w-full">
+                                                  {isLink(String(file)) ? <LinkIcon size={10} className="mr-1"/> : <FileText size={10} className="mr-1"/>} 
+                                                  <span className="truncate max-w-[200px]">{String(file)}</span>
                                               </div>
                                           ))}
                                       </div>
@@ -706,7 +720,7 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                   <div className="flex-1 p-6 overflow-y-auto border-b md:border-b-0 md:border-r border-slate-200 relative">
                        <div className="flex justify-between items-start mb-4">
                            <span className={`text-xs font-bold px-2 py-1 rounded uppercase ${getTypeColor(selectedTask.type)}`}>{selectedTask.type}</span>
-                           <button onClick={() => setSelectedTask(null)} className="text-slate-400 hover:text-slate-600 md:hidden"><X size={24}/></button>
+                           <button onClick={() => setSelectedTaskId(null)} className="text-slate-400 hover:text-slate-600 md:hidden"><X size={24}/></button>
                        </div>
                        
                        <h2 className="text-2xl font-bold text-slate-900 mb-2">{selectedTask.title}</h2>
@@ -740,17 +754,23 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
 
                        {selectedTask.attachments && selectedTask.attachments.length > 0 && (
                            <div className="mb-8">
-                               <h4 className="font-bold text-slate-800 mb-3 flex items-center"><Paperclip size={16} className="mr-2"/> Pièces jointes</h4>
+                               <h4 className="font-bold text-slate-800 mb-3 flex items-center"><Paperclip size={16} className="mr-2"/> Pièces jointes / Liens</h4>
                                <div className="grid grid-cols-2 gap-2">
-                                   {selectedTask.attachments.map((file, i) => (
+                                   {selectedTask.attachments.map((file, i) => {
+                                       const link = isLink(file);
+                                       return (
                                        <div key={i} className="p-3 border border-slate-200 rounded-lg flex items-center justify-between hover:bg-slate-50 transition-colors">
                                            <div className="flex items-center space-x-2 truncate">
-                                               <FileText size={16} className="text-slate-400" />
-                                               <span className="text-sm truncate">{file}</span>
+                                               {link ? <LinkIcon size={16} className="text-blue-500" /> : <FileText size={16} className="text-slate-400" />}
+                                               <span className="text-sm truncate" title={file}>{file}</span>
                                            </div>
-                                           <button className="text-primary text-xs font-bold hover:underline">Télécharger</button>
+                                           {link ? (
+                                               <button onClick={() => window.open(file, '_blank')} className="text-primary text-xs font-bold hover:underline flex items-center"><ExternalLink size={12} className="mr-1"/> Ouvrir</button>
+                                           ) : (
+                                               <button className="text-primary text-xs font-bold hover:underline">Télécharger</button>
+                                           )}
                                        </div>
-                                   ))}
+                                   )})}
                                </div>
                            </div>
                        )}
@@ -765,7 +785,7 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                                    selectedTask.comments?.map(comment => {
                                        const user = users.find(u => u.id === comment.userId);
                                        return (
-                                           <div key={comment.id} className="flex space-x-3">
+                                           <div key={comment.id} className="flex space-x-3 animate-in slide-in-from-bottom-2">
                                                <img src={user?.avatar} className="w-8 h-8 rounded-full mt-1" alt="Avatar" />
                                                <div className="bg-white p-3 rounded-lg border border-slate-200 flex-1 shadow-sm">
                                                    <div className="flex justify-between items-center mb-1">
@@ -805,7 +825,7 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                   {/* Right Column: Sidebar Actions */}
                   <div className="w-full md:w-72 bg-slate-50 p-6 flex flex-col shrink-0">
                       <div className="flex justify-end mb-6 hidden md:block">
-                          <button onClick={() => setSelectedTask(null)} className="text-slate-400 hover:text-slate-600"><X size={24}/></button>
+                          <button onClick={() => setSelectedTaskId(null)} className="text-slate-400 hover:text-slate-600"><X size={24}/></button>
                       </div>
 
                       <div className="space-y-6">
@@ -859,7 +879,7 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Actions</label>
                                <button 
                                  className="w-full flex items-center space-x-2 p-2 text-sm text-slate-600 hover:bg-white rounded-lg transition-colors mb-2"
-                                 onClick={handleFileUpload}
+                                 onClick={handleOpenLinkModal}
                                >
                                    <Paperclip size={16} />
                                    <span>Ajouter un fichier</span>
@@ -876,6 +896,49 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                           </div>
                       </div>
                   </div>
+              </div>
+          </div>
+      )}
+
+      {/* Add Link Modal (Google Drive Style) - Same as Files.tsx */}
+      {showLinkModal && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
+              <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                  <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+                      <h3 className="text-lg font-bold text-slate-900">Ajouter un lien externe</h3>
+                      <button onClick={() => setShowLinkModal(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
+                  </div>
+                  <form onSubmit={handleSaveLink} className="p-6 space-y-4">
+                      <div className="bg-blue-50 p-3 rounded-lg flex items-start text-xs text-blue-700 mb-4">
+                          <LinkIcon size={16} className="mr-2 flex-shrink-0 mt-0.5" />
+                          <p>Pour économiser l'espace de stockage, ajoutez le lien vers vos fichiers (Google Drive, Dropbox, WeTransfer).</p>
+                      </div>
+                      <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-1">Nom du fichier (Optionnel)</label>
+                          <input 
+                            type="text" 
+                            value={linkName}
+                            onChange={e => setLinkName(e.target.value)}
+                            className="w-full p-2.5 bg-gray-200 text-black border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all"
+                            placeholder="Ex: Maquette V1"
+                          />
+                      </div>
+                      <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-1">URL (Lien)</label>
+                          <input 
+                            type="url" 
+                            required
+                            value={linkUrl}
+                            onChange={e => setLinkUrl(e.target.value)}
+                            className="w-full p-2.5 bg-gray-200 text-black border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all"
+                            placeholder="https://drive.google.com/..."
+                          />
+                      </div>
+                      <div className="flex justify-end space-x-3 mt-4">
+                          <button type="button" onClick={() => setShowLinkModal(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">Annuler</button>
+                          <button type="submit" className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-blue-700 shadow-sm">Ajouter</button>
+                      </div>
+                  </form>
               </div>
           </div>
       )}

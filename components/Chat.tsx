@@ -2,7 +2,6 @@
 
 
 
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Send, Paperclip, Smile, Hash, Lock, Search, Bell, MessageSquare, File as FileIcon, Image, Menu, X, Plus, Check, Trash2, AtSign, Eye, Download, Circle } from 'lucide-react';
 import { Message, User, Channel, UserRole } from '../types';
@@ -51,8 +50,6 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
 
   // Initial Load: Get last read time from storage to display separator
   useEffect(() => {
-      if (!currentChannelId) return;
-      
       const storageKey = `ivision_last_read_${currentUser.id}`;
       const storage = JSON.parse(localStorage.getItem(storageKey) || '{}');
       const savedTime = storage[currentChannelId] || '1970-01-01T00:00:00.000Z';
@@ -81,7 +78,6 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
 
   const handleSend = () => {
     if (!newMessage.trim() && pendingAttachments.length === 0) return;
-    if (!currentChannelId) return; // Guard against sending to void
     onSendMessage(newMessage, currentChannelId, pendingAttachments);
     setNewMessage('');
     setPendingAttachments([]);
@@ -258,7 +254,7 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
             </div>
         </div>
 
-        {/* Global Channels: Visible to all, Deletable by Admin/Perm */}
+        {/* Global Channels: Admin or Permission required to delete. Visible to all? Yes. */}
         <div className="mt-6">
             <h3 className="text-xs font-bold text-slate-400 uppercase mb-2 px-2 tracking-wider">Global</h3>
             <div className="space-y-1">
@@ -300,6 +296,7 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
   );
 
   // Determine where to insert "New Messages" separator
+  // We find the index of the first message that is NEW
   const firstNewMessageIndex = activeMessages.findIndex(m => isMessageNew(m));
 
   return (
@@ -337,168 +334,141 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
       )}
 
       <div className="flex-1 flex flex-col min-w-0 bg-white h-full relative">
-        {/* --- EMPTY STATE if activeChannel is missing (e.g. General was deleted) --- */}
-        {!activeChannel ? (
-             <div className="flex-1 flex flex-col items-center justify-center text-center p-8 animate-in fade-in zoom-in duration-200">
-                <div className="bg-slate-50 p-6 rounded-full mb-4">
-                    <MessageSquare size={48} className="text-slate-300" />
-                </div>
-                <h2 className="text-xl font-bold text-slate-800 mb-2">Aucune discussion sélectionnée</h2>
-                {channels.length === 0 ? (
-                    <p className="text-slate-500 mb-6 max-w-xs">Créez un premier canal pour commencer à échanger avec votre équipe.</p>
-                ) : (
-                    <p className="text-slate-500 mb-6">Sélectionnez un canal dans le menu pour voir les messages.</p>
-                )}
-                
-                {(canManageChannels || channels.length === 0) && (
-                     <button 
-                        onClick={() => setShowAddChannelModal(true)} 
-                        className="px-5 py-2.5 bg-primary text-white rounded-lg font-medium hover:bg-blue-700 flex items-center shadow-lg shadow-primary/20"
-                     >
-                        <Plus size={18} className="mr-2" /> Créer un canal
-                     </button>
-                )}
-                <button onClick={() => setShowMobileSidebar(true)} className="mt-4 md:hidden text-primary font-medium text-sm">Ouvrir le menu</button>
-             </div>
-        ) : (
-            <>
-            <div className="p-4 border-b border-slate-200 flex justify-between items-center bg-white z-20 shrink-0">
-                <div className="flex items-center">
-                    <button onClick={() => setShowMobileSidebar(true)} className="mr-3 md:hidden text-slate-500 p-1 hover:bg-slate-100 rounded"><Menu size={20} /></button>
-                    <span className="text-slate-400 mr-3 p-2 bg-slate-50 rounded-full border border-slate-100">{activeChannel?.type === 'project' ? <Lock size={18}/> : <Hash size={18}/>}</span>
-                    <div className="overflow-hidden">
-                        <h2 className="font-bold text-slate-900 truncate max-w-[150px] sm:max-w-md">{activeChannel?.name}</h2>
-                        <p className="text-xs text-slate-500 flex items-center"><span className="w-1.5 h-1.5 bg-success rounded-full mr-1.5"></span>{users.length} membres</p>
-                    </div>
-                </div>
-                <div className="flex items-center space-x-3">
-                    <div className="flex -space-x-2 pl-2">
-                        {users.slice(0,3).map(u => <img key={u.id} src={u.avatar} className="w-8 h-8 rounded-full border-2 border-white" title={u.name} />)}
-                        {users.length > 3 && <div className="w-8 h-8 rounded-full border-2 border-white bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-500">+{users.length - 3}</div>}
-                    </div>
+        <div className="p-4 border-b border-slate-200 flex justify-between items-center bg-white z-20 shrink-0">
+            <div className="flex items-center">
+                <button onClick={() => setShowMobileSidebar(true)} className="mr-3 md:hidden text-slate-500 p-1 hover:bg-slate-100 rounded"><Menu size={20} /></button>
+                <span className="text-slate-400 mr-3 p-2 bg-slate-50 rounded-full border border-slate-100">{activeChannel?.type === 'project' ? <Lock size={18}/> : <Hash size={18}/>}</span>
+                <div className="overflow-hidden">
+                    <h2 className="font-bold text-slate-900 truncate max-w-[150px] sm:max-w-md">{activeChannel?.name}</h2>
+                    <p className="text-xs text-slate-500 flex items-center"><span className="w-1.5 h-1.5 bg-success rounded-full mr-1.5"></span>{users.length} membres</p>
                 </div>
             </div>
+            <div className="flex items-center space-x-3">
+                <div className="flex -space-x-2 pl-2">
+                    {users.slice(0,3).map(u => <img key={u.id} src={u.avatar} className="w-8 h-8 rounded-full border-2 border-white" title={u.name} />)}
+                    {users.length > 3 && <div className="w-8 h-8 rounded-full border-2 border-white bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-500">+{users.length - 3}</div>}
+                </div>
+            </div>
+        </div>
 
-            <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 bg-white">
-                {activeMessages.length === 0 ? (
-                    <div className="h-full flex flex-col items-center justify-center text-slate-300">
-                        <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4"><MessageSquare size={32} className="opacity-50" /></div>
-                        <p className="font-medium text-slate-400">Début de la conversation</p>
-                    </div>
-                ) : (
-                    activeMessages.map((msg, idx) => {
-                        const isMe = msg.userId === currentUser.id;
-                        const sender = users.find(u => u.id === msg.userId);
-                        const isSequence = idx > 0 && activeMessages[idx - 1].userId === msg.userId;
-                        const isNew = isMessageNew(msg);
-                        const showSeparator = idx === firstNewMessageIndex && isNew;
+        <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 bg-white">
+            {activeMessages.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-slate-300">
+                    <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4"><MessageSquare size={32} className="opacity-50" /></div>
+                    <p className="font-medium text-slate-400">Début de la conversation</p>
+                </div>
+            ) : (
+                activeMessages.map((msg, idx) => {
+                    const isMe = msg.userId === currentUser.id;
+                    const sender = users.find(u => u.id === msg.userId);
+                    const isSequence = idx > 0 && activeMessages[idx - 1].userId === msg.userId;
+                    const isNew = isMessageNew(msg);
+                    const showSeparator = idx === firstNewMessageIndex && isNew;
 
-                        return (
-                            <React.Fragment key={msg.id}>
-                                {showSeparator && (
-                                    <div className="flex items-center justify-center my-6 animate-pulse">
-                                        <div className="h-px bg-red-200 flex-1"></div>
-                                        <span className="px-3 text-xs font-bold text-red-500 uppercase tracking-widest bg-white">-------------- Nouveaux messages --------------</span>
-                                        <div className="h-px bg-red-200 flex-1"></div>
-                                    </div>
-                                )}
-                                
-                                <div className={`flex ${isMe ? 'justify-end' : 'justify-start'} group animate-in fade-in slide-in-from-bottom-2 duration-300`}>
-                                <div className={`flex max-w-[85%] md:max-w-[75%] ${isMe ? 'flex-row-reverse space-x-reverse' : 'flex-row space-x-3'}`}>
-                                    {!isMe && !isSequence && <img src={sender?.avatar} className="w-8 h-8 rounded-full mt-1 flex-shrink-0" title={sender?.name} />}
-                                    {!isMe && isSequence && <div className="w-8 flex-shrink-0" />}
+                    return (
+                        <React.Fragment key={msg.id}>
+                            {showSeparator && (
+                                <div className="flex items-center justify-center my-6 animate-pulse">
+                                    <div className="h-px bg-red-200 flex-1"></div>
+                                    <span className="px-3 text-xs font-bold text-red-500 uppercase tracking-widest bg-white">-------------- Nouveaux messages --------------</span>
+                                    <div className="h-px bg-red-200 flex-1"></div>
+                                </div>
+                            )}
+                            
+                            <div className={`flex ${isMe ? 'justify-end' : 'justify-start'} group animate-in fade-in slide-in-from-bottom-2 duration-300`}>
+                            <div className={`flex max-w-[85%] md:max-w-[75%] ${isMe ? 'flex-row-reverse space-x-reverse' : 'flex-row space-x-3'}`}>
+                                {!isMe && !isSequence && <img src={sender?.avatar} className="w-8 h-8 rounded-full mt-1 flex-shrink-0" title={sender?.name} />}
+                                {!isMe && isSequence && <div className="w-8 flex-shrink-0" />}
 
-                                    <div>
-                                        {!isMe && !isSequence && (
-                                            <div className="flex items-center mb-1 ml-1 space-x-2">
-                                                <p className="text-xs text-slate-500">{sender?.name}</p>
-                                                {isNew && <span className="text-[10px] bg-green-100 text-green-700 px-1.5 rounded font-bold">NOUVEAU</span>}
+                                <div>
+                                    {!isMe && !isSequence && (
+                                        <div className="flex items-center mb-1 ml-1 space-x-2">
+                                            <p className="text-xs text-slate-500">{sender?.name}</p>
+                                            {isNew && <span className="text-[10px] bg-green-100 text-green-700 px-1.5 rounded font-bold">NOUVEAU</span>}
+                                        </div>
+                                    )}
+                                    <div className={`p-3.5 rounded-2xl text-sm leading-relaxed shadow-sm relative ${isMe ? 'bg-primary text-white rounded-tr-none' : 'bg-slate-50 text-slate-800 border border-slate-200 rounded-tl-none'}`}>
+                                        {formatMessageContent(msg.content)}
+                                        
+                                        {/* Attachments Display */}
+                                        {msg.attachments && msg.attachments.length > 0 && (
+                                            <div className={`mt-3 pt-2 border-t ${isMe ? 'border-white/20' : 'border-slate-200'} flex flex-col space-y-2`}>
+                                                {msg.attachments.map((file, fIdx) => (
+                                                    <div key={fIdx} className={`flex items-center justify-between p-2 rounded-lg text-xs ${isMe ? 'bg-black/10 hover:bg-black/20' : 'bg-white border border-slate-100 hover:shadow-sm'} transition-all group/file cursor-pointer`}>
+                                                        <div className="flex items-center truncate">
+                                                            <FileIcon size={14} className="mr-2 opacity-70 flex-shrink-0" />
+                                                            <span className="truncate font-medium">{file}</span>
+                                                        </div>
+                                                        <div className="flex items-center opacity-0 group-hover/file:opacity-100 transition-opacity">
+                                                            <button className="p-1 hover:scale-110"><Eye size={12}/></button>
+                                                            <button className="p-1 hover:scale-110 ml-1"><Download size={12}/></button>
+                                                        </div>
+                                                    </div>
+                                                ))}
                                             </div>
                                         )}
-                                        <div className={`p-3.5 rounded-2xl text-sm leading-relaxed shadow-sm relative ${isMe ? 'bg-primary text-white rounded-tr-none' : 'bg-slate-50 text-slate-800 border border-slate-200 rounded-tl-none'}`}>
-                                            {formatMessageContent(msg.content)}
-                                            
-                                            {/* Attachments Display */}
-                                            {msg.attachments && msg.attachments.length > 0 && (
-                                                <div className={`mt-3 pt-2 border-t ${isMe ? 'border-white/20' : 'border-slate-200'} flex flex-col space-y-2`}>
-                                                    {msg.attachments.map((file, fIdx) => (
-                                                        <div key={fIdx} className={`flex items-center justify-between p-2 rounded-lg text-xs ${isMe ? 'bg-black/10 hover:bg-black/20' : 'bg-white border border-slate-100 hover:shadow-sm'} transition-all group/file cursor-pointer`}>
-                                                            <div className="flex items-center truncate">
-                                                                <FileIcon size={14} className="mr-2 opacity-70 flex-shrink-0" />
-                                                                <span className="truncate font-medium">{file}</span>
-                                                            </div>
-                                                            <div className="flex items-center opacity-0 group-hover/file:opacity-100 transition-opacity">
-                                                                <button className="p-1 hover:scale-110"><Eye size={12}/></button>
-                                                                <button className="p-1 hover:scale-110 ml-1"><Download size={12}/></button>
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
-                                        <p className={`text-[10px] mt-1 opacity-0 group-hover:opacity-100 transition-opacity ${isMe ? 'text-right text-slate-300' : 'text-slate-300'}`}>{msg.timestamp}</p>
                                     </div>
+                                    <p className={`text-[10px] mt-1 opacity-0 group-hover:opacity-100 transition-opacity ${isMe ? 'text-right text-slate-300' : 'text-slate-300'}`}>{msg.timestamp}</p>
                                 </div>
-                                </div>
-                            </React.Fragment>
-                        )
-                    })
-                )}
-                <div ref={messagesEndRef} />
-            </div>
-
-            {/* Mentions */}
-            {showMentions && filteredUsersForMention.length > 0 && (
-                <div className="absolute bottom-20 left-4 bg-white rounded-xl shadow-xl border border-slate-200 p-2 z-50 w-64 animate-in slide-in-from-bottom-2">
-                    <h4 className="text-xs font-bold text-slate-400 px-2 py-1 uppercase mb-1 flex items-center"><AtSign size={12} className="mr-1"/>Membres</h4>
-                    <div className="max-h-48 overflow-y-auto">
-                        {filteredUsersForMention.map(user => (
-                            <button key={user.id} onClick={() => insertMention(user)} className="w-full flex items-center space-x-3 p-2 hover:bg-slate-100 rounded-lg transition-colors text-left">
-                                <img src={user.avatar} className="w-6 h-6 rounded-full" />
-                                <span className="text-sm font-medium text-slate-800">{user.name}</span>
-                            </button>
-                        ))}
-                    </div>
-                </div>
+                            </div>
+                            </div>
+                        </React.Fragment>
+                    )
+                })
             )}
+            <div ref={messagesEndRef} />
+        </div>
 
-            {/* Attachments Pending Preview */}
-            {pendingAttachments.length > 0 && (
-                <div className="px-4 py-2 bg-slate-50 border-t border-slate-200 flex space-x-2 overflow-x-auto">
-                    {pendingAttachments.map((file, idx) => (
-                        <div key={idx} className="bg-white border border-slate-200 rounded-lg p-2 pr-8 relative text-xs shadow-sm flex items-center shrink-0 animate-in zoom-in duration-200">
-                            <FileIcon size={14} className="mr-2 text-blue-500" />
-                            <span className="max-w-[150px] truncate">{file}</span>
-                            <button onClick={() => removeAttachment(idx)} className="absolute right-1 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-red-500"><X size={14}/></button>
-                        </div>
-                    ))}
-                </div>
-            )}
-
-            <div className="p-4 bg-white border-t border-slate-200 shrink-0 relative">
-                <div className="bg-gray-200 rounded-xl border border-gray-300 p-2 flex items-end shadow-inner focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary transition-all duration-200">
-                    <button onClick={() => fileInputRef.current?.click()} className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-300/50 rounded-lg transition-colors relative">
-                        <Paperclip size={20} />
-                        <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" multiple />
-                    </button>
-                    <textarea 
-                        ref={inputRef}
-                        value={newMessage}
-                        onChange={handleInputChange}
-                        onKeyDown={handleKeyDown}
-                        placeholder={pendingAttachments.length > 0 ? "Ajouter un message..." : "Envoyer un message..."}
-                        className="flex-1 bg-transparent border-none focus:ring-0 text-sm text-black placeholder-gray-500 resize-none py-2.5 px-2 max-h-32 font-medium"
-                        rows={1}
-                        style={{ minHeight: '44px' }}
-                    />
-                    <div className="flex items-center pb-1 space-x-1">
-                        <button className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-300/50 rounded-lg transition-colors hidden sm:block"><Smile size={20} /></button>
-                        <button onClick={handleSend} disabled={(!newMessage.trim() && pendingAttachments.length === 0)} className={`p-2 rounded-lg transition-all duration-200 ${newMessage.trim() || pendingAttachments.length > 0 ? 'bg-primary text-white shadow-md hover:bg-blue-700 transform hover:scale-105' : 'bg-slate-300 text-slate-400 cursor-not-allowed'}`}><Send size={18} /></button>
-                    </div>
-                </div>
-            </div>
-            </>
+        {/* Mentions */}
+        {showMentions && filteredUsersForMention.length > 0 && (
+             <div className="absolute bottom-20 left-4 bg-white rounded-xl shadow-xl border border-slate-200 p-2 z-50 w-64 animate-in slide-in-from-bottom-2">
+                 <h4 className="text-xs font-bold text-slate-400 px-2 py-1 uppercase mb-1 flex items-center"><AtSign size={12} className="mr-1"/>Membres</h4>
+                 <div className="max-h-48 overflow-y-auto">
+                     {filteredUsersForMention.map(user => (
+                         <button key={user.id} onClick={() => insertMention(user)} className="w-full flex items-center space-x-3 p-2 hover:bg-slate-100 rounded-lg transition-colors text-left">
+                             <img src={user.avatar} className="w-6 h-6 rounded-full" />
+                             <span className="text-sm font-medium text-slate-800">{user.name}</span>
+                         </button>
+                     ))}
+                 </div>
+             </div>
         )}
+
+        {/* Attachments Pending Preview */}
+        {pendingAttachments.length > 0 && (
+            <div className="px-4 py-2 bg-slate-50 border-t border-slate-200 flex space-x-2 overflow-x-auto">
+                {pendingAttachments.map((file, idx) => (
+                    <div key={idx} className="bg-white border border-slate-200 rounded-lg p-2 pr-8 relative text-xs shadow-sm flex items-center shrink-0 animate-in zoom-in duration-200">
+                        <FileIcon size={14} className="mr-2 text-blue-500" />
+                        <span className="max-w-[150px] truncate">{file}</span>
+                        <button onClick={() => removeAttachment(idx)} className="absolute right-1 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-red-500"><X size={14}/></button>
+                    </div>
+                ))}
+            </div>
+        )}
+
+        <div className="p-4 bg-white border-t border-slate-200 shrink-0 relative">
+            <div className="bg-gray-200 rounded-xl border border-gray-300 p-2 flex items-end shadow-inner focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary transition-all duration-200">
+                <button onClick={() => fileInputRef.current?.click()} className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-300/50 rounded-lg transition-colors relative">
+                    <Paperclip size={20} />
+                    <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" multiple />
+                </button>
+                <textarea 
+                    ref={inputRef}
+                    value={newMessage}
+                    onChange={handleInputChange}
+                    onKeyDown={handleKeyDown}
+                    placeholder={pendingAttachments.length > 0 ? "Ajouter un message..." : "Envoyer un message..."}
+                    className="flex-1 bg-transparent border-none focus:ring-0 text-sm text-black placeholder-gray-500 resize-none py-2.5 px-2 max-h-32 font-medium"
+                    rows={1}
+                    style={{ minHeight: '44px' }}
+                />
+                <div className="flex items-center pb-1 space-x-1">
+                    <button className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-300/50 rounded-lg transition-colors hidden sm:block"><Smile size={20} /></button>
+                    <button onClick={handleSend} disabled={!newMessage.trim() && pendingAttachments.length === 0} className={`p-2 rounded-lg transition-all duration-200 ${newMessage.trim() || pendingAttachments.length > 0 ? 'bg-primary text-white shadow-md hover:bg-blue-700 transform hover:scale-105' : 'bg-slate-300 text-slate-400 cursor-not-allowed'}`}><Send size={18} /></button>
+                </div>
+            </div>
+        </div>
       </div>
 
       {/* Add Channel Modal */}

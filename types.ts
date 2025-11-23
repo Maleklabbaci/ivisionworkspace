@@ -85,6 +85,14 @@ export interface Message {
   attachments?: string[];
 }
 
+export interface FileLink {
+  id: string;
+  name: string;
+  url: string;
+  createdBy: string;
+  createdAt: string;
+}
+
 export interface ToastNotification {
   id: string;
   title: string;

@@ -20,18 +20,22 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, currentView, onN
     { id: 'reports', label: 'Rapports', icon: BarChart3, roles: [UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.ANALYST] },
     { id: 'tasks', label: 'Tâches', icon: CheckSquare, roles: [UserRole.ADMIN, UserRole.MEMBER, UserRole.PROJECT_MANAGER, UserRole.COMMUNITY_MANAGER, UserRole.ANALYST] },
     { id: 'chat', label: 'Chat & Équipe', icon: MessageSquare, roles: [UserRole.ADMIN, UserRole.MEMBER, UserRole.PROJECT_MANAGER, UserRole.COMMUNITY_MANAGER, UserRole.ANALYST] },
+    // STRICT : Seul Admin a accès par défaut. Les autres nécessitent la permission explicite 'canViewFiles'
     { id: 'files', label: 'Fichiers', icon: FolderOpen, roles: [UserRole.ADMIN] },
+    // STRICT : Seul Admin a accès par défaut. Les autres nécessitent la permission explicite 'canManageTeam'
     { id: 'team', label: 'Membres', icon: UsersIcon, roles: [UserRole.ADMIN] },
   ];
 
   // Filter items based on Role OR Special Permissions
   const visibleNavItems = navItems.filter(item => {
-    // Special Permissions Override
+    // 1. Special Permissions Override (PRIORITÉ ABSOLUE)
+    // Si l'admin a coché la case, on affiche, peu importe le rôle.
     if (item.id === 'files' && currentUser.permissions?.canViewFiles) return true;
     if (item.id === 'reports' && currentUser.permissions?.canViewReports) return true;
     if (item.id === 'team' && currentUser.permissions?.canManageTeam) return true;
     
-    // Default Role Check
+    // 2. Default Role Check
+    // Si ce n'est pas une permission spéciale, on regarde si le rôle est dans la liste par défaut.
     return item.roles.includes(currentUser.role);
   });
 
