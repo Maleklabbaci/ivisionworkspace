@@ -96,13 +96,14 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
     setCurrentDate(new Date());
   };
 
-  const getDaysInMonth = (year: number, month: number) => {
-    return new Date(year, month + 1, 0).getDate();
-  };
-
-  const getFirstDayOfMonth = (year: number, month: number) => {
-    const day = new Date(year, month, 1).getDay();
-    return day === 0 ? 6 : day - 1;
+  const getDaysInMonth = (date: Date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const days = new Date(year, month + 1, 0).getDate();
+    const firstDay = new Date(year, month, 1).getDay(); // 0 = Sun, 1 = Mon
+    // Adjust for Monday start (European/French standard)
+    const firstDayAdjusted = firstDay === 0 ? 6 : firstDay - 1;
+    return { days, firstDay: firstDayAdjusted, year, month };
   };
 
   // --- Drag & Drop Logic ---
@@ -163,7 +164,7 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
       const taskAttachments = Array.isArray(newTask.attachments) ? newTask.attachments.map(String) : [];
 
       const task: Task = {
-          id: Date.now().toString(),
+          id: 'temp-id-' + Date.now(), // Placeholder ID, will be replaced by App.tsx
           title: taskTitle,
           description: taskDesc,
           assigneeId: taskAssignee,
@@ -187,8 +188,9 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
   const handleAddComment = () => {
     if(!selectedTask || !taskComment.trim()) return;
     
+    // Fix: Generate a robust ID locally just in case, though server handles it usually.
     const newComment: Comment = {
-        id: Date.now().toString(),
+        id: Math.random().toString(36).substr(2, 9),
         userId: currentUser.id,
         content: taskComment,
         timestamp: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
@@ -330,6 +332,20 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
       );
   };
 
+  // Helper for Calendar Chip Styling
+  const getCalendarChipStyle = (type: string, status: TaskStatus) => {
+      if (status === TaskStatus.DONE) {
+          return "bg-slate-100 text-slate-400 border-slate-200 line-through opacity-75";
+      }
+      switch(type) {
+          case 'content': return "bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-200";
+          case 'ads': return "bg-green-100 text-green-700 border-green-200 hover:bg-green-200";
+          case 'social': return "bg-purple-100 text-purple-700 border-purple-200 hover:bg-purple-200";
+          case 'seo': return "bg-yellow-100 text-yellow-700 border-yellow-200 hover:bg-yellow-200";
+          default: return "bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-200";
+      }
+  };
+
   return (
     <div className="h-[calc(100vh-100px)] flex flex-col">
       {/* Toolbar */}
@@ -384,60 +400,61 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
           </div>
       )}
 
-      {/* Calendar View (Monthly) */}
+      {/* Calendar View (Redesigned Modern Grid) */}
       {viewMode === 'calendar' && (
-          <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col animate-in fade-in duration-300 min-h-0">
-              {/* Calendar Header */}
-              <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+          <div className="flex-1 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col animate-in fade-in duration-300 min-h-0">
+              {/* Modern Calendar Header */}
+              <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-white">
                   <div className="flex items-center space-x-4">
-                      <h3 className="text-lg font-bold text-slate-900 capitalize w-48">
-                          {currentDate.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
-                      </h3>
-                      <div className="flex items-center space-x-1">
+                      <div className="flex items-center bg-slate-50 rounded-lg p-1 border border-slate-100 shadow-sm">
                           <button onClick={prevMonth} className="p-1.5 hover:bg-white hover:shadow-sm rounded-md text-slate-500 transition-all">
-                              <ChevronLeft size={20} />
-                          </button>
-                          <button onClick={goToToday} className="px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-white hover:shadow-sm rounded-md transition-all">
-                              Aujourd'hui
+                              <ChevronLeft size={18} />
                           </button>
                           <button onClick={nextMonth} className="p-1.5 hover:bg-white hover:shadow-sm rounded-md text-slate-500 transition-all">
-                              <ChevronRight size={20} />
+                              <ChevronRight size={18} />
                           </button>
                       </div>
+                      <h3 className="text-xl font-bold text-slate-900 capitalize tracking-tight">
+                          {currentDate.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
+                      </h3>
+                      <button onClick={goToToday} className="px-3 py-1.5 text-xs font-bold text-primary bg-blue-50 hover:bg-blue-100 rounded-full transition-all border border-blue-100">
+                          Aujourd'hui
+                      </button>
                   </div>
                   
-                  <div className="hidden md:flex items-center space-x-3 text-[10px]">
-                     <div className="flex items-center"><div className="w-2 h-2 bg-blue-500 rounded-full mr-1"></div>Content</div>
-                     <div className="flex items-center"><div className="w-2 h-2 bg-green-500 rounded-full mr-1"></div>Ads</div>
-                     <div className="flex items-center"><div className="w-2 h-2 bg-purple-500 rounded-full mr-1"></div>Social</div>
-                     <span className="text-slate-400 ml-2 italic flex items-center"><div className="w-3 h-3 border border-slate-300 rounded mr-1"></div> Glisser-déposer pour changer la date</span>
+                  <div className="hidden lg:flex items-center space-x-6 text-xs font-medium text-slate-500">
+                     <div className="flex items-center"><span className="w-2.5 h-2.5 bg-blue-500 rounded-full mr-2 shadow-sm shadow-blue-500/30"></span>Content</div>
+                     <div className="flex items-center"><span className="w-2.5 h-2.5 bg-green-500 rounded-full mr-2 shadow-sm shadow-green-500/30"></span>Ads</div>
+                     <div className="flex items-center"><span className="w-2.5 h-2.5 bg-purple-500 rounded-full mr-2 shadow-sm shadow-purple-500/30"></span>Social</div>
                   </div>
               </div>
 
-              {/* Calendar Grid */}
-              <div className="flex-1 overflow-y-auto">
-                <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50 sticky top-0 z-10">
-                    {['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map(day => (
-                        <div key={day} className="p-3 text-center border-r border-slate-200 last:border-r-0">
-                            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{day}</span>
+              {/* Calendar Grid Container */}
+              <div className="flex-1 flex flex-col overflow-hidden">
+                {/* Weekdays Header */}
+                <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50/50">
+                    {['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'].map((day, i) => (
+                        <div key={day} className="py-3 text-center border-r border-slate-100 last:border-r-0">
+                            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider hidden sm:inline">{day}</span>
+                            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider sm:hidden">{day.substring(0,3)}</span>
                         </div>
                     ))}
                 </div>
                 
-                <div className="grid grid-cols-7 auto-rows-fr min-h-[600px]">
+                {/* Days Grid */}
+                <div className="flex-1 grid grid-cols-7 auto-rows-fr overflow-y-auto custom-scrollbar bg-slate-100 gap-px border-b border-slate-200">
                      {(() => {
-                         const year = currentDate.getFullYear();
-                         const month = currentDate.getMonth();
-                         const daysInMonth = getDaysInMonth(year, month);
-                         const startDay = getFirstDayOfMonth(year, month); 
-                         const totalSlots = Math.ceil((daysInMonth + startDay) / 7) * 7;
+                         const { days, firstDay, year, month } = getDaysInMonth(currentDate);
+                         const totalSlots = Math.ceil((days + firstDay) / 7) * 7;
                          const cells = [];
 
-                         for (let i = 0; i < startDay; i++) {
-                             cells.push(<div key={`empty-${i}`} className="bg-slate-50/30 border-b border-r border-slate-100"></div>);
+                         // Empty slots before start of month
+                         for (let i = 0; i < firstDay; i++) {
+                             cells.push(<div key={`empty-${i}`} className="bg-slate-50/40 min-h-[120px]"></div>);
                          }
 
-                         for (let day = 1; day <= daysInMonth; day++) {
+                         // Valid days
+                         for (let day = 1; day <= days; day++) {
                              const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                              const dayTasks = visibleTasks.filter(t => t.dueDate === dateStr);
                              const isToday = new Date().toDateString() === new Date(year, month, day).toDateString();
@@ -449,15 +466,21 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                                     onDragOver={(e) => handleDragOver(e, dateStr)}
                                     onDragLeave={handleDragLeave}
                                     onDrop={(e) => handleDrop(e, dateStr)}
-                                    className={`min-h-[120px] border-b border-r border-slate-100 p-2 flex flex-col transition-all duration-200 group relative ${
-                                        isDragOver ? 'bg-blue-50 ring-2 ring-inset ring-primary z-10' : 
-                                        isToday ? 'bg-blue-50/20' : 'bg-white hover:bg-slate-50'
+                                    className={`min-h-[120px] bg-white p-2 flex flex-col transition-all duration-200 group relative ${
+                                        isDragOver ? 'bg-blue-50 ring-2 ring-inset ring-blue-300' : 
+                                        isToday ? 'bg-blue-50/20' : 'hover:bg-slate-50'
                                     }`}
                                  >
+                                     {/* Day Number Header */}
                                      <div className="flex justify-between items-start mb-2 pointer-events-none">
-                                         <span className={`text-sm font-semibold w-7 h-7 flex items-center justify-center rounded-full ${isToday ? 'bg-primary text-white shadow-md' : 'text-slate-700'}`}>
+                                         <span className={`text-sm font-semibold w-7 h-7 flex items-center justify-center rounded-full transition-all ${
+                                             isToday 
+                                             ? 'bg-primary text-white shadow-md shadow-primary/30' 
+                                             : 'text-slate-500'
+                                         }`}>
                                              {day}
                                          </span>
+                                         {/* Add Button (Hidden by default, shown on hover) */}
                                          {canCreateTask() && (
                                             <button 
                                                 onClick={(e) => {
@@ -465,20 +488,16 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                                                     setNewTask({...newTask, dueDate: dateStr});
                                                     setShowModal(true);
                                                 }}
-                                                className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-primary transition-opacity pointer-events-auto"
+                                                className="opacity-0 group-hover:opacity-100 p-1 hover:bg-slate-100 rounded-md text-slate-400 hover:text-primary transition-all pointer-events-auto"
                                             >
-                                                <Plus size={16} />
+                                                <Plus size={14} />
                                             </button>
                                          )}
                                      </div>
                                      
-                                     <div className="flex-1 space-y-1.5 overflow-y-auto custom-scrollbar max-h-[100px]">
+                                     {/* Task List */}
+                                     <div className="flex-1 space-y-1.5 overflow-y-auto custom-scrollbar max-h-[150px]">
                                          {dayTasks.map(task => {
-                                             let barColor = 'bg-slate-400';
-                                             if(task.type === 'content') barColor = 'bg-blue-500';
-                                             else if(task.type === 'ads') barColor = 'bg-green-500';
-                                             else if(task.type === 'social') barColor = 'bg-purple-500';
-                                             
                                              const assignee = users.find(u => u.id === task.assigneeId);
                                              const isDragging = draggedTaskId === task.id;
 
@@ -488,21 +507,19 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                                                     draggable
                                                     onDragStart={(e) => handleDragStart(e, task.id)}
                                                     onClick={(e) => { e.stopPropagation(); setSelectedTask(task); }}
-                                                    className={`text-[10px] p-1.5 rounded cursor-pointer border shadow-sm transition-all hover:scale-[1.02] hover:shadow-md flex items-center space-x-1.5 group/task relative ${
-                                                        isDragging ? 'opacity-50 border-dashed border-primary bg-slate-100 rotate-2' : 
-                                                        task.status === TaskStatus.DONE ? 'bg-slate-50 text-slate-400 border-slate-200 opacity-70' : 'bg-white text-slate-700 border-slate-200 hover:border-primary/50'
+                                                    className={`px-2 py-1.5 rounded-md cursor-pointer border text-xs font-medium shadow-sm transition-all hover:scale-[1.02] hover:shadow-md flex items-center space-x-1.5 group/task ${
+                                                        isDragging ? 'opacity-50 border-dashed border-primary bg-slate-100' : 
+                                                        getCalendarChipStyle(task.type, task.status)
                                                     }`}
                                                  >
-                                                     <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${barColor}`}></div>
                                                      {assignee && (
-                                                        <img 
-                                                            src={assignee.avatar} 
-                                                            alt={assignee.name}
-                                                            title={`Assigné à: ${assignee.name}`}
-                                                            className="w-3.5 h-3.5 rounded-full border border-slate-200 flex-shrink-0"
-                                                        />
+                                                         <img 
+                                                             src={assignee.avatar} 
+                                                             className="w-4 h-4 rounded-full border border-white flex-shrink-0 object-cover" 
+                                                             title={assignee.name}
+                                                         />
                                                      )}
-                                                     <span className={`truncate font-medium ${task.status === TaskStatus.DONE ? 'line-through' : ''}`}>{task.title}</span>
+                                                     <span className="truncate leading-tight">{task.title}</span>
                                                  </div>
                                              )
                                          })}
@@ -511,9 +528,10 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                              );
                          }
 
-                         const remainingSlots = totalSlots - (startDay + daysInMonth);
+                         // Empty slots after end of month
+                         const remainingSlots = totalSlots - (firstDay + days);
                          for (let i = 0; i < remainingSlots; i++) {
-                              cells.push(<div key={`empty-end-${i}`} className="bg-slate-50/30 border-b border-r border-slate-100"></div>);
+                              cells.push(<div key={`empty-end-${i}`} className="bg-slate-50/40 min-h-[120px]"></div>);
                          }
 
                          return cells;

@@ -24,7 +24,7 @@ const App: React.FC = () => {
   const [channels, setChannels] = useState<Channel[]>([]);
   
   const [notifications, setNotifications] = useState<ToastNotification[]>([]);
-  const [currentChannelId, setCurrentChannelId] = useState('general');
+  const [currentChannelId, setCurrentChannelId] = useState('');
   
   // Loading States
   const [isLoading, setIsLoading] = useState(false); 
@@ -42,16 +42,9 @@ const App: React.FC = () => {
 
   // Helper for UUID generation (Robust Polyfill)
   const generateUUID = () => {
-    try {
-      // Check if secure context and randomUUID is available
-      if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-        return crypto.randomUUID();
-      }
-    } catch (e) {
-      // Fallback if security restriction prevents access
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
     }
-    
-    // Robust fallback for non-secure contexts
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
       var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
       return v.toString(16);
@@ -59,7 +52,7 @@ const App: React.FC = () => {
   };
 
   const addNotification = (title: string, message: string, type: 'info' | 'success' | 'urgent' = 'info') => {
-    const id = Date.now().toString() + Math.random();
+    const id = generateUUID();
     setNotifications(prev => [...prev, { id, title, message, type }]);
   };
 
@@ -135,7 +128,7 @@ const App: React.FC = () => {
              // Chargement des vraies données en arrière-plan (Non-bloquant)
              Promise.all([
                 fetchUserProfile(session.user.id),
-                fetchInitialData()
+                fetchInitialData(session.user.id) // Pass ID directly to avoid closure staleness
              ]).then(() => {
                 isDataLoaded.current = true;
              }).catch(err => console.error("Background fetch error", err));
@@ -182,20 +175,14 @@ const App: React.FC = () => {
                 setChannels(prev => prev.map(c => 
                     c.id === newMsg.channel_id ? { ...c, unread: (c.unread || 0) + 1 } : c
                 ));
-            } else {
-               // If we are on the channel, we DON'T auto-read here to allow the "New Message" line to appear
-               // markChannelAsRead will be called by the Chat component interaction
             }
         }
 
         // 3. CHECK FOR MENTIONS (@User)
-        // We only notify if the sender is NOT the current user
         if (newMsg.user_id !== currentUser.id) {
-           // Create the tag we are looking for: @NameWithoutSpaces (e.g. @JeanDupont)
            const myMentionTag = `@${currentUser.name.replace(/\s+/g, '')}`;
            
            if (newMsg.content.includes(myMentionTag)) {
-              // Find sender name for better notification
               const sender = users.find(u => u.id === newMsg.user_id);
               const senderName = sender ? sender.name : "Quelqu'un";
               
@@ -285,8 +272,24 @@ const App: React.FC = () => {
     }
   };
 
-  const fetchInitialData = async () => {
+  const fetchInitialData = async (userId?: string) => {
     try {
+        // CRITICAL: Upsert User Immediately to ensure Foreign Key exists
+        // This fixes the race condition where user tries to send msg before profile is fully synced
+        const uid = userId || currentUser?.id;
+        if (uid) {
+            const { data: { user: authUser } } = await supabase.auth.getUser();
+            if (authUser) {
+                await supabase.from('users').upsert([{
+                    id: uid,
+                    name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'User',
+                    email: authUser.email,
+                    role: UserRole.ADMIN, // Fallback
+                    status: 'active'
+                }]);
+            }
+        }
+
         // Parallel Fetching
         const [usersResult, channelsResult, messagesResult, tasksResult] = await Promise.all([
             supabase.from('users').select('*'),
@@ -305,7 +308,7 @@ const App: React.FC = () => {
                 phoneNumber: u.phone_number,
                 notificationPref: u.notification_pref,
                 status: u.status,
-                permissions: u.permissions || {} // Important for team view
+                permissions: u.permissions || {} 
             })));
         }
 
@@ -317,27 +320,56 @@ const App: React.FC = () => {
                 channelId: m.channel_id,
                 content: m.content,
                 timestamp: new Date(m.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-                fullTimestamp: m.created_at, // Save ISO for logic
+                fullTimestamp: m.created_at, 
                 attachments: m.attachments || []
             }));
             setMessages(fetchedMessages);
         }
 
+        let loadedChannels: Channel[] = [];
         if (channelsResult.data) {
-            // Calculate Unread Count
-            const mappedChannels = channelsResult.data.map(c => ({
+            loadedChannels = channelsResult.data.map(c => ({
                 id: c.id,
                 name: c.name,
                 type: c.type,
-                unread: 0 // Default, updated below
+                unread: 0
             }));
-            setChannels(calculateUnreadCounts(mappedChannels, fetchedMessages));
+        }
+
+        // FIX: Dynamic Default Channel Logic
+        // Don't force 'Général' if other channels exist. Allow deletion.
+        let defaultChannelId = '';
+        
+        if (loadedChannels.length > 0) {
+             // Prefer 'Général' if exists, otherwise first available channel
+             const generalChan = loadedChannels.find(c => c.name.toLowerCase() === 'général' || c.name.toLowerCase() === 'general');
+             defaultChannelId = generalChan ? generalChan.id : loadedChannels[0].id;
+        } else {
+             // ONLY create 'Général' if database is completely empty of channels
+             const { data: newChannel, error } = await supabase.from('channels').insert([{ 
+                name: 'Général', 
+                type: 'global', 
+                unread_count: 0 
+             }]).select().single();
+             
+             if (newChannel) {
+                 const genChannel = { id: newChannel.id, name: newChannel.name, type: 'global' as const, unread: 0 };
+                 loadedChannels.push(genChannel);
+                 defaultChannelId = newChannel.id;
+             } 
+        }
+
+        // Calculate unread counts
+        setChannels(calculateUnreadCounts(loadedChannels, fetchedMessages));
+        
+        // Update current channel state to valid UUID
+        if (defaultChannelId) {
+            setCurrentChannelId(defaultChannelId);
         }
 
         if (tasksResult.data) {
             const mappedTasks = await Promise.all(tasksResult.data.map(async (t) => {
-                const comments = []; 
-                // Handle missing attachments column gracefully
+                const comments = t.comments || []; 
                 const attachments = t.attachments || [];
 
                 return {
@@ -366,7 +398,6 @@ const App: React.FC = () => {
 
   const handleChannelChange = (channelId: string) => {
       setCurrentChannelId(channelId);
-      // Note: markChannelAsRead moved to Chat component to allow displaying "New Messages" separator before clearing
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -417,16 +448,10 @@ const App: React.FC = () => {
         const registeredEmail = authData.user.email;
         const newAuthId = authData.user.id;
 
-        // Vérifier si un profil a été pré-créé par l'admin (avec un ID temporaire ou différent)
         const { data: existingProfiles } = await supabase
             .from('users')
             .select('*')
             .eq('email', registeredEmail);
-        
-        // On cherche un profil qui N'EST PAS celui qu'on vient de créer (cas peu probable avec RLS strict, 
-        // mais utile si l'admin a créé une ligne manuelle sans Auth ID)
-        // Note: Avec Supabase, l'insert via Admin aurait créé une ligne. 
-        // Ici on simule la fusion : si une ligne existe, on met à jour son ID pour correspondre à l'Auth ID.
         
         const placeholderProfile = existingProfiles?.find(u => u.id !== newAuthId);
 
@@ -436,13 +461,13 @@ const App: React.FC = () => {
             const inheritedPermissions = placeholderProfile.permissions;
             const inheritedStatus = placeholderProfile.status;
 
-            // 1. Réassigner les tâches de l'ancien ID (temp) vers le nouvel Auth ID
+            // 1. Réassigner les tâches
             await supabase.from('tasks').update({ assignee_id: newAuthId }).eq('assignee_id', placeholderProfile.id);
             
             // 2. Supprimer le profil placeholder
             await supabase.from('users').delete().eq('id', placeholderProfile.id);
 
-            // 3. Créer le nouveau profil propre lié à Auth, mais avec les données héritées
+            // 3. Créer le nouveau profil propre
             const newProfile = {
                 id: newAuthId,
                 name: registerName,
@@ -450,7 +475,7 @@ const App: React.FC = () => {
                 role: inheritedRole || UserRole.MEMBER, 
                 avatar: `https://ui-avatars.com/api/?name=${registerName.replace(/\s+/g, '+')}&background=random`,
                 notification_pref: 'all',
-                status: inheritedStatus || 'active', // Garde le statut défini par l'admin
+                status: inheritedStatus || 'active', 
                 permissions: inheritedPermissions || {} 
             };
 
@@ -482,7 +507,7 @@ const App: React.FC = () => {
   };
   
   const handleUpdateTask = async (updatedTask: Task) => {
-    // Remove attachments from update payload to avoid schema error
+    const safeComments = Array.isArray(updatedTask.comments) ? updatedTask.comments : [];
     const { error } = await supabase.from('tasks').update({
         title: updatedTask.title,
         description: updatedTask.description,
@@ -490,8 +515,8 @@ const App: React.FC = () => {
         due_date: updatedTask.dueDate,
         assignee_id: updatedTask.assigneeId,
         type: updatedTask.type,
-        price: updatedTask.price
-        // attachments: updatedTask.attachments // REMOVED until column exists
+        price: updatedTask.price,
+        comments: safeComments 
     }).eq('id', updatedTask.id);
 
     if (error) { 
@@ -503,35 +528,38 @@ const App: React.FC = () => {
   };
 
   const handleAddTask = async (newTask: Task) => {
-      // Use the robust UUID generator
       const dbId = generateUUID();
       
-      // Prepare strictly typed DB object - EXCLUDING attachments to fix error
+      // Ensure we do NOT send 'attachments' to DB 'tasks' table if the column is missing.
+      // We fallback by appending files to the description text.
+      let safeDescription = newTask.description || '';
+      if (newTask.attachments && newTask.attachments.length > 0) {
+          safeDescription += `\n\n[📎 Fichiers : ${newTask.attachments.join(', ')}]`;
+      }
+
       const dbTask = {
           id: dbId,
           title: newTask.title || 'Sans titre',
-          description: newTask.description || '',
+          description: safeDescription,
           assignee_id: newTask.assigneeId,
           due_date: newTask.dueDate,
           status: newTask.status || TaskStatus.TODO,
           type: newTask.type || 'content',
           priority: newTask.priority || 'medium',
-          price: Number(newTask.price) || 0
-          // attachments: Array.isArray(newTask.attachments) ? newTask.attachments : [] // REMOVED
+          price: Number(newTask.price) || 0,
+          comments: [] 
+          // Removed: attachments field
       };
 
-      // Optimistic UI Update
-      const addedTask = { ...newTask, id: dbId, price: dbTask.price, attachments: newTask.attachments || [] };
+      const addedTask = { ...newTask, id: dbId, price: dbTask.price, comments: [], attachments: newTask.attachments || [] };
       setTasks(prev => [...prev, addedTask]);
       addNotification('Succès', 'Tâche créée.', 'success');
 
-      // DB Insert
       const { error } = await supabase.from('tasks').insert([dbTask]);
       
       if (error) { 
           console.error("DB Insert Error:", error); 
           addNotification('Erreur', `Échec de la création: ${error.message}`, 'urgent');
-          // Rollback optimistic update
           setTasks(prev => prev.filter(t => t.id !== dbId)); 
       } 
   };
@@ -554,13 +582,57 @@ const App: React.FC = () => {
   const handleSendMessage = async (text: string, channelId: string, attachments: string[] = []) => {
       if (!currentUser) return;
       
+      // 1. ROBUST CHANNEL RESOLUTION (SELF-HEALING)
+      // Fixes "Canal introuvable" error by finding the correct UUID if 'general' is passed or ID is stale
+      let finalChannelId = channelId;
+      
+      // Check if local channel state has this ID
+      const channelExists = channels.some(c => c.id === finalChannelId);
+
+      if (!channelExists || finalChannelId === 'general') {
+          console.log("Channel ID invalid or not found locally. Attempting self-healing resolution...");
+          
+          // A. Force Refresh from DB
+          const { data: dbChannels } = await supabase.from('channels').select('*');
+          
+          if (dbChannels && dbChannels.length > 0) {
+               // Update local state to be in sync
+               const loaded = dbChannels.map(c => ({ id: c.id, name: c.name, type: c.type, unread: 0 }));
+               setChannels(loaded);
+
+               // B. Find correct ID
+               if (finalChannelId === 'general') {
+                   // Look for any channel named General/Général
+                   const match = dbChannels.find(c => c.name.toLowerCase() === 'general' || c.name.toLowerCase() === 'général');
+                   finalChannelId = match ? match.id : dbChannels[0].id;
+               } else {
+                   // Check if the UUID actually exists
+                   const match = dbChannels.find(c => c.id === finalChannelId);
+                   finalChannelId = match ? match.id : dbChannels[0].id; // Fallback to first available
+               }
+               setCurrentChannelId(finalChannelId);
+          } else {
+               // C. Absolute Last Resort: Create 'Général' if DB is empty
+               const { data: newChan } = await supabase.from('channels').insert([{ name: 'Général', type: 'global', unread_count: 0 }]).select().single();
+               if (newChan) {
+                   finalChannelId = newChan.id;
+                   setChannels([{ id: newChan.id, name: newChan.name, type: 'global', unread: 0 }]);
+                   setCurrentChannelId(finalChannelId);
+               } else {
+                   addNotification('Erreur Technique', 'Impossible de créer ou trouver un canal.', 'urgent');
+                   return;
+               }
+          }
+      }
+      
       const newMessageId = generateUUID();
       const now = new Date();
       
+      // Optimistic Update
       const displayMessage: Message = { 
           id: newMessageId, 
           userId: currentUser.id, 
-          channelId, 
+          channelId: finalChannelId, 
           content: text, 
           timestamp: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
           fullTimestamp: now.toISOString(),
@@ -568,23 +640,54 @@ const App: React.FC = () => {
       };
       
       setMessages(prev => [...prev, displayMessage]);
-      
-      // Mark as read immediately for self
-      markChannelAsRead(channelId);
+      markChannelAsRead(finalChannelId);
+
+      // 2. SYNC & SEND
+      // FIX: Append attachments to content and REMOVE 'attachments' column from DB insert
+      // This prevents the "column not found" schema error
+      let dbContent = text;
+      if (attachments.length > 0) {
+          dbContent += `\n\n[📎 Pièces jointes : ${attachments.join(', ')}]`;
+      }
 
       const dbMessage = { 
           id: newMessageId, 
-          channel_id: channelId, 
+          channel_id: finalChannelId, 
           user_id: currentUser.id, 
-          content: text,
-          attachments: attachments 
+          content: dbContent
+          // attachments: REMOVED to prevent schema error
       };
-      const { error } = await supabase.from('messages').insert([dbMessage]);
       
-      if (error) { 
-          console.error(error); 
-          addNotification('Erreur', 'Message non envoyé.', 'urgent');
-          setMessages(prev => prev.filter(m => m.id !== newMessageId)); 
+      // Attempt 1
+      let { error } = await supabase.from('messages').insert([dbMessage]);
+      
+      if (error) {
+          console.log("Message send failed (Attempt 1). Trying auto-fix...", error.message);
+          
+          // Auto-Fix Strategy: Upsert User to ensure FK user_id exists
+          await supabase.from('users').upsert([{
+             id: currentUser.id,
+             name: currentUser.name,
+             email: currentUser.email,
+             role: currentUser.role,
+             avatar: currentUser.avatar,
+             status: 'active'
+          }]);
+
+          // Ensure Membership
+          const { error: memberError } = await supabase.from('channel_members').insert([{
+              channel_id: finalChannelId,
+              user_id: currentUser.id
+          }]);
+
+          // Attempt 2
+          const retry = await supabase.from('messages').insert([dbMessage]);
+          
+          if (retry.error) {
+              console.error("Message Send Fatal Error:", retry.error); 
+              addNotification('Échec Envoi', `Erreur: ${retry.error.message || 'Inconnue'}`, 'urgent');
+              setMessages(prev => prev.filter(m => m.id !== newMessageId)); 
+          }
       }
   };
 
@@ -609,8 +712,14 @@ const App: React.FC = () => {
           return;
       }
 
-      if (newChannel.type === 'project' && newChannel.members && newChannel.members.length > 0) {
-           const memberInserts = newChannel.members.map(uid => ({
+      // Always add creator to channel members
+      const membersToAdd = newChannel.members ? [...newChannel.members] : [];
+      if (!membersToAdd.includes(currentUser!.id)) {
+          membersToAdd.push(currentUser!.id);
+      }
+
+      if (membersToAdd.length > 0) {
+           const memberInserts = membersToAdd.map(uid => ({
                channel_id: tempId,
                user_id: uid
            }));
@@ -624,9 +733,13 @@ const App: React.FC = () => {
 
   const handleDeleteChannel = async (channelId: string) => {
       const previousChannels = [...channels];
-      setChannels(prev => prev.filter(c => c.id !== channelId));
+      const newChannels = channels.filter(c => c.id !== channelId);
+      setChannels(newChannels);
+      
       if (currentChannelId === channelId) {
-          setCurrentChannelId('general');
+          // If we deleted the active channel, switch to another or empty
+          const fallback = newChannels.length > 0 ? newChannels[0].id : '';
+          setCurrentChannelId(fallback);
       }
       addNotification('Succès', 'Conversation supprimée.', 'success');
 
@@ -742,6 +855,7 @@ const App: React.FC = () => {
   if (!currentUser) {
     return (
       <div className="min-h-[100dvh] bg-slate-50 flex items-center justify-center p-4 overflow-y-auto">
+        {/* Toast is now properly positioned via its internal styles */}
         <ToastContainer notifications={notifications} onDismiss={removeNotification} />
         
         <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full border border-slate-200 relative overflow-hidden">
@@ -828,6 +942,7 @@ const App: React.FC = () => {
   return (
     <div className="animate-in slide-in-from-right duration-300 ease-out h-full">
       <Layout currentUser={currentUser} currentView={currentView} onNavigate={setCurrentView} onLogout={handleLogout} unreadMessageCount={totalUnreadCount}>
+        {/* Notification Container - Self positioning */}
         <ToastContainer notifications={notifications} onDismiss={removeNotification} />
         
         {currentView === 'dashboard' && (
@@ -860,7 +975,7 @@ const App: React.FC = () => {
             <Chat 
                 currentUser={currentUser} 
                 users={users.filter(u => u.status === 'active')} 
-                channels={channels.length > 0 ? channels : [{ id: 'general', name: 'Général', type: 'global' }]} 
+                channels={channels} 
                 currentChannelId={currentChannelId} 
                 messages={messages} 
                 onChannelChange={handleChannelChange} 
