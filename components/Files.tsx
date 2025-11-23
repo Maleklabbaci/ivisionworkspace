@@ -55,9 +55,10 @@ const Files: React.FC<FilesProps> = ({ tasks, messages, fileLinks = [], currentU
     const urlRegex = /((https?:\/\/)|(www\.))[^\s]+/g;
 
     // 1. Manual File Links (Google Drive, etc.) - From Library
+    // ID Format: link|{id}
     fileLinks.forEach(link => {
         files.push({
-            id: `link-${link.id}`,
+            id: `link|${link.id}`,
             name: link.name,
             url: link.url,
             source: 'Bibliothèque',
@@ -68,9 +69,10 @@ const Files: React.FC<FilesProps> = ({ tasks, messages, fileLinks = [], currentU
     });
 
     // 2. Extract from Tasks (Iterate comments for accurate timestamp)
+    // ID Format: task|{taskId}|{commentId}
     tasks.forEach(task => {
       if (task.comments && task.comments.length > 0) {
-        task.comments.forEach((comment, cIdx) => {
+        task.comments.forEach((comment) => {
              const foundUrls = comment.content.match(urlRegex);
              if (foundUrls) {
                  foundUrls.forEach((url, uIdx) => {
@@ -79,7 +81,7 @@ const Files: React.FC<FilesProps> = ({ tasks, messages, fileLinks = [], currentU
                      const dateStr = !isNaN(dateObj.getTime()) ? dateObj.toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
 
                      files.push({
-                        id: `task-${task.id}-${cIdx}-${uIdx}`,
+                        id: `task|${task.id}|${comment.id}`,
                         name: url,
                         url: url,
                         source: `Tâche: ${task.title}`,
@@ -94,6 +96,7 @@ const Files: React.FC<FilesProps> = ({ tasks, messages, fileLinks = [], currentU
     });
 
     // 3. Extract from Messages (Use fullTimestamp)
+    // ID Format: chat|{msgId}|{filename}
     messages.forEach(msg => {
       if (msg.attachments && msg.attachments.length > 0) {
         msg.attachments.forEach((fileName, idx) => {
@@ -101,7 +104,7 @@ const Files: React.FC<FilesProps> = ({ tasks, messages, fileLinks = [], currentU
           const dateStr = !isNaN(dateObj.getTime()) ? dateObj.toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
           
           files.push({
-            id: `msg-${msg.id}-${idx}`,
+            id: `chat|${msg.id}|${fileName}`,
             name: fileName,
             source: `Chat`,
             sourceType: 'chat',
@@ -256,8 +259,8 @@ const Files: React.FC<FilesProps> = ({ tasks, messages, fileLinks = [], currentU
                             </button>
                         ) : null}
                         
-                        {/* Delete Button - Only for Library Files (sourceType === 'drive') */}
-                        {file.sourceType === 'drive' && onDeleteFileLink && (
+                        {/* Delete Button for ALL files if permission granted */}
+                        {onDeleteFileLink && canAccess && (
                             <button 
                                 onClick={() => handleDeleteClick(file.id, file.name)}
                                 className="text-slate-400 hover:text-red-500 p-2 hover:bg-red-50 rounded-full transition-colors"

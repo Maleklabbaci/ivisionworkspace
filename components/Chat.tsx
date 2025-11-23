@@ -1,8 +1,6 @@
 
 
-
-
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Send, Paperclip, Smile, Hash, Lock, Search, Bell, MessageSquare, File as FileIcon, Image, Menu, X, Plus, Check, Trash2, AtSign, Eye, Download, Circle } from 'lucide-react';
 import { Message, User, Channel, UserRole } from '../types';
 
@@ -18,6 +16,71 @@ interface ChatProps {
   onDeleteChannel: (channelId: string) => void;
   onReadChannel?: (channelId: string) => void;
 }
+
+// Memoized Chat Message Component for Performance
+const ChatMessage = React.memo(({ msg, isMe, sender, isSequence, isNew, showSeparator }: {
+    msg: Message, isMe: boolean, sender?: User, isSequence: boolean, isNew: boolean, showSeparator: boolean
+}) => {
+    const formatMessageContent = (content: string) => {
+        const parts = content.split(/(@\w+)/g);
+        return parts.map((part, index) => {
+            if (part.startsWith('@')) {
+                return <span key={index} className="font-bold text-blue-600 bg-blue-50 rounded px-1 mx-0.5">{part}</span>;
+            }
+            return part;
+        });
+    };
+
+    return (
+        <React.Fragment>
+            {showSeparator && (
+                <div className="flex items-center justify-center my-6 animate-pulse">
+                    <div className="h-px bg-red-200 flex-1"></div>
+                    <span className="px-3 text-xs font-bold text-red-500 uppercase tracking-widest bg-white">-------------- Nouveaux messages --------------</span>
+                    <div className="h-px bg-red-200 flex-1"></div>
+                </div>
+            )}
+            
+            <div className={`flex ${isMe ? 'justify-end' : 'justify-start'} group animate-in fade-in slide-in-from-bottom-2 duration-300`}>
+            <div className={`flex max-w-[85%] md:max-w-[75%] ${isMe ? 'flex-row-reverse space-x-reverse' : 'flex-row space-x-3'}`}>
+                {!isMe && !isSequence && <img src={sender?.avatar} className="w-8 h-8 rounded-full mt-1 flex-shrink-0" title={sender?.name} />}
+                {!isMe && isSequence && <div className="w-8 flex-shrink-0" />}
+
+                <div>
+                    {!isMe && !isSequence && (
+                        <div className="flex items-center mb-1 ml-1 space-x-2">
+                            <p className="text-xs text-slate-500">{sender?.name}</p>
+                            {isNew && <span className="text-[10px] bg-green-100 text-green-700 px-1.5 rounded font-bold">NOUVEAU</span>}
+                        </div>
+                    )}
+                    <div className={`p-3.5 rounded-2xl text-sm leading-relaxed shadow-sm relative ${isMe ? 'bg-primary text-white rounded-tr-none' : 'bg-slate-50 text-slate-800 border border-slate-200 rounded-tl-none'}`}>
+                        {formatMessageContent(msg.content)}
+                        
+                        {/* Attachments Display */}
+                        {msg.attachments && msg.attachments.length > 0 && (
+                            <div className={`mt-3 pt-2 border-t ${isMe ? 'border-white/20' : 'border-slate-200'} flex flex-col space-y-2`}>
+                                {msg.attachments.map((file, fIdx) => (
+                                    <div key={fIdx} className={`flex items-center justify-between p-2 rounded-lg text-xs ${isMe ? 'bg-black/10 hover:bg-black/20' : 'bg-white border border-slate-100 hover:shadow-sm'} transition-all group/file cursor-pointer`}>
+                                        <div className="flex items-center truncate">
+                                            <FileIcon size={14} className="mr-2 opacity-70 flex-shrink-0" />
+                                            <span className="truncate font-medium">{file}</span>
+                                        </div>
+                                        <div className="flex items-center opacity-0 group-hover/file:opacity-100 transition-opacity">
+                                            <button className="p-1 hover:scale-110"><Eye size={12}/></button>
+                                            <button className="p-1 hover:scale-110 ml-1"><Download size={12}/></button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                    <p className={`text-[10px] mt-1 opacity-0 group-hover:opacity-100 transition-opacity ${isMe ? 'text-right text-slate-300' : 'text-slate-300'}`}>{msg.timestamp}</p>
+                </div>
+            </div>
+            </div>
+        </React.Fragment>
+    );
+});
 
 const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChannelId, messages, onChannelChange, onSendMessage, onAddChannel, onDeleteChannel, onReadChannel }) => {
   const [newMessage, setNewMessage] = useState('');
@@ -42,7 +105,11 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  const activeMessages = messages.filter(m => m.channelId === currentChannelId);
+  // MEMOIZE ACTIVE MESSAGES TO PREVENT RE-CALC ON EVERY KEYSTROKE
+  const activeMessages = useMemo(() => {
+      return messages.filter(m => m.channelId === currentChannelId);
+  }, [messages, currentChannelId]);
+  
   const activeChannel = channels.find(c => c.id === currentChannelId);
 
   // Permission Checks: Admin OR Special Permission 'canManageChannels'
@@ -74,7 +141,7 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
   useEffect(() => {
       // Simple heuristic: always scroll for now
       scrollToBottom();
-  }, [messages]);
+  }, [messages]); // Keep simple for scrolling
 
   const handleSend = () => {
     if (!newMessage.trim() && pendingAttachments.length === 0) return;
@@ -156,16 +223,6 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
       setPendingAttachments(prev => prev.filter((_, i) => i !== index));
   };
 
-  const formatMessageContent = (content: string) => {
-      const parts = content.split(/(@\w+)/g);
-      return parts.map((part, index) => {
-          if (part.startsWith('@')) {
-              return <span key={index} className="font-bold text-blue-600 bg-blue-50 rounded px-1 mx-0.5">{part}</span>;
-          }
-          return part;
-      });
-  };
-
   const handleChannelSelect = (id: string) => {
       onChannelChange(id);
       setShowMobileSidebar(false);
@@ -201,15 +258,20 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
       }
   };
 
-  const filteredUsersForMention = users.filter(u => 
+  const filteredUsersForMention = useMemo(() => users.filter(u => 
       u.name.toLowerCase().replace(/\s+/g, '').includes(mentionQuery.toLowerCase())
-  );
+  ), [users, mentionQuery]);
 
   // Helper to check if message is "New" (newer than last read time)
   const isMessageNew = (msg: Message) => {
       if (msg.userId === currentUser.id) return false;
       return new Date(msg.fullTimestamp) > new Date(lastReadTime);
   };
+  
+  // Find index of first new message for separator
+  const firstNewMessageIndex = useMemo(() => {
+      return activeMessages.findIndex(m => isMessageNew(m));
+  }, [activeMessages, lastReadTime]);
 
   const ChannelList = () => (
     <>
@@ -254,7 +316,7 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
             </div>
         </div>
 
-        {/* Global Channels: Admin or Permission required to delete. Visible to all? Yes. */}
+        {/* Global Channels */}
         <div className="mt-6">
             <h3 className="text-xs font-bold text-slate-400 uppercase mb-2 px-2 tracking-wider">Global</h3>
             <div className="space-y-1">
@@ -294,10 +356,6 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
         </div>
     </>
   );
-
-  // Determine where to insert "New Messages" separator
-  // We find the index of the first message that is NEW
-  const firstNewMessageIndex = activeMessages.findIndex(m => isMessageNew(m));
 
   return (
     <div className="flex flex-col md:flex-row h-[calc(100vh-100px)] bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden relative">
@@ -366,54 +424,16 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
                     const showSeparator = idx === firstNewMessageIndex && isNew;
 
                     return (
-                        <React.Fragment key={msg.id}>
-                            {showSeparator && (
-                                <div className="flex items-center justify-center my-6 animate-pulse">
-                                    <div className="h-px bg-red-200 flex-1"></div>
-                                    <span className="px-3 text-xs font-bold text-red-500 uppercase tracking-widest bg-white">-------------- Nouveaux messages --------------</span>
-                                    <div className="h-px bg-red-200 flex-1"></div>
-                                </div>
-                            )}
-                            
-                            <div className={`flex ${isMe ? 'justify-end' : 'justify-start'} group animate-in fade-in slide-in-from-bottom-2 duration-300`}>
-                            <div className={`flex max-w-[85%] md:max-w-[75%] ${isMe ? 'flex-row-reverse space-x-reverse' : 'flex-row space-x-3'}`}>
-                                {!isMe && !isSequence && <img src={sender?.avatar} className="w-8 h-8 rounded-full mt-1 flex-shrink-0" title={sender?.name} />}
-                                {!isMe && isSequence && <div className="w-8 flex-shrink-0" />}
-
-                                <div>
-                                    {!isMe && !isSequence && (
-                                        <div className="flex items-center mb-1 ml-1 space-x-2">
-                                            <p className="text-xs text-slate-500">{sender?.name}</p>
-                                            {isNew && <span className="text-[10px] bg-green-100 text-green-700 px-1.5 rounded font-bold">NOUVEAU</span>}
-                                        </div>
-                                    )}
-                                    <div className={`p-3.5 rounded-2xl text-sm leading-relaxed shadow-sm relative ${isMe ? 'bg-primary text-white rounded-tr-none' : 'bg-slate-50 text-slate-800 border border-slate-200 rounded-tl-none'}`}>
-                                        {formatMessageContent(msg.content)}
-                                        
-                                        {/* Attachments Display */}
-                                        {msg.attachments && msg.attachments.length > 0 && (
-                                            <div className={`mt-3 pt-2 border-t ${isMe ? 'border-white/20' : 'border-slate-200'} flex flex-col space-y-2`}>
-                                                {msg.attachments.map((file, fIdx) => (
-                                                    <div key={fIdx} className={`flex items-center justify-between p-2 rounded-lg text-xs ${isMe ? 'bg-black/10 hover:bg-black/20' : 'bg-white border border-slate-100 hover:shadow-sm'} transition-all group/file cursor-pointer`}>
-                                                        <div className="flex items-center truncate">
-                                                            <FileIcon size={14} className="mr-2 opacity-70 flex-shrink-0" />
-                                                            <span className="truncate font-medium">{file}</span>
-                                                        </div>
-                                                        <div className="flex items-center opacity-0 group-hover/file:opacity-100 transition-opacity">
-                                                            <button className="p-1 hover:scale-110"><Eye size={12}/></button>
-                                                            <button className="p-1 hover:scale-110 ml-1"><Download size={12}/></button>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-                                    <p className={`text-[10px] mt-1 opacity-0 group-hover:opacity-100 transition-opacity ${isMe ? 'text-right text-slate-300' : 'text-slate-300'}`}>{msg.timestamp}</p>
-                                </div>
-                            </div>
-                            </div>
-                        </React.Fragment>
-                    )
+                        <ChatMessage 
+                           key={msg.id}
+                           msg={msg}
+                           isMe={isMe}
+                           sender={sender}
+                           isSequence={isSequence}
+                           isNew={isNew}
+                           showSeparator={showSeparator}
+                        />
+                    );
                 })
             )}
             <div ref={messagesEndRef} />

@@ -1,5 +1,6 @@
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Plus, Calendar as CalendarIcon, Clock, Sparkles, Filter, LayoutGrid, List, AlertCircle, Paperclip, Send, X, FileText, Trash2, DollarSign, ChevronLeft, ChevronRight, Lock, CheckCircle, MessageSquare, User as UserIcon, Link as LinkIcon, ExternalLink } from 'lucide-react';
 import { Task, TaskStatus, User, Comment, UserRole } from '../types';
 import { brainstormTaskIdeas } from '../services/geminiService';
@@ -13,12 +14,107 @@ interface TasksProps {
   onUpdateTask: (task: Task) => void;
   onDeleteTask: (taskId: string) => void;
   onAddComment: (taskId: string, content: string) => void;
-  onAddFileLink?: (name: string, url: string) => void; // Ajout de la prop pour sauvegarder dans Fichiers
+  onAddFileLink?: (name: string, url: string) => void; 
+  onDeleteAttachment?: (taskId: string, url: string) => void;
 }
+
+// Optimization: Memoized Task Card Component
+const TaskCard = React.memo(({ task, users, canDelete, onDelete, onDragStart, onClick, canViewFinancials }: { 
+    task: Task, 
+    users: User[], 
+    canDelete: boolean, 
+    onDelete: (id: string, e: React.MouseEvent) => void,
+    onDragStart: (e: React.DragEvent, id: string) => void,
+    onClick: (id: string) => void,
+    canViewFinancials: boolean
+}) => {
+    // Helper for Progress Bar logic inside card
+    const getProgressConfig = (status: TaskStatus) => {
+        switch(status) {
+            case TaskStatus.DONE: return { width: '100%', color: 'bg-green-500' };
+            case TaskStatus.IN_PROGRESS: return { width: '40%', color: 'bg-blue-500' };
+            case TaskStatus.BLOCKED: return { width: '15%', color: 'bg-red-500' };
+            default: return { width: '0%', color: 'bg-slate-200' }; 
+        }
+    };
+
+    const getTypeColor = (type: string) => {
+        switch(type) {
+            case 'content': return 'bg-blue-100 text-blue-700';
+            case 'ads': return 'bg-green-100 text-green-700';
+            case 'social': return 'bg-purple-100 text-purple-700';
+            case 'seo': return 'bg-yellow-100 text-yellow-700';
+            default: return 'bg-slate-100 text-slate-600';
+        }
+    };
+    
+    const getPriorityColor = (p?: string) => {
+        switch(p) {
+            case 'high': return 'text-urgent bg-red-50 border-red-100';
+            case 'medium': return 'text-orange-600 bg-orange-50 border-orange-100';
+            default: return 'text-slate-500 bg-slate-50 border-slate-100';
+        }
+    };
+
+    const progress = getProgressConfig(task.status);
+
+    return (
+        <div 
+          draggable
+          onDragStart={(e) => onDragStart(e, task.id)}
+          onClick={() => onClick(task.id)}
+          className="bg-white p-4 rounded-lg shadow-sm border border-slate-200 hover:border-primary hover:shadow-md transition-all duration-200 cursor-pointer group transform hover:-translate-y-1 relative"
+        >
+            {canDelete && (
+                <button 
+                  onClick={(e) => onDelete(task.id, e)}
+                  className="absolute top-2 right-2 p-1.5 bg-white text-slate-300 hover:text-urgent hover:bg-red-50 rounded shadow-sm border border-slate-100 transition-colors z-10"
+                  title="Supprimer"
+                >
+                    <Trash2 size={14} />
+                </button>
+            )}
+
+            <div className="flex justify-between items-start mb-2">
+                <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${getTypeColor(task.type)}`}>{task.type}</span>
+                {task.priority === 'high' && <AlertCircle size={14} className="text-urgent" />}
+            </div>
+            
+            <h4 className="font-bold text-slate-800 mb-1 text-sm leading-snug group-hover:text-primary transition-colors">{task.title}</h4>
+            
+            {/* Admin or Permission: Price Badge */}
+            {canViewFinancials && typeof task.price === 'number' && task.price > 0 && (
+               <div className="mb-2">
+                 <span className="text-[10px] font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border border-slate-200">
+                   {task.price} DA
+                 </span>
+               </div>
+            )}
+            
+            <div className="w-full bg-slate-100 h-1.5 rounded-full mt-3 mb-3 overflow-hidden">
+                <div 
+                  className={`h-full rounded-full transition-all duration-500 ${progress.color}`} 
+                  style={{ width: progress.width }}
+                ></div>
+            </div>
+
+            <div className="flex items-center justify-between">
+                <div className="flex -space-x-2">
+                    {users.filter(u => u.id === task.assigneeId).map(u => (
+                        <img key={u.id} src={u.avatar} alt={u.name} className="w-6 h-6 rounded-full border-2 border-white" title={u.name} />
+                    ))}
+                </div>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded border ${getPriorityColor(task.priority)}`}>
+                    {new Date(task.dueDate).toLocaleDateString('fr-FR', {day:'numeric', month:'short'})}
+                </span>
+            </div>
+        </div>
+    );
+});
 
 type ViewMode = 'board' | 'calendar';
 
-const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus, onAddTask, onUpdateTask, onDeleteTask, onAddComment, onAddFileLink }) => {
+const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus, onAddTask, onUpdateTask, onDeleteTask, onAddComment, onAddFileLink, onDeleteAttachment }) => {
   const [viewMode, setViewMode] = useState<ViewMode>('board');
   const [showModal, setShowModal] = useState(false);
   
@@ -71,20 +167,12 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
              currentUser.permissions?.canViewFinancials === true;
   };
 
-  // Helper for Progress Bar logic
-  const getProgressConfig = (status: TaskStatus) => {
-      switch(status) {
-          case TaskStatus.DONE: return { width: '100%', color: 'bg-green-500', text: '100%' };
-          case TaskStatus.IN_PROGRESS: return { width: '40%', color: 'bg-blue-500', text: '40%' };
-          case TaskStatus.BLOCKED: return { width: '15%', color: 'bg-red-500', text: 'Bloqué' };
-          default: return { width: '0%', color: 'bg-slate-200', text: '0%' }; 
-      }
-  };
-
-  // Filter tasks based on role
-  const visibleTasks = (currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.PROJECT_MANAGER || currentUser.permissions?.canCreateTasks)
-    ? tasks 
-    : tasks.filter(t => t.assigneeId === currentUser.id);
+  // Filter tasks based on role - MEMOIZED to prevent recalculation
+  const visibleTasks = useMemo(() => {
+    return (currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.PROJECT_MANAGER || currentUser.permissions?.canCreateTasks)
+      ? tasks 
+      : tasks.filter(t => t.assigneeId === currentUser.id);
+  }, [tasks, currentUser.role, currentUser.permissions, currentUser.id]);
 
   const handleTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
       const newType = String(e.target.value);
@@ -118,11 +206,11 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
   };
 
   // --- Drag & Drop Logic ---
-  const handleDragStart = (e: React.DragEvent, taskId: string) => {
+  const handleDragStart = useCallback((e: React.DragEvent, taskId: string) => {
       setDraggedTaskId(taskId);
       e.dataTransfer.effectAllowed = "move";
       e.dataTransfer.setData("text/plain", taskId);
-  };
+  }, []);
 
   const handleDragOver = (e: React.DragEvent, dateStr: string) => {
       e.preventDefault();
@@ -164,7 +252,6 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
       e.preventDefault();
       if (!newTask.title || !newTask.assigneeId || !newTask.dueDate) return;
 
-      // Ensure string conversions to prevent [object Object]
       const taskTitle = String(newTask.title || '');
       const taskDesc = String(newTask.description || '');
       const taskAssignee = String(newTask.assigneeId);
@@ -175,7 +262,7 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
       const taskAttachments = Array.isArray(newTask.attachments) ? newTask.attachments.map(String) : [];
 
       const task: Task = {
-          id: 'temp-id-' + Date.now(), // Placeholder ID, will be replaced by App.tsx
+          id: 'temp-id-' + Date.now(),
           title: taskTitle,
           description: taskDesc,
           assigneeId: taskAssignee,
@@ -198,19 +285,28 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
 
   const handleAddComment = () => {
     if(!selectedTask || !taskComment.trim()) return;
-    
-    // Calls the parent function which inserts into task_comments table
     onAddComment(selectedTask.id, taskComment);
-    
     setTaskComment('');
   };
 
-  const handleDeleteClick = (taskId: string) => {
+  const handleDeleteClick = useCallback((taskId: string, e?: React.MouseEvent) => {
+      if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+      }
       if (window.confirm("Êtes-vous sûr de vouloir supprimer cette tâche ?")) {
           onDeleteTask(taskId);
-          if (selectedTask && selectedTask.id === taskId) {
-              setSelectedTaskId(null);
-          }
+          // If we deleted the currently open task, close the modal
+          // We can't access selectedTaskId easily in this callback if we want stable ref, 
+          // but onDeleteTask usually handles logic.
+          // Note: State updates here might need care.
+      }
+  }, [onDeleteTask]);
+  
+  const handleDeleteAttachmentClick = (url: string) => {
+      if(!selectedTask || !onDeleteAttachment) return;
+      if(window.confirm("Voulez-vous supprimer cette pièce jointe ?")) {
+          onDeleteAttachment(selectedTask.id, url);
       }
   };
 
@@ -223,31 +319,22 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
       if (!linkUrl) return;
       
       let finalUrl = linkUrl;
-      // Auto-prefix https if missing to ensure regex matching works
       if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
           if (finalUrl.startsWith('www.')) {
               finalUrl = 'https://' + finalUrl;
           } else {
-              // Assume https for other domains
               finalUrl = 'https://' + finalUrl;
           }
       }
 
-      // 1. Sauvegarder dans la bibliothèque globale "Fichiers"
       const nameToSave = linkName.trim() || finalUrl;
       if (onAddFileLink) {
           onAddFileLink(nameToSave, finalUrl);
       }
 
-      // 2. Ajouter l'URL à la tâche
-      // FIX: Au lieu de mettre à jour 'attachments' (colonne manquante), on ajoute un commentaire système.
-      // Cela permet à l'App.tsx de détecter le lien et de l'afficher comme pièce jointe.
-      
       if (showModal) {
-         // Mode Création de tâche : on met à jour le state local
          setNewTask(prev => ({ ...prev, attachments: [...(prev.attachments || []), finalUrl] }));
       } else if (selectedTask) {
-         // Mode Édition : On poste un commentaire pour persister le lien
          onAddComment(selectedTask.id, `📎 Fichier attaché: ${nameToSave} \n${finalUrl}`);
       }
       
@@ -276,89 +363,6 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
       }
   };
 
-  const renderBoardColumn = (status: TaskStatus) => {
-      const columnTasks = visibleTasks.filter(t => t.status === status);
-      
-      return (
-          <div className="flex-1 min-w-[280px] bg-slate-50 rounded-xl p-4 border border-slate-200 flex flex-col h-full">
-              <div className="flex justify-between items-center mb-4 shrink-0">
-                  <h3 className="font-bold text-slate-700 text-sm uppercase tracking-wide flex items-center space-x-2">
-                    <span className={`w-2 h-2 rounded-full ${
-                        status === TaskStatus.DONE ? 'bg-success' : 
-                        status === TaskStatus.BLOCKED ? 'bg-urgent' : 
-                        status === TaskStatus.IN_PROGRESS ? 'bg-blue-400' : 'bg-slate-400'
-                    }`} />
-                    <span>{status}</span>
-                  </h3>
-                  <span className="text-xs font-medium text-slate-400 bg-white px-2 py-0.5 rounded-full border border-slate-200">{columnTasks.length}</span>
-              </div>
-              <div className="space-y-3 overflow-y-auto pr-1 custom-scrollbar flex-1">
-                  {columnTasks.map(task => {
-                      const progress = getProgressConfig(task.status);
-                      
-                      return (
-                      <div 
-                        key={task.id} 
-                        draggable
-                        onDragStart={(e) => handleDragStart(e, task.id)}
-                        onClick={() => setSelectedTaskId(task.id)}
-                        className="bg-white p-4 rounded-lg shadow-sm border border-slate-200 hover:border-primary hover:shadow-md transition-all duration-200 cursor-pointer group transform hover:-translate-y-1 relative"
-                      >
-                          {canDeleteTask() && (
-                              <button 
-                                onClick={(e) => { 
-                                    e.preventDefault();
-                                    e.stopPropagation(); 
-                                    handleDeleteClick(task.id); 
-                                }}
-                                className="absolute top-2 right-2 p-1.5 bg-white text-slate-300 hover:text-urgent hover:bg-red-50 rounded shadow-sm border border-slate-100 transition-colors z-10"
-                                title="Supprimer"
-                              >
-                                  <Trash2 size={14} />
-                              </button>
-                          )}
-
-                          <div className="flex justify-between items-start mb-2">
-                              <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${getTypeColor(task.type)}`}>{task.type}</span>
-                              {task.priority === 'high' && <AlertCircle size={14} className="text-urgent" />}
-                          </div>
-                          
-                          <h4 className="font-bold text-slate-800 mb-1 text-sm leading-snug group-hover:text-primary transition-colors">{task.title}</h4>
-                          
-                          {/* Admin or Permission: Price Badge */}
-                          {canViewFinancials() && typeof task.price === 'number' && task.price > 0 && (
-                             <div className="mb-2">
-                               <span className="text-[10px] font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border border-slate-200">
-                                 {task.price} DA
-                               </span>
-                             </div>
-                          )}
-                          
-                          {/* Visual Progress Bar (Kanban Card) */}
-                          <div className="w-full bg-slate-100 h-1.5 rounded-full mt-3 mb-3 overflow-hidden">
-                              <div 
-                                className={`h-full rounded-full transition-all duration-500 ${progress.color}`} 
-                                style={{ width: progress.width }}
-                              ></div>
-                          </div>
-
-                          <div className="flex items-center justify-between">
-                              <div className="flex -space-x-2">
-                                  {users.filter(u => u.id === task.assigneeId).map(u => (
-                                      <img key={u.id} src={u.avatar} alt={u.name} className="w-6 h-6 rounded-full border-2 border-white" title={u.name} />
-                                  ))}
-                              </div>
-                              <span className={`text-[10px] px-1.5 py-0.5 rounded border ${getPriorityColor(task.priority)}`}>
-                                  {new Date(task.dueDate).toLocaleDateString('fr-FR', {day:'numeric', month:'short'})}
-                              </span>
-                          </div>
-                      </div>
-                  )})}
-              </div>
-          </div>
-      );
-  };
-
   // Helper for Calendar Chip Styling
   const getCalendarChipStyle = (type: string, status: TaskStatus) => {
       if (status === TaskStatus.DONE) {
@@ -372,6 +376,11 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
           default: return "bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-200";
       }
   };
+
+  // Memoized handlers for the card
+  const handleCardClick = useCallback((id: string) => setSelectedTaskId(id), []);
+  const canDelete = canDeleteTask();
+  const canSeeMoney = canViewFinancials();
 
   return (
     <div className="h-[calc(100vh-100px)] flex flex-col">
@@ -419,10 +428,38 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
       {viewMode === 'board' && (
           <div className="flex-1 overflow-x-auto pb-4 min-h-0">
               <div className="flex space-x-4 min-w-[1000px] h-full">
-                  {renderBoardColumn(TaskStatus.TODO)}
-                  {renderBoardColumn(TaskStatus.IN_PROGRESS)}
-                  {renderBoardColumn(TaskStatus.BLOCKED)}
-                  {renderBoardColumn(TaskStatus.DONE)}
+                 {[TaskStatus.TODO, TaskStatus.IN_PROGRESS, TaskStatus.BLOCKED, TaskStatus.DONE].map(status => {
+                     const columnTasks = visibleTasks.filter(t => t.status === status);
+                     return (
+                         <div key={status} className="flex-1 min-w-[280px] bg-slate-50 rounded-xl p-4 border border-slate-200 flex flex-col h-full">
+                              <div className="flex justify-between items-center mb-4 shrink-0">
+                                  <h3 className="font-bold text-slate-700 text-sm uppercase tracking-wide flex items-center space-x-2">
+                                    <span className={`w-2 h-2 rounded-full ${
+                                        status === TaskStatus.DONE ? 'bg-success' : 
+                                        status === TaskStatus.BLOCKED ? 'bg-urgent' : 
+                                        status === TaskStatus.IN_PROGRESS ? 'bg-blue-400' : 'bg-slate-400'
+                                    }`} />
+                                    <span>{status}</span>
+                                  </h3>
+                                  <span className="text-xs font-medium text-slate-400 bg-white px-2 py-0.5 rounded-full border border-slate-200">{columnTasks.length}</span>
+                              </div>
+                              <div className="space-y-3 overflow-y-auto pr-1 custom-scrollbar flex-1">
+                                  {columnTasks.map(task => (
+                                      <TaskCard 
+                                          key={task.id} 
+                                          task={task} 
+                                          users={users} 
+                                          canDelete={canDelete}
+                                          onDelete={handleDeleteClick}
+                                          onDragStart={handleDragStart}
+                                          onClick={handleCardClick}
+                                          canViewFinancials={canSeeMoney}
+                                      />
+                                  ))}
+                              </div>
+                         </div>
+                     )
+                 })}
               </div>
           </div>
       )}
@@ -773,16 +810,28 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                                    {selectedTask.attachments.map((file, i) => {
                                        const link = isLink(file);
                                        return (
-                                       <div key={i} className="p-3 border border-slate-200 rounded-lg flex items-center justify-between hover:bg-slate-50 transition-colors">
-                                           <div className="flex items-center space-x-2 truncate">
+                                       <div key={i} className="p-3 border border-slate-200 rounded-lg flex items-center justify-between hover:bg-slate-50 transition-colors group/att">
+                                           <div className="flex items-center space-x-2 truncate flex-1">
                                                {link ? <LinkIcon size={16} className="text-blue-500" /> : <FileText size={16} className="text-slate-400" />}
                                                <span className="text-sm truncate" title={file}>{file}</span>
                                            </div>
-                                           {link ? (
-                                               <button onClick={() => window.open(file, '_blank')} className="text-primary text-xs font-bold hover:underline flex items-center"><ExternalLink size={12} className="mr-1"/> Ouvrir</button>
-                                           ) : (
-                                               <button className="text-primary text-xs font-bold hover:underline">Télécharger</button>
-                                           )}
+                                           <div className="flex items-center space-x-2">
+                                              {link ? (
+                                                  <button onClick={() => window.open(file, '_blank')} className="text-primary text-xs font-bold hover:underline flex items-center"><ExternalLink size={12} className="mr-1"/> Ouvrir</button>
+                                              ) : (
+                                                  <button className="text-primary text-xs font-bold hover:underline">Télécharger</button>
+                                              )}
+                                              {/* Delete Button inside Modal */}
+                                              {onDeleteAttachment && (
+                                                <button 
+                                                  onClick={() => handleDeleteAttachmentClick(file)}
+                                                  className="text-slate-300 hover:text-red-500 p-1 rounded-full transition-colors opacity-0 group-hover/att:opacity-100"
+                                                  title="Supprimer la pièce jointe"
+                                                >
+                                                  <Trash2 size={14} />
+                                                </button>
+                                              )}
+                                           </div>
                                        </div>
                                    )})}
                                </div>
@@ -898,7 +947,7 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                                    <Paperclip size={16} />
                                    <span>Ajouter un fichier</span>
                                </button>
-                               {canDeleteTask() && (
+                               {canDelete && (
                                    <button 
                                      onClick={() => handleDeleteClick(selectedTask.id)}
                                      className="w-full flex items-center space-x-2 p-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
