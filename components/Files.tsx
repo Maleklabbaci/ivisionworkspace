@@ -1,6 +1,7 @@
 
+
 import React, { useState, useMemo } from 'react';
-import { FileText, Image, Archive, Search, ExternalLink, Link as LinkIcon, Plus, X, FolderOpen, Lock } from 'lucide-react';
+import { FileText, Image, Archive, Search, ExternalLink, Link as LinkIcon, Plus, X, FolderOpen, Lock, Trash2 } from 'lucide-react';
 import { Task, Message, User, UserRole, FileLink } from '../types';
 
 interface FilesProps {
@@ -9,6 +10,7 @@ interface FilesProps {
   fileLinks?: FileLink[]; // Nouveaux liens stockés en DB
   currentUser: User;
   onAddFileLink?: (name: string, url: string) => void;
+  onDeleteFileLink?: (id: string) => void;
 }
 
 interface FileItem {
@@ -21,7 +23,7 @@ interface FileItem {
   type: 'pdf' | 'image' | 'archive' | 'link' | 'other';
 }
 
-const Files: React.FC<FilesProps> = ({ tasks, messages, fileLinks = [], currentUser, onAddFileLink }) => {
+const Files: React.FC<FilesProps> = ({ tasks, messages, fileLinks = [], currentUser, onAddFileLink, onDeleteFileLink }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'pdf' | 'image' | 'link'>('all');
   
@@ -50,8 +52,9 @@ const Files: React.FC<FilesProps> = ({ tasks, messages, fileLinks = [], currentU
   // Aggregate files from tasks, messages, and manual links
   const allFiles: FileItem[] = useMemo(() => {
     const files: FileItem[] = [];
+    const urlRegex = /((https?:\/\/)|(www\.))[^\s]+/g;
 
-    // 1. Manual File Links (Google Drive, etc.)
+    // 1. Manual File Links (Google Drive, etc.) - From Library
     fileLinks.forEach(link => {
         files.push({
             id: `link-${link.id}`,
@@ -64,32 +67,45 @@ const Files: React.FC<FilesProps> = ({ tasks, messages, fileLinks = [], currentU
         });
     });
 
-    // 2. Extract from Tasks
+    // 2. Extract from Tasks (Iterate comments for accurate timestamp)
     tasks.forEach(task => {
-      if (task.attachments && task.attachments.length > 0) {
-        task.attachments.forEach((fileName, idx) => {
-          files.push({
-            id: `task-${task.id}-${idx}`,
-            name: fileName,
-            source: `Tâche: ${task.title}`,
-            sourceType: 'task',
-            date: task.dueDate, 
-            type: getFileType(fileName)
-          });
+      if (task.comments && task.comments.length > 0) {
+        task.comments.forEach((comment, cIdx) => {
+             const foundUrls = comment.content.match(urlRegex);
+             if (foundUrls) {
+                 foundUrls.forEach((url, uIdx) => {
+                     // Try to parse exact date from fullTimestamp if available, else current date
+                     const dateObj = comment.fullTimestamp ? new Date(comment.fullTimestamp) : new Date();
+                     const dateStr = !isNaN(dateObj.getTime()) ? dateObj.toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+
+                     files.push({
+                        id: `task-${task.id}-${cIdx}-${uIdx}`,
+                        name: url,
+                        url: url,
+                        source: `Tâche: ${task.title}`,
+                        sourceType: 'task',
+                        date: dateStr,
+                        type: getFileType(url)
+                     });
+                 });
+             }
         });
       }
     });
 
-    // 3. Extract from Messages
+    // 3. Extract from Messages (Use fullTimestamp)
     messages.forEach(msg => {
       if (msg.attachments && msg.attachments.length > 0) {
         msg.attachments.forEach((fileName, idx) => {
+          const dateObj = new Date(msg.fullTimestamp);
+          const dateStr = !isNaN(dateObj.getTime()) ? dateObj.toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+          
           files.push({
             id: `msg-${msg.id}-${idx}`,
             name: fileName,
             source: `Chat`,
             sourceType: 'chat',
-            date: new Date().toISOString().split('T')[0], 
+            date: dateStr,
             type: getFileType(fileName)
           });
         });
@@ -133,6 +149,12 @@ const Files: React.FC<FilesProps> = ({ tasks, messages, fileLinks = [], currentU
           setShowAddModal(false);
           setNewFileName('');
           setNewFileUrl('');
+      }
+  };
+
+  const handleDeleteClick = (id: string, name: string) => {
+      if (window.confirm(`Êtes-vous sûr de vouloir supprimer le fichier "${name}" ?`)) {
+          if (onDeleteFileLink) onDeleteFileLink(id);
       }
   };
 
@@ -197,7 +219,7 @@ const Files: React.FC<FilesProps> = ({ tasks, messages, fileLinks = [], currentU
                   <th className="px-6 py-4">Nom</th>
                   <th className="px-6 py-4">Source</th>
                   <th className="px-6 py-4 hidden sm:table-cell">Type</th>
-                  <th className="px-6 py-4 hidden sm:table-cell">Date</th>
+                  <th className="px-6 py-4 hidden sm:table-cell">Date d'ajout</th>
                   <th className="px-6 py-4 text-right">Action</th>
                 </tr>
               </thead>
@@ -223,17 +245,28 @@ const Files: React.FC<FilesProps> = ({ tasks, messages, fileLinks = [], currentU
                     <td className="px-6 py-4 hidden sm:table-cell uppercase text-xs font-bold tracking-wider text-slate-400">{file.type}</td>
                     <td className="px-6 py-4 hidden sm:table-cell text-slate-400">{file.date}</td>
                     <td className="px-6 py-4 text-right">
-                      {file.type === 'link' || file.url ? (
-                          <button 
-                            onClick={() => openLink(file.url)}
-                            className="text-primary hover:text-blue-700 p-2 hover:bg-blue-50 rounded-full transition-colors flex items-center justify-end ml-auto"
-                            title="Ouvrir le lien"
-                          >
-                            <ExternalLink size={18} />
-                          </button>
-                      ) : (
-                          <span className="text-xs text-slate-400">Local</span>
-                      )}
+                      <div className="flex items-center justify-end space-x-2">
+                        {file.type === 'link' || file.url ? (
+                            <button 
+                                onClick={() => openLink(file.url)}
+                                className="text-primary hover:text-blue-700 p-2 hover:bg-blue-50 rounded-full transition-colors"
+                                title="Ouvrir le lien"
+                            >
+                                <ExternalLink size={18} />
+                            </button>
+                        ) : null}
+                        
+                        {/* Delete Button - Only for Library Files (sourceType === 'drive') */}
+                        {file.sourceType === 'drive' && onDeleteFileLink && (
+                            <button 
+                                onClick={() => handleDeleteClick(file.id, file.name)}
+                                className="text-slate-400 hover:text-red-500 p-2 hover:bg-red-50 rounded-full transition-colors"
+                                title="Supprimer"
+                            >
+                                <Trash2 size={18} />
+                            </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

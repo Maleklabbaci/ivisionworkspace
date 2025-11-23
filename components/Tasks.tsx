@@ -13,11 +13,12 @@ interface TasksProps {
   onUpdateTask: (task: Task) => void;
   onDeleteTask: (taskId: string) => void;
   onAddComment: (taskId: string, content: string) => void;
+  onAddFileLink?: (name: string, url: string) => void; // Ajout de la prop pour sauvegarder dans Fichiers
 }
 
 type ViewMode = 'board' | 'calendar';
 
-const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus, onAddTask, onUpdateTask, onDeleteTask, onAddComment }) => {
+const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus, onAddTask, onUpdateTask, onDeleteTask, onAddComment, onAddFileLink }) => {
   const [viewMode, setViewMode] = useState<ViewMode>('board');
   const [showModal, setShowModal] = useState(false);
   
@@ -205,7 +206,7 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
   };
 
   const handleDeleteClick = (taskId: string) => {
-      if (window.confirm("Êtes-vous sûr de vouloir supprimer cette tâche définitivement ?")) {
+      if (window.confirm("Êtes-vous sûr de vouloir supprimer cette tâche ?")) {
           onDeleteTask(taskId);
           if (selectedTask && selectedTask.id === taskId) {
               setSelectedTaskId(null);
@@ -220,21 +221,34 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
   const handleSaveLink = (e: React.FormEvent) => {
       e.preventDefault();
       if (!linkUrl) return;
+      
+      let finalUrl = linkUrl;
+      // Auto-prefix https if missing to ensure regex matching works
+      if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
+          if (finalUrl.startsWith('www.')) {
+              finalUrl = 'https://' + finalUrl;
+          } else {
+              // Assume https for other domains
+              finalUrl = 'https://' + finalUrl;
+          }
+      }
 
-      // We store just the URL for now as attachments is string[].
-      // In the future, we could store JSON string for name+url
-      const fileToAdd = linkUrl; 
+      // 1. Sauvegarder dans la bibliothèque globale "Fichiers"
+      const nameToSave = linkName.trim() || finalUrl;
+      if (onAddFileLink) {
+          onAddFileLink(nameToSave, finalUrl);
+      }
+
+      // 2. Ajouter l'URL à la tâche
+      // FIX: Au lieu de mettre à jour 'attachments' (colonne manquante), on ajoute un commentaire système.
+      // Cela permet à l'App.tsx de détecter le lien et de l'afficher comme pièce jointe.
       
       if (showModal) {
-         // Create Mode
-         setNewTask(prev => ({ ...prev, attachments: [...(prev.attachments || []), fileToAdd] }));
+         // Mode Création de tâche : on met à jour le state local
+         setNewTask(prev => ({ ...prev, attachments: [...(prev.attachments || []), finalUrl] }));
       } else if (selectedTask) {
-         // Edit Mode
-         const updatedTask = {
-             ...selectedTask,
-             attachments: [...(selectedTask.attachments || []), fileToAdd]
-         };
-         onUpdateTask(updatedTask);
+         // Mode Édition : On poste un commentaire pour persister le lien
+         onAddComment(selectedTask.id, `📎 Fichier attaché: ${nameToSave} \n${finalUrl}`);
       }
       
       setShowLinkModal(false);
@@ -792,7 +806,7 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                                                        <span className="font-bold text-sm text-slate-900">{user?.name}</span>
                                                        <span className="text-xs text-slate-400">{comment.timestamp}</span>
                                                    </div>
-                                                   <p className="text-sm text-slate-700">{comment.content}</p>
+                                                   <p className="text-sm text-slate-700 whitespace-pre-line">{comment.content}</p>
                                                </div>
                                            </div>
                                        );

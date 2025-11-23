@@ -51,6 +51,7 @@ export interface Comment {
   userId: string;
   content: string;
   timestamp: string;
+  fullTimestamp?: string; // Ajout pour la date exacte
   attachments?: string[];
 }
 
