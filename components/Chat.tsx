@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Send, Paperclip, Smile, Hash, Lock, Search, Bell, MessageSquare, File as FileIcon, Image, Menu, X, Plus, Check, Trash2, AtSign, Eye, Download, Circle } from 'lucide-react';
 import { Message, User, Channel, UserRole } from '../types';
@@ -10,12 +8,30 @@ interface ChatProps {
   channels: Channel[];
   currentChannelId: string;
   messages: Message[];
+  onlineUserIds: Set<string>;
   onChannelChange: (channelId: string) => void;
   onSendMessage: (text: string, channelId: string, attachments?: string[]) => void;
   onAddChannel: (channel: { name: string; type: 'global' | 'project'; members?: string[] }) => void;
   onDeleteChannel: (channelId: string) => void;
   onReadChannel?: (channelId: string) => void;
 }
+
+// Fonction utilitaire pour formater le temps depuis la dernière connexion
+const formatLastSeen = (lastSeen?: string) => {
+    if (!lastSeen) return "Hors ligne";
+    
+    const date = new Date(lastSeen);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMins < 1) return "En ligne"; // Juste au cas où
+    if (diffMins < 60) return `Il y a ${diffMins} min`;
+    if (diffHours < 24) return `Il y a ${diffHours} h`;
+    return `Il y a ${diffDays} j`;
+};
 
 // Memoized Chat Message Component for Performance
 const ChatMessage = React.memo(({ msg, isMe, sender, isSequence, isNew, showSeparator }: {
@@ -82,7 +98,7 @@ const ChatMessage = React.memo(({ msg, isMe, sender, isSequence, isNew, showSepa
     );
 });
 
-const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChannelId, messages, onChannelChange, onSendMessage, onAddChannel, onDeleteChannel, onReadChannel }) => {
+const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChannelId, messages, onlineUserIds, onChannelChange, onSendMessage, onAddChannel, onDeleteChannel, onReadChannel }) => {
   const [newMessage, setNewMessage] = useState('');
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   const [showAddChannelModal, setShowAddChannelModal] = useState(false);
@@ -292,19 +308,20 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
                                 isActive 
                                 ? 'bg-white text-primary shadow-sm font-medium border border-slate-100 translate-x-1' 
                                 : isUnread
-                                    ? 'text-slate-900 bg-white/50 font-bold hover:bg-white/80'
-                                    : 'text-slate-600 hover:bg-white/60 hover:translate-x-1'
+                                    ? 'text-slate-900 bg-white/50 font-bold border border-transparent' // Highlight row a bit
+                                    : 'text-slate-600 hover:bg-white/60 hover:translate-x-1 border border-transparent'
                             }`}
                         >
                             <div className="flex items-center truncate">
-                                <Lock size={14} className={`mr-2 flex-shrink-0 ${isUnread ? 'text-primary' : 'opacity-50'}`} />
-                                <span className="truncate">{channel.name}</span>
+                                <Lock size={14} className={`mr-2 flex-shrink-0 ${isUnread ? 'text-orange-500' : 'opacity-50'}`} />
+                                <span className={`truncate ${isUnread ? 'text-orange-900 font-extrabold' : ''}`}>{channel.name}</span>
                             </div>
                             <div className="flex items-center">
                                 {isUnread && (
-                                    <span className="bg-urgent text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-2 flex-shrink-0 animate-pulse shadow-sm">
+                                    // CHANGEMENT: Indicateur plus visuel (point/nombre orange vif)
+                                    <div className="flex items-center justify-center bg-orange-500 text-white text-[10px] font-bold min-w-[20px] h-5 rounded-full ml-2 px-1 shadow-sm animate-in zoom-in duration-300">
                                         {channel.unread}
-                                    </span>
+                                    </div>
                                 )}
                                 {canManageChannels && (
                                     <div onClick={(e) => handleDeleteClick(e, channel.id)} className="ml-2 p-1 text-slate-300 hover:text-urgent hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-opacity" title="Supprimer"><Trash2 size={12} /></div>
@@ -331,19 +348,20 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
                                 isActive 
                                 ? 'bg-white text-primary shadow-sm font-medium border border-slate-100 translate-x-1' 
                                 : isUnread
-                                    ? 'text-slate-900 bg-white/50 font-bold hover:bg-white/80'
-                                    : 'text-slate-600 hover:bg-white/60 hover:translate-x-1'
+                                    ? 'text-slate-900 bg-white/50 font-bold border border-transparent'
+                                    : 'text-slate-600 hover:bg-white/60 hover:translate-x-1 border border-transparent'
                             }`}
                         >
                             <div className="flex items-center">
-                                <Hash size={14} className={`mr-2 ${isUnread ? 'text-primary' : 'opacity-50'}`} />
-                                <span>{channel.name}</span>
+                                <Hash size={14} className={`mr-2 ${isUnread ? 'text-orange-500' : 'opacity-50'}`} />
+                                <span className={isUnread ? 'text-orange-900 font-extrabold' : ''}>{channel.name}</span>
                             </div>
                             <div className="flex items-center">
                                 {isUnread && (
-                                    <span className="bg-urgent text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-2 flex-shrink-0 animate-pulse shadow-sm">
+                                    // CHANGEMENT: Indicateur plus visuel (point/nombre orange vif)
+                                    <div className="flex items-center justify-center bg-orange-500 text-white text-[10px] font-bold min-w-[20px] h-5 rounded-full ml-2 px-1 shadow-sm animate-in zoom-in duration-300">
                                         {channel.unread}
-                                    </span>
+                                    </div>
                                 )}
                                 {canManageChannels && (
                                     <div onClick={(e) => handleDeleteClick(e, channel.id)} className="ml-2 p-1 text-slate-300 hover:text-urgent hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-opacity" title="Supprimer"><Trash2 size={12} /></div>
@@ -398,13 +416,23 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
                 <span className="text-slate-400 mr-3 p-2 bg-slate-50 rounded-full border border-slate-100">{activeChannel?.type === 'project' ? <Lock size={18}/> : <Hash size={18}/>}</span>
                 <div className="overflow-hidden">
                     <h2 className="font-bold text-slate-900 truncate max-w-[150px] sm:max-w-md">{activeChannel?.name}</h2>
-                    <p className="text-xs text-slate-500 flex items-center"><span className="w-1.5 h-1.5 bg-success rounded-full mr-1.5"></span>{users.length} membres</p>
+                    <p className="text-xs text-slate-500 flex items-center">
+                         {onlineUserIds.size > 0 && <span className="w-1.5 h-1.5 bg-success rounded-full mr-1.5"></span>}
+                         {onlineUserIds.size} en ligne / {users.length} membres
+                    </p>
                 </div>
             </div>
             <div className="flex items-center space-x-3">
-                <div className="flex -space-x-2 pl-2">
-                    {users.slice(0,3).map(u => <img key={u.id} src={u.avatar} className="w-8 h-8 rounded-full border-2 border-white" title={u.name} />)}
-                    {users.length > 3 && <div className="w-8 h-8 rounded-full border-2 border-white bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-500">+{users.length - 3}</div>}
+                <div className="flex -space-x-2 pl-2 overflow-hidden max-w-[120px]">
+                    {users.slice(0, 5).map(u => {
+                        const isOnline = onlineUserIds.has(u.id);
+                        return (
+                            <div key={u.id} className="relative group/avatar cursor-pointer">
+                                <img src={u.avatar} className={`w-8 h-8 rounded-full border-2 border-white transition-transform ${isOnline ? 'ring-2 ring-success ring-offset-1' : ''}`} title={u.name} />
+                                {isOnline && <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-success border-2 border-white rounded-full"></span>}
+                            </div>
+                        )
+                    })}
                 </div>
             </div>
         </div>
@@ -444,12 +472,20 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
              <div className="absolute bottom-20 left-4 bg-white rounded-xl shadow-xl border border-slate-200 p-2 z-50 w-64 animate-in slide-in-from-bottom-2">
                  <h4 className="text-xs font-bold text-slate-400 px-2 py-1 uppercase mb-1 flex items-center"><AtSign size={12} className="mr-1"/>Membres</h4>
                  <div className="max-h-48 overflow-y-auto">
-                     {filteredUsersForMention.map(user => (
-                         <button key={user.id} onClick={() => insertMention(user)} className="w-full flex items-center space-x-3 p-2 hover:bg-slate-100 rounded-lg transition-colors text-left">
-                             <img src={user.avatar} className="w-6 h-6 rounded-full" />
-                             <span className="text-sm font-medium text-slate-800">{user.name}</span>
-                         </button>
-                     ))}
+                     {filteredUsersForMention.map(user => {
+                         const isOnline = onlineUserIds.has(user.id);
+                         return (
+                             <button key={user.id} onClick={() => insertMention(user)} className="w-full flex items-center justify-between space-x-3 p-2 hover:bg-slate-100 rounded-lg transition-colors text-left group">
+                                 <div className="flex items-center space-x-2">
+                                     <img src={user.avatar} className="w-6 h-6 rounded-full" />
+                                     <span className="text-sm font-medium text-slate-800">{user.name}</span>
+                                 </div>
+                                 <span className={`text-[10px] ${isOnline ? 'text-success font-bold' : 'text-slate-400'}`}>
+                                     {isOnline ? 'En ligne' : formatLastSeen(user.lastSeen)}
+                                 </span>
+                             </button>
+                         )
+                     })}
                  </div>
              </div>
         )}
@@ -513,12 +549,23 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
                               <div className="animate-in slide-in-from-top-2">
                                   <label className="block text-sm font-medium text-slate-700 mb-2">Membres assignés</label>
                                   <div className="border border-gray-300 rounded-lg overflow-hidden bg-gray-50 max-h-48 overflow-y-auto">
-                                      {users.filter(u => u.id !== currentUser.id).map(user => (
+                                      {users.filter(u => u.id !== currentUser.id).map(user => {
+                                          const isOnline = onlineUserIds.has(user.id);
+                                          return (
                                           <div key={user.id} onClick={() => toggleMemberSelection(user.id)} className="flex items-center justify-between p-3 hover:bg-white border-b border-gray-200 last:border-0 cursor-pointer transition-colors">
-                                              <div className="flex items-center space-x-3"><img src={user.avatar} alt={user.name} className="w-8 h-8 rounded-full" /><div><p className="text-sm font-medium text-slate-900">{user.name}</p><p className="text-xs text-slate-500">{user.role}</p></div></div>
+                                              <div className="flex items-center space-x-3">
+                                                  <div className="relative">
+                                                      <img src={user.avatar} alt={user.name} className="w-8 h-8 rounded-full" />
+                                                      {isOnline && <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-success border-2 border-white rounded-full"></span>}
+                                                  </div>
+                                                  <div>
+                                                      <p className="text-sm font-medium text-slate-900">{user.name}</p>
+                                                      <p className="text-xs text-slate-500">{isOnline ? 'En ligne' : formatLastSeen(user.lastSeen)}</p>
+                                                  </div>
+                                              </div>
                                               <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${selectedMembers.includes(user.id) ? 'bg-primary border-primary text-white' : 'border-gray-400 bg-white'}`}>{selectedMembers.includes(user.id) && <Check size={14} />}</div>
                                           </div>
-                                      ))}
+                                      )})}
                                   </div>
                               </div>
                           )}

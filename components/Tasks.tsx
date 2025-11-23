@@ -1,6 +1,7 @@
 
+
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Plus, Calendar as CalendarIcon, Clock, Sparkles, Filter, LayoutGrid, List, AlertCircle, Paperclip, Send, X, FileText, Trash2, DollarSign, ChevronLeft, ChevronRight, Lock, CheckCircle, MessageSquare, User as UserIcon, Link as LinkIcon, ExternalLink } from 'lucide-react';
+import { Plus, Calendar as CalendarIcon, Clock, Sparkles, Filter, LayoutGrid, List, AlertCircle, Paperclip, Send, X, FileText, Trash2, DollarSign, ChevronLeft, ChevronRight, Lock, CheckCircle, MessageSquare, User as UserIcon, Link as LinkIcon, ExternalLink, Edit2 } from 'lucide-react';
 import { Task, TaskStatus, User, Comment, UserRole } from '../types';
 import { brainstormTaskIdeas } from '../services/geminiService';
 
@@ -48,11 +49,19 @@ const TaskCard = React.memo(({ task, assignee, canDelete, onDelete, onDragStart,
         }
     };
     
-    const getPriorityColor = (p?: string) => {
+    const getPriorityBadgeStyle = (p?: string) => {
         switch(p) {
-            case 'high': return 'text-urgent bg-red-50 border-red-100';
-            case 'medium': return 'text-orange-600 bg-orange-50 border-orange-100';
-            default: return 'text-slate-500 bg-slate-50 border-slate-100';
+            case 'high': return 'bg-red-100 text-red-700 border-red-200';
+            case 'medium': return 'bg-orange-100 text-orange-700 border-orange-200';
+            default: return 'bg-slate-100 text-slate-600 border-slate-200';
+        }
+    };
+
+    const getPriorityLabel = (p?: string) => {
+        switch(p) {
+            case 'high': return 'Haute';
+            case 'medium': return 'Moy.';
+            default: return 'Basse';
         }
     };
 
@@ -68,19 +77,22 @@ const TaskCard = React.memo(({ task, assignee, canDelete, onDelete, onDragStart,
             {canDelete && (
                 <button 
                   onClick={(e) => onDelete(task.id, e)}
-                  className="absolute top-2 right-2 p-1.5 bg-white text-slate-300 hover:text-urgent hover:bg-red-50 rounded shadow-sm border border-slate-100 transition-colors z-10"
+                  className="absolute top-2 right-2 p-1.5 bg-white text-slate-300 hover:text-urgent hover:bg-red-50 rounded shadow-sm border border-slate-100 transition-colors z-10 opacity-0 group-hover:opacity-100"
                   title="Supprimer"
                 >
                     <Trash2 size={14} />
                 </button>
             )}
 
-            <div className="flex justify-between items-start mb-2">
+            <div className="flex justify-between items-center mb-2">
                 <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${getTypeColor(task.type)}`}>{task.type}</span>
-                {task.priority === 'high' && <AlertCircle size={14} className="text-urgent" />}
+                <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold flex items-center ${getPriorityBadgeStyle(task.priority)}`}>
+                    {task.priority === 'high' && <AlertCircle size={10} className="mr-1" />}
+                    {getPriorityLabel(task.priority)}
+                </span>
             </div>
             
-            <h4 className="font-bold text-slate-800 mb-1 text-sm leading-snug group-hover:text-primary transition-colors">{task.title}</h4>
+            <h4 className="font-bold text-slate-800 mb-1 text-sm leading-snug group-hover:text-primary transition-colors pr-6">{task.title}</h4>
             
             {/* Admin or Permission: Price Badge */}
             {canViewFinancials && typeof task.price === 'number' && task.price > 0 && (
@@ -104,9 +116,10 @@ const TaskCard = React.memo(({ task, assignee, canDelete, onDelete, onDragStart,
                         <img src={assignee.avatar} alt={assignee.name} className="w-6 h-6 rounded-full border-2 border-white" title={assignee.name} />
                     )}
                 </div>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded border ${getPriorityColor(task.priority)}`}>
-                    {new Date(task.dueDate).toLocaleDateString('fr-FR', {day:'numeric', month:'short'})}
-                </span>
+                <div className="flex items-center text-[10px] text-slate-400 bg-slate-50 px-2 py-1 rounded-md border border-slate-100">
+                     <CalendarIcon size={12} className="mr-1.5"/>
+                     {new Date(task.dueDate).toLocaleDateString('fr-FR', {day:'numeric', month:'short'})}
+                </div>
             </div>
         </div>
     );
@@ -126,6 +139,11 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
   // Refactor: Use ID for selection to ensure realtime updates propagate to the modal
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const selectedTask = useMemo(() => tasks.find(t => t.id === selectedTaskId) || null, [tasks, selectedTaskId]);
+
+  // Edit State
+  const [isEditing, setIsEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDescription, setEditDescription] = useState('');
 
   const [brainstormTopic, setBrainstormTopic] = useState('');
   const [isBrainstorming, setIsBrainstorming] = useState(false);
@@ -147,6 +165,14 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
     attachments: [],
     price: 0
   });
+
+  // --- PERFORMANCE OPTIMIZATION ---
+  // Create a User Map for O(1) Lookup
+  const userMap = useMemo(() => {
+    const map = new Map<string, User>();
+    users.forEach(u => map.set(u.id, u));
+    return map;
+  }, [users]);
 
   // --- PERMISSIONS HELPERS ---
   
@@ -262,7 +288,7 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
       const taskAttachments = Array.isArray(newTask.attachments) ? newTask.attachments.map(String) : [];
 
       const task: Task = {
-          id: 'temp-id-' + Date.now(),
+          id: 'temp-id-' + Date.now(), // App.tsx will replace this with a real UUID if needed
           title: taskTitle,
           description: taskDesc,
           assigneeId: taskAssignee,
@@ -345,6 +371,25 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
       setLinkName('');
       setLinkUrl('');
   };
+  
+  const handleStartEdit = () => {
+      if (selectedTask) {
+          setEditTitle(selectedTask.title);
+          setEditDescription(selectedTask.description);
+          setIsEditing(true);
+      }
+  };
+
+  const handleSaveEdit = () => {
+      if (selectedTask) {
+          onUpdateTask({
+              ...selectedTask,
+              title: editTitle,
+              description: editDescription
+          });
+          setIsEditing(false);
+      }
+  };
 
   const isLink = (str: string) => str.startsWith('http://') || str.startsWith('https://');
 
@@ -381,7 +426,11 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
   };
 
   // Memoized handlers for the card
-  const handleCardClick = useCallback((id: string) => setSelectedTaskId(id), []);
+  const handleCardClick = useCallback((id: string) => {
+      setSelectedTaskId(id);
+      setIsEditing(false); // Reset edit mode when opening a new task
+  }, []);
+  
   const canDelete = canDeleteTask();
   const canSeeMoney = canViewFinancials();
 
@@ -448,8 +497,8 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                               </div>
                               <div className="space-y-3 overflow-y-auto pr-1 custom-scrollbar flex-1">
                                   {columnTasks.map(task => {
-                                      // Optimized: Find user once here, pass as object to Memoized Card
-                                      const assignee = users.find(u => u.id === task.assigneeId);
+                                      // Optimized: O(1) Lookup instead of O(N) array find
+                                      const assignee = userMap.get(task.assigneeId);
                                       return (
                                           <TaskCard 
                                               key={task.id} 
@@ -569,7 +618,7 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                                      {/* Task List */}
                                      <div className="flex-1 space-y-1.5 overflow-y-auto custom-scrollbar max-h-[150px]">
                                          {dayTasks.map(task => {
-                                             const assignee = users.find(u => u.id === task.assigneeId);
+                                             const assignee = userMap.get(task.assigneeId);
                                              const isDragging = draggedTaskId === task.id;
 
                                              return (
@@ -781,7 +830,32 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                            <button onClick={() => setSelectedTaskId(null)} className="text-slate-400 hover:text-slate-600 md:hidden"><X size={24}/></button>
                        </div>
                        
-                       <h2 className="text-2xl font-bold text-slate-900 mb-2">{selectedTask.title}</h2>
+                       {/* Title Edit */}
+                       {isEditing ? (
+                           <div className="mb-4">
+                                <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Titre</label>
+                                <input 
+                                    type="text" 
+                                    className="w-full text-xl font-bold text-slate-900 border-b-2 border-primary outline-none bg-transparent py-1"
+                                    value={editTitle}
+                                    onChange={(e) => setEditTitle(e.target.value)}
+                                    autoFocus
+                                />
+                           </div>
+                       ) : (
+                           <div className="flex items-center justify-between group/header mb-2">
+                                <h2 className="text-2xl font-bold text-slate-900">{selectedTask.title}</h2>
+                                {!isEditing && (
+                                    <button 
+                                        onClick={handleStartEdit}
+                                        className="p-2 text-slate-400 hover:text-primary hover:bg-blue-50 rounded-full transition-all opacity-0 group-hover/header:opacity-100"
+                                        title="Modifier"
+                                    >
+                                        <Edit2 size={18} />
+                                    </button>
+                                )}
+                           </div>
+                       )}
                        
                        {/* Price Display (Admin/Permission only) */}
                        {canViewFinancials() && typeof selectedTask.price === 'number' && (
@@ -806,9 +880,42 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                            </div>
                        </div>
 
-                       <div className="prose prose-sm text-slate-600 mb-8">
-                           <p className="whitespace-pre-wrap">{selectedTask.description}</p>
-                       </div>
+                       {/* Description Edit */}
+                       {isEditing ? (
+                           <div className="mb-8">
+                                <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Description</label>
+                                <textarea 
+                                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-primary min-h-[200px] font-medium text-slate-700 resize-y leading-relaxed"
+                                    value={editDescription}
+                                    onChange={(e) => setEditDescription(e.target.value)}
+                                />
+                                <div className="flex justify-end space-x-3 mt-3">
+                                    <button 
+                                        onClick={() => setIsEditing(false)} 
+                                        className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg text-sm font-medium transition-colors"
+                                    >
+                                        Annuler
+                                    </button>
+                                    <button 
+                                        onClick={handleSaveEdit} 
+                                        className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-blue-700 shadow-sm transition-colors"
+                                    >
+                                        Enregistrer
+                                    </button>
+                                </div>
+                           </div>
+                       ) : (
+                           <div className="prose prose-sm text-slate-600 mb-8 relative group/desc border border-transparent hover:border-slate-100 hover:bg-slate-50/50 rounded-lg p-2 -ml-2 transition-all">
+                               <p className="whitespace-pre-wrap">{selectedTask.description}</p>
+                               <button 
+                                    onClick={handleStartEdit}
+                                    className="absolute top-2 right-2 text-slate-400 hover:text-primary opacity-0 group-hover/desc:opacity-100 transition-opacity bg-white shadow-sm p-1.5 rounded border border-slate-100"
+                                    title="Modifier la description"
+                                >
+                                    <Edit2 size={14} />
+                                </button>
+                           </div>
+                       )}
 
                        {selectedTask.attachments && selectedTask.attachments.length > 0 && (
                            <div className="mb-8">
@@ -853,7 +960,9 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                                    <p className="text-slate-400 text-sm italic">Aucun commentaire pour le moment.</p>
                                ) : (
                                    selectedTask.comments?.map(comment => {
-                                       const user = users.find(u => u.id === comment.userId);
+                                       // Optimized lookup using userMap
+                                       const user = userMap.get(comment.userId);
+                                       
                                        // Check if user can delete (Admin or Author)
                                        const isAuthor = comment.userId === currentUser.id;
                                        const isAdmin = currentUser.role === UserRole.ADMIN;

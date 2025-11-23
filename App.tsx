@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useRef, Suspense, lazy, useCallback } from 'react';
 import { LogIn, Lock, Mail, UserPlus, ArrowLeft, User as UserIcon, Loader2, AlertCircle, Info } from 'lucide-react';
 import { supabase, isConfigured } from './services/supabaseClient';
@@ -17,10 +15,13 @@ const Settings = lazy(() => import('./components/Settings'));
 const Reports = lazy(() => import('./components/Reports'));
 const Campaigns = lazy(() => import('./components/Campaigns'));
 
-// Robust UUID generator safe for all contexts
+// Robust UUID generator safe for all contexts (Fixes DB Insert Null Error)
 const generateUUID = () => {
-  let d = new Date().getTime(); // Timestamp
-  let d2 = ((typeof performance !== 'undefined') && performance.now && (performance.now() * 1000)) || 0; // Time in microseconds
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  let d = new Date().getTime(); 
+  let d2 = ((typeof performance !== 'undefined') && performance.now && (performance.now() * 1000)) || 0; 
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
       let r = Math.random() * 16;
       if (d > 0) {
@@ -44,6 +45,9 @@ const App: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [channels, setChannels] = useState<Channel[]>([]);
   const [fileLinks, setFileLinks] = useState<FileLink[]>([]); 
+  
+  // Presence State
+  const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
   
   const [notifications, setNotifications] = useState<ToastNotification[]>([]);
   const [currentChannelId, setCurrentChannelId] = useState('general');
@@ -98,11 +102,9 @@ const App: React.FC = () => {
       });
   };
 
-  // Helper to extract links from comments to populate attachments
   const extractAttachmentsFromComments = (comments: Comment[]): string[] => {
       const links: string[] = [];
       const urlRegex = /((https?:\/\/)|(www\.))[^\s]+/g;
-      
       comments.forEach(c => {
           const found = c.content.match(urlRegex);
           if (found) {
@@ -123,7 +125,7 @@ const App: React.FC = () => {
                   userId: c.user_id, 
                   content: c.content,
                   timestamp: new Date(c.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-                  fullTimestamp: c.created_at // IMPORTANT: Stockage de la date complète pour le tri
+                  fullTimestamp: c.created_at 
               }));
           
           const derivedAttachments = extractAttachmentsFromComments(taskComments);
@@ -138,6 +140,22 @@ const App: React.FC = () => {
       });
   };
 
+  // Heartbeat pour mettre à jour last_seen
+  useEffect(() => {
+    if (!currentUser) return;
+
+    // Update immediately on mount
+    const updatePresence = async () => {
+      await supabase.from('users').update({ last_seen: new Date().toISOString() }).eq('id', currentUser.id);
+    };
+    updatePresence();
+
+    // Update every 2 minutes
+    const interval = setInterval(updatePresence, 120000);
+
+    return () => clearInterval(interval);
+  }, [currentUser]);
+
   // Auth Effect
   useEffect(() => {
     if (!isConfigured) {
@@ -151,6 +169,7 @@ const App: React.FC = () => {
         setTasks([]);
         setMessages([]);
         setFileLinks([]);
+        setOnlineUserIds(new Set());
         isDataLoaded.current = false;
         setIsLoading(false);
       } else if (session?.user) {
@@ -184,19 +203,37 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Realtime Subscriptions Effect - STABILIZED
+  // Realtime Subscriptions Effect (Presence & Data)
   useEffect(() => {
     if (!currentUser) return;
 
-    // Messages Subscription (Insert & Delete)
+    // 1. Presence Channel (Who is online NOW)
+    const presenceChannel = supabase.channel('online-users');
+    presenceChannel
+      .on('presence', { event: 'sync' }, () => {
+        const state = presenceChannel.presenceState();
+        const onlineIds = new Set<string>();
+        // Extract all user_ids from presence state
+        Object.values(state).forEach((presences: any) => {
+             presences.forEach((p: any) => {
+                 if(p.user_id) onlineIds.add(p.user_id);
+             });
+        });
+        setOnlineUserIds(onlineIds);
+      })
+      .subscribe(async (status) => {
+          if (status === 'SUBSCRIBED') {
+              await presenceChannel.track({ user_id: currentUser.id, online_at: new Date().toISOString() });
+          }
+      });
+
+    // 2. Data Subscriptions
     const messageChannel = supabase
       .channel('public:messages')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, (payload) => {
         const eventType = payload.eventType;
-        
         if (eventType === 'INSERT') {
             const newMsg = payload.new as any;
-            // Prevent duplicate display if optimistic ID matches or if we already have it
             if (messages.some(m => m.id === newMsg.id)) return;
 
             const displayMsg: Message = {
@@ -233,13 +270,9 @@ const App: React.FC = () => {
       })
       .subscribe();
 
-    // Comments Subscription (Refetch tasks on change)
     const commentChannel = supabase
       .channel('public:task_comments')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'task_comments' }, async (payload) => {
-        // We only refetch if we are NOT the one who initiated the action (to preserve optimistic state smooth feel)
-        // However, payload doesn't easily tell us "who". 
-        // For simplicity and to ensure consistency:
         const { data } = await supabase.from('tasks').select('*');
         if (data) {
            const allCommentsResult = await supabase.from('task_comments').select('*');
@@ -249,7 +282,6 @@ const App: React.FC = () => {
       })
       .subscribe();
 
-    // Files Subscription
     const filesChannel = supabase
       .channel('public:file_links')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'file_links' }, (payload) => {
@@ -270,12 +302,9 @@ const App: React.FC = () => {
       })
       .subscribe();
 
-    // Tasks Subscription
     const tasksChannel = supabase
       .channel('public:tasks')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, async (payload) => {
-          // If update/insert happens, refetch to keep everyone in sync.
-          // Note: Optimistic UI updates local state instantly, this eventually reconciles it.
           const { data } = await supabase.from('tasks').select('*');
           if (data) {
              const allCommentsResult = await supabase.from('task_comments').select('*');
@@ -285,11 +314,58 @@ const App: React.FC = () => {
       })
       .subscribe();
 
+    // Listen to Users Table for Last Seen updates from others
+    const usersChannel = supabase
+      .channel('public:users')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, (payload) => {
+          // Handle UPDATE
+          if (payload.eventType === 'UPDATE') {
+              const updatedUser = payload.new as any;
+              setUsers(prev => prev.map(u => 
+                 u.id === updatedUser.id ? { 
+                     ...u, 
+                     name: updatedUser.name,
+                     role: updatedUser.role,
+                     status: updatedUser.status,
+                     permissions: updatedUser.permissions,
+                     lastSeen: updatedUser.last_seen 
+                 } : u
+              ));
+          }
+          // Handle INSERT (New User from another admin/tab)
+          if (payload.eventType === 'INSERT') {
+               const newUser = payload.new as any;
+               setUsers(prev => {
+                   if(prev.some(u => u.id === newUser.id)) return prev;
+                   return [...prev, {
+                        id: newUser.id,
+                        name: newUser.name,
+                        email: newUser.email,
+                        role: newUser.role,
+                        avatar: newUser.avatar,
+                        status: newUser.status,
+                        permissions: newUser.permissions,
+                        notificationPref: newUser.notification_pref || 'all',
+                        phoneNumber: newUser.phone_number,
+                        lastSeen: newUser.last_seen
+                   }];
+               });
+          }
+          // Handle DELETE
+          if (payload.eventType === 'DELETE') {
+               const deletedId = (payload.old as any).id;
+               setUsers(prev => prev.filter(u => u.id !== deletedId));
+          }
+      })
+      .subscribe();
+
     return () => {
+      supabase.removeChannel(presenceChannel);
       supabase.removeChannel(messageChannel);
       supabase.removeChannel(commentChannel);
       supabase.removeChannel(filesChannel);
       supabase.removeChannel(tasksChannel);
+      supabase.removeChannel(usersChannel);
     };
   }, [currentUser, addNotification]); 
 
@@ -306,7 +382,8 @@ const App: React.FC = () => {
                 phoneNumber: data.phone_number,
                 notificationPref: data.notification_pref,
                 status: data.status,
-                permissions: data.permissions || {} 
+                permissions: data.permissions || {},
+                lastSeen: data.last_seen
             });
         }
     } catch (e) { console.error(e); }
@@ -326,7 +403,8 @@ const App: React.FC = () => {
         if (usersResult.data) {
             setUsers(usersResult.data.map(u => ({
                 id: u.id, name: u.name, email: u.email, role: u.role as UserRole, avatar: u.avatar,
-                phoneNumber: u.phone_number, notificationPref: u.notification_pref, status: u.status, permissions: u.permissions || {} 
+                phoneNumber: u.phone_number, notificationPref: u.notification_pref, status: u.status, permissions: u.permissions || {},
+                lastSeen: u.last_seen
             })));
         }
 
@@ -349,7 +427,7 @@ const App: React.FC = () => {
 
         let loadedChannels: Channel[] = [];
         if (channelsResult.data) {
-            loadedChannels = channelsResult.data.map(c => ({ id: c.id, name: c.name, type: c.type, unread: 0 }));
+            loadedChannels = channelsResult.data.map(c => ({ id: c.id, name: c.name, type: c.type, unread: 0, members: c.members }));
         }
         
         let defaultChannelId = 'general';
@@ -370,105 +448,129 @@ const App: React.FC = () => {
     }
   };
 
+  // ----------------- OPTIMISTIC UI HANDLERS FOR USER MANAGEMENT -----------------
+
+  const handleAddUser = useCallback(async (user: User) => {
+      if (!currentUser) return;
+      
+      // Generate valid UUID if current ID is temp
+      const finalId = (user.id && !user.id.startsWith('temp')) ? user.id : generateUUID();
+      
+      // 1. Optimistic Update (Update UI Immediately)
+      const optimisticUser: User = { ...user, id: finalId, status: 'active' };
+      setUsers(prev => [...prev, optimisticUser]);
+      addNotification("Succès", `${user.name} a été ajouté.`, "success");
+
+      // 2. DB Insert
+      const { error } = await supabase.from('users').insert({
+          id: finalId,
+          name: optimisticUser.name,
+          email: optimisticUser.email,
+          role: optimisticUser.role,
+          avatar: optimisticUser.avatar,
+          status: optimisticUser.status,
+          permissions: optimisticUser.permissions,
+          phone_number: optimisticUser.phoneNumber
+      });
+
+      if (error) {
+          // 3. Revert on Error
+          setUsers(prev => prev.filter(u => u.id !== finalId));
+          addNotification("Erreur", "Impossible d'ajouter l'utilisateur: " + error.message, "urgent");
+      }
+  }, [currentUser, addNotification]);
+
+  const handleRemoveUser = useCallback(async (userId: string) => {
+      const previousUsers = users;
+      
+      // 1. Optimistic Update
+      setUsers(prev => prev.filter(u => u.id !== userId));
+      addNotification("Suppression", "Membre supprimé.", "info");
+
+      // 2. DB Delete
+      const { error } = await supabase.from('users').delete().eq('id', userId);
+
+      if (error) {
+          // 3. Revert
+          setUsers(previousUsers);
+          addNotification("Erreur", "Echec de la suppression: " + error.message, "urgent");
+      }
+  }, [users, addNotification]);
+
+  const handleUpdateUser = useCallback(async (userId: string, data: Partial<User>) => {
+      const previousUsers = users;
+      
+      // 1. Optimistic Update
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, ...data } : u));
+      addNotification("Mise à jour", "Modifications enregistrées.", "success");
+
+      // 2. Prepare DB Payload
+      const dbUpdates: any = {};
+      if (data.name !== undefined) dbUpdates.name = data.name;
+      if (data.email !== undefined) dbUpdates.email = data.email;
+      if (data.role !== undefined) dbUpdates.role = data.role;
+      if (data.status !== undefined) dbUpdates.status = data.status;
+      if (data.permissions !== undefined) dbUpdates.permissions = data.permissions;
+      if (data.phoneNumber !== undefined) dbUpdates.phone_number = data.phoneNumber;
+
+      if (Object.keys(dbUpdates).length === 0) return;
+
+      // 3. DB Update
+      const { error } = await supabase.from('users').update(dbUpdates).eq('id', userId);
+
+      if (error) {
+          // 4. Revert
+          setUsers(previousUsers);
+          addNotification("Erreur", "Echec de la mise à jour: " + error.message, "urgent");
+      }
+  }, [users, addNotification]);
+
+  // ----------------------------------------------------------------------------
+
   const handleTaskComment = useCallback(async (taskId: string, content: string) => {
       if(!currentUser) return;
-      
       const newId = generateUUID();
       const now = new Date();
-      
-      // OPTIMISTIC UPDATE: Add comment immediately
       const optimisticComment: Comment = {
-          id: newId,
-          userId: currentUser.id,
-          content: content,
-          timestamp: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-          fullTimestamp: now.toISOString(),
+          id: newId, userId: currentUser.id, content: content, timestamp: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}), fullTimestamp: now.toISOString(),
       };
-
-      setTasks(prev => prev.map(t => {
-          if (t.id === taskId) {
-              return { ...t, comments: [...(t.comments || []), optimisticComment] };
-          }
-          return t;
-      }));
-      
-      const { error } = await supabase.from('task_comments').insert({ 
-          id: newId, 
-          task_id: taskId, 
-          user_id: currentUser.id, 
-          content: content 
-      });
-      
+      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, comments: [...(t.comments || []), optimisticComment] } : t));
+      const { error } = await supabase.from('task_comments').insert({ id: newId, task_id: taskId, user_id: currentUser.id, content: content });
       if (error) {
-          console.error("Error sending comment:", error);
-          // Rollback
-          setTasks(prev => prev.map(t => {
-            if (t.id === taskId) {
-                return { ...t, comments: t.comments?.filter(c => c.id !== newId) };
-            }
-            return t;
-          }));
+          setTasks(prev => prev.map(t => t.id === taskId ? { ...t, comments: t.comments?.filter(c => c.id !== newId) } : t));
           addNotification("Erreur", "Message non envoyé : " + error.message, "urgent");
       }
   }, [currentUser, addNotification]);
 
   const handleSendMessage = useCallback(async (text: string, channelId: string, attachments?: string[]) => {
       if (!currentUser) return;
-
       const newId = generateUUID();
       const now = new Date();
-
-      // OPTIMISTIC UPDATE
       const optimisticMsg: Message = {
-          id: newId,
-          userId: currentUser.id,
-          channelId: channelId,
-          content: text,
-          timestamp: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-          fullTimestamp: now.toISOString(),
-          attachments: attachments || []
+          id: newId, userId: currentUser.id, channelId: channelId, content: text, timestamp: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}), fullTimestamp: now.toISOString(), attachments: attachments || []
       };
-
       setMessages(prev => [...prev, optimisticMsg]);
-
-      const { error } = await supabase.from('messages').insert({ 
-          id: newId,
-          user_id: currentUser.id, 
-          channel_id: channelId, 
-          content: text, 
-          attachments: attachments 
-      });
-
+      const { error } = await supabase.from('messages').insert({ id: newId, user_id: currentUser.id, channel_id: channelId, content: text, attachments: attachments });
       if (error) {
-          // Rollback
           setMessages(prev => prev.filter(m => m.id !== newId));
           addNotification("Erreur", "Message non envoyé", "urgent");
       }
-
   }, [currentUser, addNotification]);
 
   const handleAddFileLink = useCallback(async (name: string, url: string) => {
       if (!currentUser) return;
       try {
-          const { error } = await supabase.from('file_links').insert({ 
-              id: generateUUID(), 
-              name, 
-              url, 
-              created_by: currentUser.id 
-          });
+          const { error } = await supabase.from('file_links').insert({ id: generateUUID(), name, url, created_by: currentUser.id });
           if (error) throw error;
           addNotification("Fichier ajouté", "Le lien a été sauvegardé avec succès.", "success");
       } catch (e: any) {
-          console.error(e);
           addNotification("Erreur", "Impossible d'ajouter le fichier: " + e.message, "urgent");
       }
   }, [currentUser, addNotification]);
   
   const handleGlobalFileDelete = useCallback(async (compositeId: string) => {
       if (!currentUser) return;
-      
       try {
-          // Check prefix to determine deletion strategy
           if (compositeId.startsWith('link|')) {
              const cleanId = compositeId.split('|')[1];
              const { error } = await supabase.from('file_links').delete().eq('id', cleanId);
@@ -496,7 +598,6 @@ const App: React.FC = () => {
           }
           addNotification("Suppression", "Le fichier a été supprimé.", "info");
       } catch (e: any) {
-          console.error("Delete Error", e);
           addNotification("Erreur", "Impossible de supprimer: " + e.message, "urgent");
       }
   }, [currentUser, addNotification]);
@@ -505,17 +606,10 @@ const App: React.FC = () => {
       if (!currentUser) return;
       const task = tasks.find(t => t.id === taskId);
       if (!task || !task.comments) return;
-
       const commentToDelete = task.comments.find(c => c.content.includes(url));
       if (commentToDelete) {
           try {
-             // Optimistic removal from Task UI
-             setTasks(prev => prev.map(t => {
-                 if (t.id === taskId && t.comments) {
-                     return { ...t, comments: t.comments.filter(c => c.id !== commentToDelete.id) };
-                 }
-                 return t;
-             }));
+             setTasks(prev => prev.map(t => t.id === taskId && t.comments ? { ...t, comments: t.comments.filter(c => c.id !== commentToDelete.id) } : t));
              const { error } = await supabase.from('task_comments').delete().eq('id', commentToDelete.id);
              if (error) throw error;
           } catch (e: any) {
@@ -526,124 +620,68 @@ const App: React.FC = () => {
 
   const handleDeleteComment = useCallback(async (taskId: string, commentId: string) => {
       if (!currentUser) return;
-
-      // Optimistic UI Update
-      setTasks(prev => prev.map(t => {
-          if (t.id !== taskId) return t;
-          return {
-              ...t,
-              comments: t.comments?.filter(c => c.id !== commentId)
-          };
-      }));
-
+      const prevTasks = tasks;
+      setTasks(prev => prev.map(t => t.id !== taskId ? t : { ...t, comments: t.comments?.filter(c => c.id !== commentId) }));
       try {
           const { error } = await supabase.from('task_comments').delete().eq('id', commentId);
           if (error) throw error;
       } catch (e: any) {
-          console.error("Delete Comment Error", e);
+          setTasks(prevTasks);
           addNotification("Erreur", "Impossible de supprimer le commentaire.", "urgent");
       }
-  }, [currentUser, addNotification]);
+  }, [currentUser, tasks, addNotification]);
 
   const handleAddTask = useCallback(async (task: Task) => {
       if (!currentUser) return;
-      
-      const newTaskId = task.id.startsWith('temp') ? generateUUID() : task.id;
-
-      // OPTIMISTIC UPDATE: Add task immediately to UI
+      const newTaskId = (task.id && !task.id.startsWith('temp')) ? task.id : generateUUID();
       const optimisticTask: Task = { ...task, id: newTaskId };
       setTasks(prev => [...prev, optimisticTask]);
-
       const taskPayload = {
-          id: newTaskId,
-          title: task.title,
-          description: task.description,
-          assignee_id: task.assigneeId,
-          due_date: task.dueDate,
-          status: task.status,
-          type: task.type,
-          priority: task.priority,
-          price: task.price
+          id: newTaskId, title: task.title, description: task.description, assignee_id: task.assigneeId,
+          due_date: task.dueDate, status: task.status, type: task.type, priority: task.priority, price: task.price
       };
-
       const { data: newTaskData, error } = await supabase.from('tasks').insert(taskPayload).select().single();
-
       if (error) {
-          console.error("Task Insert Error:", error);
-          // Rollback
           setTasks(prev => prev.filter(t => t.id !== newTaskId));
           addNotification("Erreur", `Impossible de créer la tâche: ${error.message}`, "urgent");
           return;
       }
-
       if (newTaskData && task.attachments && task.attachments.length > 0) {
            const commentsPayload = task.attachments.map(url => ({
-               id: generateUUID(), 
-               task_id: newTaskData.id,
-               user_id: currentUser.id,
-               content: `📎 Fichier attaché: ${url}` 
+               id: generateUUID(), task_id: newTaskData.id, user_id: currentUser.id, content: `📎 Fichier attaché: ${url}` 
            }));
-           
-           const { error: commentError } = await supabase.from('task_comments').insert(commentsPayload);
-           if (commentError) {
-              console.error("Error adding attachments as comments", commentError);
-           }
+           await supabase.from('task_comments').insert(commentsPayload);
       }
-
       addNotification("Succès", "Tâche créée avec succès", "success");
   }, [currentUser, addNotification]);
 
   const handleUpdateTask = useCallback(async (updatedTask: Task) => {
       if (!currentUser) return;
-      
-      // OPTIMISTIC UPDATE
       setTasks(prev => prev.map(t => t.id === updatedTask.id ? updatedTask : t));
-
       const taskPayload = {
-          title: updatedTask.title,
-          description: updatedTask.description,
-          status: updatedTask.status,
-          priority: updatedTask.priority,
-          due_date: updatedTask.dueDate,
-          assignee_id: updatedTask.assigneeId,
-          type: updatedTask.type,
-          price: updatedTask.price
+          title: updatedTask.title, description: updatedTask.description, status: updatedTask.status,
+          priority: updatedTask.priority, due_date: updatedTask.dueDate, assignee_id: updatedTask.assigneeId,
+          type: updatedTask.type, price: updatedTask.price
       };
-
       const { error } = await supabase.from('tasks').update(taskPayload).eq('id', updatedTask.id);
-
-      if (error) {
-          console.error("Task Update Error:", error);
-          addNotification("Erreur", "Impossible de mettre à jour la tâche", "urgent");
-      }
+      if (error) addNotification("Erreur", "Impossible de mettre à jour la tâche", "urgent");
   }, [currentUser, addNotification]);
 
   const handleDeleteTask = useCallback(async (taskId: string) => {
       if (!currentUser) return;
-      
-      // OPTIMISTIC UPDATE: Remove immediately
       const previousTasks = tasks; 
       setTasks(prev => prev.filter(t => t.id !== taskId));
-
       const { error } = await supabase.from('tasks').delete().eq('id', taskId);
-      if (error) {
-          // Rollback
-          setTasks(previousTasks);
-          addNotification("Erreur", "Impossible de supprimer la tâche", "urgent");
-      } else {
-          addNotification("Suppression", "Tâche supprimée.", "info");
-      }
+      if (error) { setTasks(previousTasks); addNotification("Erreur", "Impossible de supprimer la tâche", "urgent"); } 
+      else { addNotification("Suppression", "Tâche supprimée.", "info"); }
   }, [currentUser, tasks, addNotification]);
 
   const handleUpdateStatus = useCallback(async (taskId: string, newStatus: TaskStatus) => {
-      // OPTIMISTIC UPDATE
+      const previousTasks = tasks;
       setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
-
       const { error } = await supabase.from('tasks').update({ status: newStatus }).eq('id', taskId);
-      if (error) {
-          addNotification("Erreur", "Impossible de changer le statut", "urgent");
-      }
-  }, [addNotification]);
+      if (error) { setTasks(previousTasks); addNotification("Erreur", "Impossible de changer le statut", "urgent"); }
+  }, [tasks, addNotification]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -770,28 +808,50 @@ const App: React.FC = () => {
   return (
     <Layout currentUser={currentUser} currentView={currentView} onNavigate={setCurrentView} onLogout={handleLogout} unreadMessageCount={channels.reduce((acc, c) => acc + (c.unread || 0), 0)}>
       <Suspense fallback={<div className="flex h-full items-center justify-center"><Loader2 className="animate-spin text-primary" size={40} /></div>}>
-        {currentView === 'dashboard' && <Dashboard currentUser={currentUser} tasks={tasks} messages={messages} notifications={notifications} onNavigate={setCurrentView} onDeleteTask={handleDeleteTask} unreadMessageCount={channels.reduce((acc, c) => acc + (c.unread || 0), 0)} />}
+        {currentView === 'dashboard' && <Dashboard currentUser={currentUser} tasks={tasks} messages={messages} notifications={notifications} channels={channels} onNavigate={setCurrentView} onDeleteTask={handleDeleteTask} unreadMessageCount={channels.reduce((acc, c) => acc + (c.unread || 0), 0)} />}
         {currentView === 'tasks' && <Tasks tasks={tasks} users={users} currentUser={currentUser} onUpdateStatus={handleUpdateStatus} onAddTask={handleAddTask} onUpdateTask={handleUpdateTask} onDeleteTask={handleDeleteTask} onAddComment={handleTaskComment} onAddFileLink={handleAddFileLink} onDeleteAttachment={handleDeleteTaskAttachment} onDeleteComment={handleDeleteComment} />}
-        {currentView === 'chat' && <Chat currentUser={currentUser} users={users} channels={channels} currentChannelId={currentChannelId} messages={messages} onChannelChange={setCurrentChannelId} onSendMessage={handleSendMessage} onAddChannel={async (c) => { 
-            await supabase.from('channels').insert({ 
-                id: generateUUID(),
-                name: c.name, 
-                type: c.type, 
-                members: c.members 
-            });
-        }} onDeleteChannel={async (cid) => {
-            await supabase.from('channels').delete().eq('id', cid);
-            setChannels(prev => prev.filter(c => c.id !== cid));
-            if(currentChannelId === cid) setCurrentChannelId('general');
-        }} onReadChannel={(cid) => {
-            const key = `ivision_last_read_${currentUser.id}`;
-            const current = JSON.parse(localStorage.getItem(key) || '{}');
-            current[cid] = new Date().toISOString();
-            localStorage.setItem(key, JSON.stringify(current));
-            setChannels(prev => prev.map(c => c.id === cid ? { ...c, unread: 0 } : c));
-        }} />}
+        {currentView === 'chat' && (
+          <Chat 
+            currentUser={currentUser} 
+            users={users} 
+            channels={channels} 
+            currentChannelId={currentChannelId} 
+            messages={messages} 
+            onlineUserIds={onlineUserIds}
+            onChannelChange={setCurrentChannelId} 
+            onSendMessage={handleSendMessage} 
+            onAddChannel={async (c) => { 
+                await supabase.from('channels').insert({ id: generateUUID(), name: c.name, type: c.type, members: c.members });
+            }} 
+            onDeleteChannel={async (cid) => {
+                await supabase.from('channels').delete().eq('id', cid);
+                setChannels(prev => prev.filter(c => c.id !== cid));
+                if(currentChannelId === cid) setCurrentChannelId('general');
+            }} 
+            onReadChannel={(cid) => {
+                const key = `ivision_last_read_${currentUser.id}`;
+                const current = JSON.parse(localStorage.getItem(key) || '{}');
+                current[cid] = new Date().toISOString();
+                localStorage.setItem(key, JSON.stringify(current));
+                setChannels(prev => prev.map(c => c.id === cid ? { ...c, unread: 0 } : c));
+            }} 
+          />
+        )}
         {currentView === 'files' && <Files tasks={tasks} messages={messages} fileLinks={fileLinks} currentUser={currentUser} onAddFileLink={handleAddFileLink} onDeleteFileLink={handleGlobalFileDelete} />}
-        {currentView === 'team' && <Team currentUser={currentUser} users={users} tasks={tasks} activities={[]} onAddUser={async (u) => { await supabase.from('users').insert({ id: generateUUID(), name: u.name, email: u.email, role: u.role, status: 'active', avatar: u.avatar }); }} onRemoveUser={async (uid) => { await supabase.from('users').delete().eq('id', uid); setUsers(prev => prev.filter(u => u.id !== uid)); }} onUpdateRole={async (uid, role) => { await supabase.from('users').update({ role }).eq('id', uid); }} onApproveUser={async (uid) => { await supabase.from('users').update({ status: 'active' }).eq('id', uid); setUsers(prev => prev.map(u => u.id === uid ? { ...u, status: 'active' } : u)); }} onUpdateMember={async (uid, data) => { await supabase.from('users').update(data).eq('id', uid); }} />}
+        {currentView === 'team' && (
+          <Team 
+            currentUser={currentUser} 
+            users={users} 
+            tasks={tasks} 
+            onlineUserIds={onlineUserIds} 
+            activities={[]} 
+            onAddUser={handleAddUser} 
+            onRemoveUser={handleRemoveUser} 
+            onUpdateRole={(uid, role) => handleUpdateUser(uid, { role })} 
+            onApproveUser={(uid) => handleUpdateUser(uid, { status: 'active' })} 
+            onUpdateMember={(uid, data) => handleUpdateUser(uid, data)} 
+          />
+        )}
         {currentView === 'settings' && <Settings currentUser={currentUser} onUpdateProfile={async (data) => { await supabase.from('users').update(data).eq('id', currentUser.id); setCurrentUser(prev => prev ? { ...prev, ...data } : null); addNotification("Profil mis à jour", "Vos modifications ont été enregistrées.", "success"); }} />}
         {currentView === 'reports' && <Reports currentUser={currentUser} tasks={tasks} users={users} />}
         {currentView === 'campaigns' && <Campaigns currentUser={currentUser} campaignsData={[]} tasks={tasks} users={users} />}

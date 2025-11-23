@@ -1,20 +1,20 @@
-
 import React, { useState } from 'react';
 import { TrendingUp, CheckCircle, AlertCircle, Sparkles, PlusCircle, Calendar, MessageCircle, Clock, DollarSign, Info, Bell, Trash2 } from 'lucide-react';
 import { generateMarketingInsight } from '../services/geminiService';
-import { Task, User, ViewState, TaskStatus, UserRole, Message, ToastNotification } from '../types';
+import { Task, User, ViewState, TaskStatus, UserRole, Message, ToastNotification, Channel } from '../types';
 
 interface DashboardProps {
   currentUser: User;
   tasks: Task[];
   messages: Message[];
   notifications: ToastNotification[];
+  channels?: Channel[]; // Added channels prop
   onNavigate: (view: ViewState) => void;
   onDeleteTask: (taskId: string) => void;
   unreadMessageCount: number;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks, messages, notifications, onNavigate, onDeleteTask, unreadMessageCount }) => {
+const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks, messages, notifications, channels = [], onNavigate, onDeleteTask, unreadMessageCount }) => {
   const [aiInsight, setAiInsight] = useState<string>("");
   const [loadingAi, setLoadingAi] = useState(false);
 
@@ -43,6 +43,9 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks, messages, not
       nextWeek.setDate(today.getDate() + 7);
       return date >= today && date <= nextWeek && t.status !== TaskStatus.DONE;
   }).length;
+
+  // Find channels with unread messages
+  const unreadChannels = channels.filter(c => c.unread && c.unread > 0);
 
   const handleGetInsights = async () => {
     setLoadingAi(true);
@@ -127,11 +130,25 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks, messages, not
             <span className={`font-bold ${unreadMessageCount > 0 ? 'text-orange-700' : 'text-slate-700'}`}>
                 Chat Équipe
             </span>
-            <span className={`text-xs ${unreadMessageCount > 0 ? 'text-orange-600 font-semibold' : 'text-slate-400'}`}>
-                {unreadMessageCount > 0 ? `${unreadMessageCount} messages non lus` : "Aucun nouveau message"}
-            </span>
+            {unreadMessageCount > 0 ? (
+              <div className="mt-1 flex flex-col space-y-1 w-full">
+                 {unreadChannels.slice(0, 2).map(c => (
+                   <span key={c.id} className="text-[10px] text-orange-600 font-medium flex items-center">
+                     <span className="w-1.5 h-1.5 bg-orange-500 rounded-full mr-1.5"></span>
+                     #{c.name} ({c.unread})
+                   </span>
+                 ))}
+                 {unreadChannels.length > 2 && (
+                    <span className="text-[10px] text-orange-500 italic">+{unreadChannels.length - 2} autres...</span>
+                 )}
+              </div>
+            ) : (
+              <span className="text-xs text-slate-400">
+                 Aucun nouveau message
+              </span>
+            )}
           </div>
-          <div className="relative">
+          <div className="relative self-start">
              <MessageCircle className={`${unreadMessageCount > 0 ? 'text-orange-500' : 'text-slate-400'} group-hover:text-primary transition-colors`} />
              {unreadMessageCount > 0 && (
                  <span className="absolute -top-2 -right-2 bg-urgent text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full font-bold border-2 border-white">

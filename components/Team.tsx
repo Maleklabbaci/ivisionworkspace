@@ -1,4 +1,5 @@
 
+
 import React, { useState } from 'react';
 import { User, UserRole, ActivityLog, Task, TaskStatus, UserPermissions } from '../types';
 import { MoreHorizontal, Mail, Shield, Trash2, UserPlus, History, Briefcase, CheckCircle, X, Edit2, ToggleLeft, ToggleRight, Save, AlertTriangle, Key, Lock, Eye, Folder } from 'lucide-react';
@@ -8,6 +9,7 @@ interface TeamProps {
   users: User[];
   tasks: Task[];
   activities: ActivityLog[];
+  onlineUserIds: Set<string>; // New Prop
   onAddUser: (user: User) => void;
   onRemoveUser: (userId: string) => void;
   onUpdateRole: (userId: string, role: UserRole) => void;
@@ -33,7 +35,24 @@ const PERMISSIONS_LIST: PermissionConfig[] = [
   { key: 'canViewReports', label: 'Voir les Rapports', description: 'Accès aux statistiques globales.', icon: <History size={14} /> },
 ];
 
-const Team: React.FC<TeamProps> = ({ currentUser, users, tasks, activities, onAddUser, onRemoveUser, onUpdateRole, onApproveUser, onUpdateMember }) => {
+// Helper pour formater le temps
+const formatLastSeen = (lastSeen?: string) => {
+    if (!lastSeen) return "Jamais";
+    
+    const date = new Date(lastSeen);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMins < 1) return "À l'instant";
+    if (diffMins < 60) return `Il y a ${diffMins} min`;
+    if (diffHours < 24) return `Il y a ${diffHours} h`;
+    return `Il y a ${diffDays} j`;
+};
+
+const Team: React.FC<TeamProps> = ({ currentUser, users, tasks, activities, onlineUserIds, onAddUser, onRemoveUser, onUpdateRole, onApproveUser, onUpdateMember }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [newUser, setNewUser] = useState<Partial<User>>({
@@ -138,16 +157,19 @@ const Team: React.FC<TeamProps> = ({ currentUser, users, tasks, activities, onAd
               {users.map((user) => {
                 const activeTasks = tasks.filter(t => t.assigneeId === user.id && t.status !== TaskStatus.DONE).length;
                 const isCurrentUser = user.id === currentUser.id;
+                const isOnline = onlineUserIds.has(user.id);
 
                 return (
                   <tr key={user.id} className="hover:bg-slate-50/80 transition-colors group">
                     <td className="px-6 py-4">
                       <div className="flex items-center space-x-3">
-                        <img src={user.avatar} alt={user.name} className="w-10 h-10 rounded-full border border-slate-200" />
+                        <div className="relative">
+                            <img src={user.avatar} alt={user.name} className="w-10 h-10 rounded-full border border-slate-200" />
+                            {isOnline && <span className="absolute bottom-0 right-0 w-3 h-3 bg-success border-2 border-white rounded-full"></span>}
+                        </div>
                         <div>
                           <p className="font-bold text-slate-900">{user.name}</p>
                           <div className="flex items-center text-xs text-slate-400">
-                            <Mail size={12} className="mr-1" />
                             {user.email}
                           </div>
                         </div>
@@ -164,7 +186,16 @@ const Team: React.FC<TeamProps> = ({ currentUser, users, tasks, activities, onAd
                     </td>
                     <td className="px-6 py-4">
                       {user.status === 'active' ? (
-                        <span className="text-success flex items-center text-xs font-bold"><CheckCircle size={14} className="mr-1"/> Actif</span>
+                        <div>
+                            {isOnline ? (
+                                <span className="text-success flex items-center text-xs font-bold"><CheckCircle size={14} className="mr-1"/> En ligne</span>
+                            ) : (
+                                <span className="text-slate-400 text-xs flex items-center">
+                                    <span className="w-2 h-2 rounded-full border border-slate-300 mr-2"></span>
+                                    {formatLastSeen(user.lastSeen)}
+                                </span>
+                            )}
+                        </div>
                       ) : (
                         <button onClick={() => onApproveUser(user.id)} className="bg-orange-100 text-orange-700 px-2 py-1 rounded text-xs font-bold hover:bg-orange-200 transition-colors">
                           En attente (Valider)
@@ -267,45 +298,41 @@ const Team: React.FC<TeamProps> = ({ currentUser, users, tasks, activities, onAd
                                 onClick={() => setEditingUser({ ...editingUser, role: role })}
                                 className={`p-3 rounded-lg border text-left transition-all ${
                                     editingUser.role === role 
-                                    ? 'bg-white border-primary ring-1 ring-primary shadow-sm' 
-                                    : 'bg-white border-slate-200 hover:bg-slate-100 text-slate-600'
+                                    ? 'bg-blue-50 border-primary text-primary shadow-sm ring-1 ring-primary' 
+                                    : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
                                 }`}
                             >
-                                <div className="flex items-center justify-between">
-                                    <span className={`text-sm font-medium ${editingUser.role === role ? 'text-primary' : ''}`}>{role}</span>
-                                    {editingUser.role === role && <CheckCircle size={16} className="text-primary" />}
-                                </div>
+                                <span className="block font-bold text-sm">{role}</span>
                             </button>
                         ))}
                     </div>
                 </div>
 
-                {/* Permissions Toggles */}
+                {/* Permissions Grid */}
                 <div>
-                    <h4 className="text-sm font-bold text-slate-700 mb-4 flex items-center">
-                        <Key size={16} className="mr-2 text-slate-500" />
+                    <label className="block text-sm font-bold text-slate-700 mb-3 flex items-center">
+                        <Key size={16} className="mr-2 text-primary" />
                         Permissions Spéciales
-                    </h4>
-                    <p className="text-xs text-slate-400 mb-3">
-                        Cochez pour activer explicitement une fonctionnalité, même si le rôle ne l'inclut pas par défaut.
-                    </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        {PERMISSIONS_LIST.map(perm => {
-                            const isEnabled = editingUser.permissions?.[perm.key] === true;
+                    </label>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {PERMISSIONS_LIST.map((perm) => {
+                            const isEnabled = editingUser.permissions?.[perm.key] || false;
                             return (
-                                <div key={perm.key} className={`flex items-start p-3 rounded-xl border transition-all ${isEnabled ? 'bg-blue-50/50 border-blue-100' : 'bg-white border-slate-100'}`}>
-                                    <div className={`mt-1 p-1.5 rounded-md mr-3 ${isEnabled ? 'bg-white text-primary shadow-sm' : 'bg-slate-100 text-slate-400'}`}>
-                                        {perm.icon}
-                                    </div>
-                                    <div className="flex-1 mr-2">
-                                        <p className={`text-sm font-bold ${isEnabled ? 'text-slate-800' : 'text-slate-600'}`}>{perm.label}</p>
-                                        <p className="text-xs text-slate-400 leading-snug mt-0.5">{perm.description}</p>
+                                <div key={perm.key} className="flex items-center justify-between p-3 bg-white border border-slate-200 rounded-lg shadow-sm">
+                                    <div className="flex items-start space-x-3">
+                                        <div className={`mt-0.5 ${isEnabled ? 'text-primary' : 'text-slate-400'}`}>
+                                            {perm.icon}
+                                        </div>
+                                        <div className="flex-1">
+                                            <p className="text-sm font-bold text-slate-800">{perm.label}</p>
+                                            <p className="text-[10px] text-slate-500 leading-tight mt-0.5">{perm.description}</p>
+                                        </div>
                                     </div>
                                     <button 
                                         onClick={() => handlePermissionToggle(perm.key)}
-                                        className={`relative w-11 h-6 rounded-full transition-colors duration-200 focus:outline-none ${isEnabled ? 'bg-primary' : 'bg-slate-200'}`}
+                                        className={`relative w-10 h-6 transition-colors rounded-full flex-shrink-0 focus:outline-none ${isEnabled ? 'bg-primary' : 'bg-slate-200'}`}
                                     >
-                                        <span className={`block w-4 h-4 bg-white rounded-full shadow transform transition-transform duration-200 ${isEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                                         <span className={`block w-4 h-4 bg-white rounded-full shadow-sm transform transition-transform duration-200 ${isEnabled ? 'translate-x-5' : 'translate-x-1'}`} />
                                     </button>
                                 </div>
                             );
@@ -314,11 +341,10 @@ const Team: React.FC<TeamProps> = ({ currentUser, users, tasks, activities, onAd
                 </div>
             </div>
 
-            <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end space-x-3 shrink-0">
-                <button onClick={() => setEditingUser(null)} className="px-4 py-2.5 text-slate-600 hover:bg-white rounded-lg font-medium transition-colors">Annuler</button>
-                <button onClick={handleSaveEdit} className="px-6 py-2.5 bg-primary text-white rounded-lg font-medium hover:bg-blue-700 shadow-sm flex items-center">
-                    <Save size={18} className="mr-2" />
-                    Enregistrer
+            <div className="p-6 border-t border-slate-100 bg-white shrink-0 flex justify-end space-x-3">
+                <button onClick={() => setEditingUser(null)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg font-medium transition-colors">Annuler</button>
+                <button onClick={handleSaveEdit} className="px-6 py-2 bg-primary text-white rounded-lg font-medium hover:bg-blue-700 shadow-md transition-colors flex items-center">
+                    <Save size={18} className="mr-2" /> Enregistrer
                 </button>
             </div>
           </div>

@@ -29,6 +29,7 @@ export interface User {
   notificationPref: 'push' | 'all';
   status: 'active' | 'pending';
   permissions?: UserPermissions;
+  lastSeen?: string; // Timestamp ISO de la dernière activité
 }
 
 export interface ActivityLog {
@@ -74,6 +75,7 @@ export interface Channel {
   name: string;
   type: 'global' | 'project';
   unread?: number;
+  members?: string[];
 }
 
 export interface Message {
