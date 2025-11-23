@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Plus, Calendar as CalendarIcon, Clock, Sparkles, Filter, LayoutGrid, List, AlertCircle, Paperclip, Send, X, FileText, Trash2, DollarSign, ChevronLeft, ChevronRight, Lock, CheckCircle, MessageSquare, User as UserIcon, Link as LinkIcon, ExternalLink } from 'lucide-react';
 import { Task, TaskStatus, User, Comment, UserRole } from '../types';
@@ -16,12 +15,13 @@ interface TasksProps {
   onAddComment: (taskId: string, content: string) => void;
   onAddFileLink?: (name: string, url: string) => void; 
   onDeleteAttachment?: (taskId: string, url: string) => void;
+  onDeleteComment?: (taskId: string, commentId: string) => void;
 }
 
-// Optimization: Memoized Task Card Component
-const TaskCard = React.memo(({ task, users, canDelete, onDelete, onDragStart, onClick, canViewFinancials }: { 
+// Optimization: Memoized Task Card Component - Now receives assignee directly
+const TaskCard = React.memo(({ task, assignee, canDelete, onDelete, onDragStart, onClick, canViewFinancials }: { 
     task: Task, 
-    users: User[], 
+    assignee?: User, 
     canDelete: boolean, 
     onDelete: (id: string, e: React.MouseEvent) => void,
     onDragStart: (e: React.DragEvent, id: string) => void,
@@ -100,9 +100,9 @@ const TaskCard = React.memo(({ task, users, canDelete, onDelete, onDragStart, on
 
             <div className="flex items-center justify-between">
                 <div className="flex -space-x-2">
-                    {users.filter(u => u.id === task.assigneeId).map(u => (
-                        <img key={u.id} src={u.avatar} alt={u.name} className="w-6 h-6 rounded-full border-2 border-white" title={u.name} />
-                    ))}
+                    {assignee && (
+                        <img src={assignee.avatar} alt={assignee.name} className="w-6 h-6 rounded-full border-2 border-white" title={assignee.name} />
+                    )}
                 </div>
                 <span className={`text-[10px] px-1.5 py-0.5 rounded border ${getPriorityColor(task.priority)}`}>
                     {new Date(task.dueDate).toLocaleDateString('fr-FR', {day:'numeric', month:'short'})}
@@ -114,7 +114,7 @@ const TaskCard = React.memo(({ task, users, canDelete, onDelete, onDragStart, on
 
 type ViewMode = 'board' | 'calendar';
 
-const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus, onAddTask, onUpdateTask, onDeleteTask, onAddComment, onAddFileLink, onDeleteAttachment }) => {
+const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus, onAddTask, onUpdateTask, onDeleteTask, onAddComment, onAddFileLink, onDeleteAttachment, onDeleteComment }) => {
   const [viewMode, setViewMode] = useState<ViewMode>('board');
   const [showModal, setShowModal] = useState(false);
   
@@ -296,10 +296,6 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
       }
       if (window.confirm("Êtes-vous sûr de vouloir supprimer cette tâche ?")) {
           onDeleteTask(taskId);
-          // If we deleted the currently open task, close the modal
-          // We can't access selectedTaskId easily in this callback if we want stable ref, 
-          // but onDeleteTask usually handles logic.
-          // Note: State updates here might need care.
       }
   }, [onDeleteTask]);
   
@@ -307,6 +303,13 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
       if(!selectedTask || !onDeleteAttachment) return;
       if(window.confirm("Voulez-vous supprimer cette pièce jointe ?")) {
           onDeleteAttachment(selectedTask.id, url);
+      }
+  };
+
+  const handleDeleteCommentClick = (commentId: string) => {
+      if (!selectedTask || !onDeleteComment) return;
+      if (window.confirm("Supprimer ce commentaire ?")) {
+          onDeleteComment(selectedTask.id, commentId);
       }
   };
 
@@ -444,18 +447,22 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                                   <span className="text-xs font-medium text-slate-400 bg-white px-2 py-0.5 rounded-full border border-slate-200">{columnTasks.length}</span>
                               </div>
                               <div className="space-y-3 overflow-y-auto pr-1 custom-scrollbar flex-1">
-                                  {columnTasks.map(task => (
-                                      <TaskCard 
-                                          key={task.id} 
-                                          task={task} 
-                                          users={users} 
-                                          canDelete={canDelete}
-                                          onDelete={handleDeleteClick}
-                                          onDragStart={handleDragStart}
-                                          onClick={handleCardClick}
-                                          canViewFinancials={canSeeMoney}
-                                      />
-                                  ))}
+                                  {columnTasks.map(task => {
+                                      // Optimized: Find user once here, pass as object to Memoized Card
+                                      const assignee = users.find(u => u.id === task.assigneeId);
+                                      return (
+                                          <TaskCard 
+                                              key={task.id} 
+                                              task={task} 
+                                              assignee={assignee}
+                                              canDelete={canDelete}
+                                              onDelete={handleDeleteClick}
+                                              onDragStart={handleDragStart}
+                                              onClick={handleCardClick}
+                                              canViewFinancials={canSeeMoney}
+                                          />
+                                      );
+                                  })}
                               </div>
                          </div>
                      )
@@ -847,15 +854,31 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onUpdateStatus
                                ) : (
                                    selectedTask.comments?.map(comment => {
                                        const user = users.find(u => u.id === comment.userId);
+                                       // Check if user can delete (Admin or Author)
+                                       const isAuthor = comment.userId === currentUser.id;
+                                       const isAdmin = currentUser.role === UserRole.ADMIN;
+                                       const canDeleteComment = isAuthor || isAdmin;
+
                                        return (
-                                           <div key={comment.id} className="flex space-x-3 animate-in slide-in-from-bottom-2">
+                                           <div key={comment.id} className="flex space-x-3 animate-in slide-in-from-bottom-2 group/comment">
                                                <img src={user?.avatar} className="w-8 h-8 rounded-full mt-1" alt="Avatar" />
-                                               <div className="bg-white p-3 rounded-lg border border-slate-200 flex-1 shadow-sm">
+                                               <div className="bg-white p-3 rounded-lg border border-slate-200 flex-1 shadow-sm relative">
                                                    <div className="flex justify-between items-center mb-1">
                                                        <span className="font-bold text-sm text-slate-900">{user?.name}</span>
                                                        <span className="text-xs text-slate-400">{comment.timestamp}</span>
                                                    </div>
                                                    <p className="text-sm text-slate-700 whitespace-pre-line">{comment.content}</p>
+                                                   
+                                                   {/* Delete Comment Button */}
+                                                   {canDeleteComment && onDeleteComment && (
+                                                       <button 
+                                                           onClick={() => handleDeleteCommentClick(comment.id)}
+                                                           className="absolute top-2 right-2 p-1 text-slate-300 hover:text-red-500 rounded hover:bg-red-50 opacity-0 group-hover/comment:opacity-100 transition-opacity"
+                                                           title="Supprimer le commentaire"
+                                                       >
+                                                           <Trash2 size={12} />
+                                                       </button>
+                                                   )}
                                                </div>
                                            </div>
                                        );

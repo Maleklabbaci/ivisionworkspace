@@ -1,6 +1,6 @@
 
 
-import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useRef, Suspense, lazy, useCallback } from 'react';
 import { LogIn, Lock, Mail, UserPlus, ArrowLeft, User as UserIcon, Loader2, AlertCircle, Info } from 'lucide-react';
 import { supabase, isConfigured } from './services/supabaseClient';
 import Layout from './components/Layout';
@@ -69,15 +69,15 @@ const App: React.FC = () => {
     currentChannelIdRef.current = currentChannelId;
   }, [currentChannelId]);
 
-  const addNotification = (title: string, message: string, type: 'info' | 'success' | 'urgent' = 'info') => {
+  const addNotification = useCallback((title: string, message: string, type: 'info' | 'success' | 'urgent' = 'info') => {
     const id = generateUUID();
     const safeMessage = typeof message === 'string' ? message : JSON.stringify(message);
     setNotifications(prev => [...prev, { id, title, message: safeMessage, type }]);
-  };
+  }, []);
 
-  const removeNotification = (id: string) => {
+  const removeNotification = useCallback((id: string) => {
     setNotifications(prev => prev.filter(n => n.id !== id));
-  };
+  }, []);
 
   const getLastReadTimestamp = (channelId: string): string => {
       if (!currentUser) return new Date().toISOString();
@@ -302,7 +302,7 @@ const App: React.FC = () => {
       supabase.removeChannel(filesChannel);
       supabase.removeChannel(tasksChannel);
     };
-  }, [currentUser]); // Depend ONLY on currentUser to keep connection stable
+  }, [currentUser, addNotification]); // Depend ONLY on currentUser to keep connection stable
 
   const fetchUserProfile = async (userId: string) => {
     try {
@@ -381,7 +381,7 @@ const App: React.FC = () => {
     }
   };
 
-  const handleTaskComment = async (taskId: string, content: string) => {
+  const handleTaskComment = useCallback(async (taskId: string, content: string) => {
       if(!currentUser) return;
       
       const newId = generateUUID();
@@ -396,9 +396,9 @@ const App: React.FC = () => {
           console.error("Error sending comment:", error);
           addNotification("Erreur", "Message non envoyé : " + error.message, "urgent");
       }
-  };
+  }, [currentUser, addNotification]);
 
-  const handleAddFileLink = async (name: string, url: string) => {
+  const handleAddFileLink = useCallback(async (name: string, url: string) => {
       if (!currentUser) return;
       try {
           const { error } = await supabase.from('file_links').insert({ 
@@ -413,10 +413,10 @@ const App: React.FC = () => {
           console.error(e);
           addNotification("Erreur", "Impossible d'ajouter le fichier: " + e.message, "urgent");
       }
-  };
+  }, [currentUser, addNotification]);
   
   // UNIFIED DELETE HANDLER FOR ALL FILE TYPES
-  const handleGlobalFileDelete = async (compositeId: string) => {
+  const handleGlobalFileDelete = useCallback(async (compositeId: string) => {
       if (!currentUser) return;
       
       try {
@@ -463,12 +463,15 @@ const App: React.FC = () => {
           console.error("Delete Error", e);
           addNotification("Erreur", "Impossible de supprimer: " + e.message, "urgent");
       }
-  };
+  }, [currentUser, addNotification]);
 
-  const handleDeleteTaskAttachment = async (taskId: string, url: string) => {
+  const handleDeleteTaskAttachment = useCallback(async (taskId: string, url: string) => {
       if (!currentUser) return;
       
       // Find the comment in the task that contains this URL
+      // Use functional state to be safe, but we need current state to find ID.
+      // Tasks is a dependency.
+      // Note: In real world, we might need a direct ID passed, but this logic persists.
       const task = tasks.find(t => t.id === taskId);
       if (!task || !task.comments) return;
 
@@ -485,12 +488,38 @@ const App: React.FC = () => {
       } else {
           addNotification("Info", "Impossible de localiser le commentaire source.", "urgent");
       }
-  };
+  }, [currentUser, tasks, addNotification]);
 
-  const handleAddTask = async (task: Task) => {
+  const handleDeleteComment = useCallback(async (taskId: string, commentId: string) => {
+      if (!currentUser) return;
+
+      // Optimistic UI Update
+      setTasks(prev => prev.map(t => {
+          if (t.id !== taskId) return t;
+          return {
+              ...t,
+              comments: t.comments?.filter(c => c.id !== commentId)
+          };
+      }));
+
+      // Database Delete
+      try {
+          const { error } = await supabase.from('task_comments').delete().eq('id', commentId);
+          if (error) throw error;
+      } catch (e: any) {
+          console.error("Delete Comment Error", e);
+          addNotification("Erreur", "Impossible de supprimer le commentaire.", "urgent");
+          // Revert logic could go here if strict data consistency is needed
+      }
+  }, [currentUser, addNotification]);
+
+  const handleAddTask = useCallback(async (task: Task) => {
       if (!currentUser) return;
       
+      const newTaskId = generateUUID();
+
       const taskPayload = {
+          id: newTaskId,
           title: task.title,
           description: task.description,
           assignee_id: task.assigneeId,
@@ -525,9 +554,9 @@ const App: React.FC = () => {
       }
 
       addNotification("Succès", "Tâche créée avec succès", "success");
-  };
+  }, [currentUser, addNotification]);
 
-  const handleUpdateTask = async (updatedTask: Task) => {
+  const handleUpdateTask = useCallback(async (updatedTask: Task) => {
       if (!currentUser) return;
       
       // OPTIMISTIC UPDATE: Update UI immediately
@@ -553,9 +582,9 @@ const App: React.FC = () => {
       } else {
           // Feedback discret ou suppression de la notification "Mise à jour" pour plus de fluidité
       }
-  };
+  }, [currentUser, addNotification]);
 
-  const handleDeleteTask = async (taskId: string) => {
+  const handleDeleteTask = useCallback(async (taskId: string) => {
       if (!currentUser) return;
       const { error } = await supabase.from('tasks').delete().eq('id', taskId);
       if (error) {
@@ -564,9 +593,9 @@ const App: React.FC = () => {
           setTasks(prev => prev.filter(t => t.id !== taskId));
           addNotification("Suppression", "Tâche supprimée.", "info");
       }
-  };
+  }, [currentUser, addNotification]);
 
-  const handleUpdateStatus = async (taskId: string, newStatus: TaskStatus) => {
+  const handleUpdateStatus = useCallback(async (taskId: string, newStatus: TaskStatus) => {
       // OPTIMISTIC UPDATE: Update UI immediately
       setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
 
@@ -574,7 +603,7 @@ const App: React.FC = () => {
       if (error) {
           addNotification("Erreur", "Impossible de changer le statut", "urgent");
       }
-  };
+  }, [addNotification]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -702,7 +731,7 @@ const App: React.FC = () => {
     <Layout currentUser={currentUser} currentView={currentView} onNavigate={setCurrentView} onLogout={handleLogout} unreadMessageCount={channels.reduce((acc, c) => acc + (c.unread || 0), 0)}>
       <Suspense fallback={<div className="flex h-full items-center justify-center"><Loader2 className="animate-spin text-primary" size={40} /></div>}>
         {currentView === 'dashboard' && <Dashboard currentUser={currentUser} tasks={tasks} messages={messages} notifications={notifications} onNavigate={setCurrentView} onDeleteTask={handleDeleteTask} unreadMessageCount={channels.reduce((acc, c) => acc + (c.unread || 0), 0)} />}
-        {currentView === 'tasks' && <Tasks tasks={tasks} users={users} currentUser={currentUser} onUpdateStatus={handleUpdateStatus} onAddTask={handleAddTask} onUpdateTask={handleUpdateTask} onDeleteTask={handleDeleteTask} onAddComment={handleTaskComment} onAddFileLink={handleAddFileLink} onDeleteAttachment={handleDeleteTaskAttachment} />}
+        {currentView === 'tasks' && <Tasks tasks={tasks} users={users} currentUser={currentUser} onUpdateStatus={handleUpdateStatus} onAddTask={handleAddTask} onUpdateTask={handleUpdateTask} onDeleteTask={handleDeleteTask} onAddComment={handleTaskComment} onAddFileLink={handleAddFileLink} onDeleteAttachment={handleDeleteTaskAttachment} onDeleteComment={handleDeleteComment} />}
         {currentView === 'chat' && <Chat currentUser={currentUser} users={users} channels={channels} currentChannelId={currentChannelId} messages={messages} onChannelChange={setCurrentChannelId} onSendMessage={async (text, cid, att) => { 
             await supabase.from('messages').insert({ 
                 id: generateUUID(),
