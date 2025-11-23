@@ -196,6 +196,9 @@ const App: React.FC = () => {
         
         if (eventType === 'INSERT') {
             const newMsg = payload.new as any;
+            // Prevent duplicate display if optimistic ID matches or if we already have it
+            if (messages.some(m => m.id === newMsg.id)) return;
+
             const displayMsg: Message = {
               id: newMsg.id,
               userId: newMsg.user_id,
@@ -211,7 +214,6 @@ const App: React.FC = () => {
               return [...prev, displayMsg];
             });
 
-            // Use Ref to check current channel without tearing down subscription
             if (newMsg.user_id !== currentUser.id) {
                 if (newMsg.channel_id !== currentChannelIdRef.current) {
                     setChannels(prev => prev.map(c => 
@@ -227,25 +229,17 @@ const App: React.FC = () => {
         } else if (eventType === 'DELETE') {
              const oldMsg = payload.old as any;
              setMessages(prev => prev.filter(m => m.id !== oldMsg.id));
-        } else if (eventType === 'UPDATE') {
-             // Handle message updates (e.g. deleting attachments)
-             const updatedMsg = payload.new as any;
-             setMessages(prev => prev.map(m => m.id === updatedMsg.id ? {
-                ...m,
-                content: updatedMsg.content,
-                attachments: updatedMsg.attachments || []
-             } : m));
         }
       })
       .subscribe();
 
-    // Comments Subscription (Insert & Delete)
+    // Comments Subscription (Refetch tasks on change)
     const commentChannel = supabase
       .channel('public:task_comments')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'task_comments' }, async (payload) => {
-        // Simple strategy: refetch task comments or manually update state. 
-        // Given the dependency on tasks state structure, refetching tasks or targeted update is needed.
-        // For simplicity and robustness with delete:
+        // We only refetch if we are NOT the one who initiated the action (to preserve optimistic state smooth feel)
+        // However, payload doesn't easily tell us "who". 
+        // For simplicity and to ensure consistency:
         const { data } = await supabase.from('tasks').select('*');
         if (data) {
            const allCommentsResult = await supabase.from('task_comments').select('*');
@@ -276,17 +270,12 @@ const App: React.FC = () => {
       })
       .subscribe();
 
-    // Tasks Subscription (Refetch strategy for safety)
+    // Tasks Subscription
     const tasksChannel = supabase
       .channel('public:tasks')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, async (payload) => {
-          // If we are the ones who just updated it (optimistically), we might get a ping here.
-          // To ensure we have the latest server state (in case of other user updates), we can fetch.
-          // BUT, to avoid "jumping" values if our local optimistic update is slightly different or faster,
-          // we usually rely on optimistic first.
-          
-          // Re-fetching full list ensures consistency but might be heavy.
-          // For now, keep full refetch for consistency across users.
+          // If update/insert happens, refetch to keep everyone in sync.
+          // Note: Optimistic UI updates local state instantly, this eventually reconciles it.
           const { data } = await supabase.from('tasks').select('*');
           if (data) {
              const allCommentsResult = await supabase.from('task_comments').select('*');
@@ -302,7 +291,7 @@ const App: React.FC = () => {
       supabase.removeChannel(filesChannel);
       supabase.removeChannel(tasksChannel);
     };
-  }, [currentUser, addNotification]); // Depend ONLY on currentUser to keep connection stable
+  }, [currentUser, addNotification]); 
 
   const fetchUserProfile = async (userId: string) => {
     try {
@@ -385,6 +374,24 @@ const App: React.FC = () => {
       if(!currentUser) return;
       
       const newId = generateUUID();
+      const now = new Date();
+      
+      // OPTIMISTIC UPDATE: Add comment immediately
+      const optimisticComment: Comment = {
+          id: newId,
+          userId: currentUser.id,
+          content: content,
+          timestamp: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+          fullTimestamp: now.toISOString(),
+      };
+
+      setTasks(prev => prev.map(t => {
+          if (t.id === taskId) {
+              return { ...t, comments: [...(t.comments || []), optimisticComment] };
+          }
+          return t;
+      }));
+      
       const { error } = await supabase.from('task_comments').insert({ 
           id: newId, 
           task_id: taskId, 
@@ -394,8 +401,50 @@ const App: React.FC = () => {
       
       if (error) {
           console.error("Error sending comment:", error);
+          // Rollback
+          setTasks(prev => prev.map(t => {
+            if (t.id === taskId) {
+                return { ...t, comments: t.comments?.filter(c => c.id !== newId) };
+            }
+            return t;
+          }));
           addNotification("Erreur", "Message non envoyé : " + error.message, "urgent");
       }
+  }, [currentUser, addNotification]);
+
+  const handleSendMessage = useCallback(async (text: string, channelId: string, attachments?: string[]) => {
+      if (!currentUser) return;
+
+      const newId = generateUUID();
+      const now = new Date();
+
+      // OPTIMISTIC UPDATE
+      const optimisticMsg: Message = {
+          id: newId,
+          userId: currentUser.id,
+          channelId: channelId,
+          content: text,
+          timestamp: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+          fullTimestamp: now.toISOString(),
+          attachments: attachments || []
+      };
+
+      setMessages(prev => [...prev, optimisticMsg]);
+
+      const { error } = await supabase.from('messages').insert({ 
+          id: newId,
+          user_id: currentUser.id, 
+          channel_id: channelId, 
+          content: text, 
+          attachments: attachments 
+      });
+
+      if (error) {
+          // Rollback
+          setMessages(prev => prev.filter(m => m.id !== newId));
+          addNotification("Erreur", "Message non envoyé", "urgent");
+      }
+
   }, [currentUser, addNotification]);
 
   const handleAddFileLink = useCallback(async (name: string, url: string) => {
@@ -415,40 +464,29 @@ const App: React.FC = () => {
       }
   }, [currentUser, addNotification]);
   
-  // UNIFIED DELETE HANDLER FOR ALL FILE TYPES
   const handleGlobalFileDelete = useCallback(async (compositeId: string) => {
       if (!currentUser) return;
       
       try {
           // Check prefix to determine deletion strategy
           if (compositeId.startsWith('link|')) {
-             // 1. Library Link
              const cleanId = compositeId.split('|')[1];
              const { error } = await supabase.from('file_links').delete().eq('id', cleanId);
              if(error) throw error;
-
           } else if (compositeId.startsWith('task|')) {
-             // 2. Task Attachment (It's a comment)
-             // Format: task|taskId|commentId
              const parts = compositeId.split('|');
              if(parts.length >= 3) {
                  const commentId = parts[2];
                  const { error } = await supabase.from('task_comments').delete().eq('id', commentId);
                  if(error) throw error;
              }
-
           } else if (compositeId.startsWith('chat|')) {
-             // 3. Chat Attachment
-             // Format: chat|msgId|filename
              const parts = compositeId.split('|');
              if(parts.length >= 3) {
                  const msgId = parts[1];
-                 const fileName = parts.slice(2).join('|'); // Rejoin if filename had pipes (unlikely but safe)
-                 
-                 // Fetch current message
+                 const fileName = parts.slice(2).join('|'); 
                  const { data: msgData, error: fetchError } = await supabase.from('messages').select('attachments').eq('id', msgId).single();
                  if(fetchError) throw fetchError;
-
                  if(msgData && msgData.attachments) {
                      const updatedAttachments = msgData.attachments.filter((a: string) => a !== fileName);
                      const { error: updateError } = await supabase.from('messages').update({ attachments: updatedAttachments }).eq('id', msgId);
@@ -456,9 +494,7 @@ const App: React.FC = () => {
                  }
              }
           }
-          
           addNotification("Suppression", "Le fichier a été supprimé.", "info");
-
       } catch (e: any) {
           console.error("Delete Error", e);
           addNotification("Erreur", "Impossible de supprimer: " + e.message, "urgent");
@@ -467,26 +503,24 @@ const App: React.FC = () => {
 
   const handleDeleteTaskAttachment = useCallback(async (taskId: string, url: string) => {
       if (!currentUser) return;
-      
-      // Find the comment in the task that contains this URL
-      // Use functional state to be safe, but we need current state to find ID.
-      // Tasks is a dependency.
-      // Note: In real world, we might need a direct ID passed, but this logic persists.
       const task = tasks.find(t => t.id === taskId);
       if (!task || !task.comments) return;
 
       const commentToDelete = task.comments.find(c => c.content.includes(url));
-
       if (commentToDelete) {
           try {
+             // Optimistic removal from Task UI
+             setTasks(prev => prev.map(t => {
+                 if (t.id === taskId && t.comments) {
+                     return { ...t, comments: t.comments.filter(c => c.id !== commentToDelete.id) };
+                 }
+                 return t;
+             }));
              const { error } = await supabase.from('task_comments').delete().eq('id', commentToDelete.id);
              if (error) throw error;
-             addNotification("Fichier supprimé", "La pièce jointe a été retirée de la tâche.", "info");
           } catch (e: any) {
              addNotification("Erreur", "Echec suppression: " + e.message, "urgent");
           }
-      } else {
-          addNotification("Info", "Impossible de localiser le commentaire source.", "urgent");
       }
   }, [currentUser, tasks, addNotification]);
 
@@ -502,21 +536,23 @@ const App: React.FC = () => {
           };
       }));
 
-      // Database Delete
       try {
           const { error } = await supabase.from('task_comments').delete().eq('id', commentId);
           if (error) throw error;
       } catch (e: any) {
           console.error("Delete Comment Error", e);
           addNotification("Erreur", "Impossible de supprimer le commentaire.", "urgent");
-          // Revert logic could go here if strict data consistency is needed
       }
   }, [currentUser, addNotification]);
 
   const handleAddTask = useCallback(async (task: Task) => {
       if (!currentUser) return;
       
-      const newTaskId = generateUUID();
+      const newTaskId = task.id.startsWith('temp') ? generateUUID() : task.id;
+
+      // OPTIMISTIC UPDATE: Add task immediately to UI
+      const optimisticTask: Task = { ...task, id: newTaskId };
+      setTasks(prev => [...prev, optimisticTask]);
 
       const taskPayload = {
           id: newTaskId,
@@ -534,6 +570,8 @@ const App: React.FC = () => {
 
       if (error) {
           console.error("Task Insert Error:", error);
+          // Rollback
+          setTasks(prev => prev.filter(t => t.id !== newTaskId));
           addNotification("Erreur", `Impossible de créer la tâche: ${error.message}`, "urgent");
           return;
       }
@@ -549,7 +587,6 @@ const App: React.FC = () => {
            const { error: commentError } = await supabase.from('task_comments').insert(commentsPayload);
            if (commentError) {
               console.error("Error adding attachments as comments", commentError);
-              addNotification("Attention", "Tâche créée mais erreur lors de l'ajout des fichiers.", "urgent");
            }
       }
 
@@ -559,7 +596,7 @@ const App: React.FC = () => {
   const handleUpdateTask = useCallback(async (updatedTask: Task) => {
       if (!currentUser) return;
       
-      // OPTIMISTIC UPDATE: Update UI immediately
+      // OPTIMISTIC UPDATE
       setTasks(prev => prev.map(t => t.id === updatedTask.id ? updatedTask : t));
 
       const taskPayload = {
@@ -577,26 +614,29 @@ const App: React.FC = () => {
 
       if (error) {
           console.error("Task Update Error:", error);
-          addNotification("Erreur", "Impossible de mettre à jour la tâche (Synchro)", "urgent");
-          // On pourrait rollback ici si nécessaire
-      } else {
-          // Feedback discret ou suppression de la notification "Mise à jour" pour plus de fluidité
+          addNotification("Erreur", "Impossible de mettre à jour la tâche", "urgent");
       }
   }, [currentUser, addNotification]);
 
   const handleDeleteTask = useCallback(async (taskId: string) => {
       if (!currentUser) return;
+      
+      // OPTIMISTIC UPDATE: Remove immediately
+      const previousTasks = tasks; 
+      setTasks(prev => prev.filter(t => t.id !== taskId));
+
       const { error } = await supabase.from('tasks').delete().eq('id', taskId);
       if (error) {
+          // Rollback
+          setTasks(previousTasks);
           addNotification("Erreur", "Impossible de supprimer la tâche", "urgent");
       } else {
-          setTasks(prev => prev.filter(t => t.id !== taskId));
           addNotification("Suppression", "Tâche supprimée.", "info");
       }
-  }, [currentUser, addNotification]);
+  }, [currentUser, tasks, addNotification]);
 
   const handleUpdateStatus = useCallback(async (taskId: string, newStatus: TaskStatus) => {
-      // OPTIMISTIC UPDATE: Update UI immediately
+      // OPTIMISTIC UPDATE
       setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
 
       const { error } = await supabase.from('tasks').update({ status: newStatus }).eq('id', taskId);
@@ -732,15 +772,7 @@ const App: React.FC = () => {
       <Suspense fallback={<div className="flex h-full items-center justify-center"><Loader2 className="animate-spin text-primary" size={40} /></div>}>
         {currentView === 'dashboard' && <Dashboard currentUser={currentUser} tasks={tasks} messages={messages} notifications={notifications} onNavigate={setCurrentView} onDeleteTask={handleDeleteTask} unreadMessageCount={channels.reduce((acc, c) => acc + (c.unread || 0), 0)} />}
         {currentView === 'tasks' && <Tasks tasks={tasks} users={users} currentUser={currentUser} onUpdateStatus={handleUpdateStatus} onAddTask={handleAddTask} onUpdateTask={handleUpdateTask} onDeleteTask={handleDeleteTask} onAddComment={handleTaskComment} onAddFileLink={handleAddFileLink} onDeleteAttachment={handleDeleteTaskAttachment} onDeleteComment={handleDeleteComment} />}
-        {currentView === 'chat' && <Chat currentUser={currentUser} users={users} channels={channels} currentChannelId={currentChannelId} messages={messages} onChannelChange={setCurrentChannelId} onSendMessage={async (text, cid, att) => { 
-            await supabase.from('messages').insert({ 
-                id: generateUUID(),
-                user_id: currentUser.id, 
-                channel_id: cid, 
-                content: text, 
-                attachments: att 
-            });
-        }} onAddChannel={async (c) => { 
+        {currentView === 'chat' && <Chat currentUser={currentUser} users={users} channels={channels} currentChannelId={currentChannelId} messages={messages} onChannelChange={setCurrentChannelId} onSendMessage={handleSendMessage} onAddChannel={async (c) => { 
             await supabase.from('channels').insert({ 
                 id: generateUUID(),
                 name: c.name, 
