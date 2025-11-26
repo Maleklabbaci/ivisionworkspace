@@ -56,6 +56,13 @@ export interface Comment {
   attachments?: string[];
 }
 
+export interface Subtask {
+  id: string;
+  taskId: string;
+  title: string;
+  isCompleted: boolean;
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -66,6 +73,7 @@ export interface Task {
   type: 'content' | 'ads' | 'social' | 'seo' | 'admin'; 
   priority?: 'low' | 'medium' | 'high';
   comments?: Comment[];
+  subtasks?: Subtask[];
   attachments?: string[];
   price?: number;
 }

@@ -1,9 +1,11 @@
+
 import React, { useState, useEffect, useRef, Suspense, lazy, useCallback } from 'react';
 import { LogIn, Lock, Mail, UserPlus, ArrowLeft, User as UserIcon, Loader2, AlertCircle, Info } from 'lucide-react';
 import { supabase, isConfigured } from './services/supabaseClient';
+import { HashRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import ToastContainer from './components/Toast';
-import { User, UserRole, ViewState, Task, TaskStatus, Channel, ActivityLog, ToastNotification, Message, Comment, FileLink } from './types';
+import { User, UserRole, ViewState, Task, TaskStatus, Channel, ActivityLog, ToastNotification, Message, Comment, FileLink, Subtask } from './types';
 
 // Lazy Load Components pour optimiser le chargement initial
 const Dashboard = lazy(() => import('./components/Dashboard'));
@@ -15,7 +17,7 @@ const Settings = lazy(() => import('./components/Settings'));
 const Reports = lazy(() => import('./components/Reports'));
 const Campaigns = lazy(() => import('./components/Campaigns'));
 
-// Robust UUID generator safe for all contexts (Fixes DB Insert Null Error)
+// Robust UUID generator safe for all contexts
 const generateUUID = () => {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
     return crypto.randomUUID();
@@ -35,9 +37,19 @@ const generateUUID = () => {
   });
 };
 
+// Helper to safely stringify errors
+const safeErrorMsg = (error: any): string => {
+    if (typeof error === 'string') return error;
+    if (error?.message) return error.message;
+    try {
+        return JSON.stringify(error);
+    } catch (e) {
+        return "Erreur inconnue";
+    }
+};
+
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [currentView, setCurrentView] = useState<ViewState>('dashboard');
   
   // Data State
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -52,14 +64,11 @@ const App: React.FC = () => {
   const [notifications, setNotifications] = useState<ToastNotification[]>([]);
   const [currentChannelId, setCurrentChannelId] = useState('general');
   
-  // Ref pour suivre le channel actuel sans casser le useEffect des subscriptions
   const currentChannelIdRef = useRef(currentChannelId);
 
-  // Loading States
   const [isLoading, setIsLoading] = useState(true); 
   const [isAuthProcessing, setIsAuthProcessing] = useState(false); 
   
-  // Login & Register State
   const [isRegistering, setIsRegistering] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -68,14 +77,13 @@ const App: React.FC = () => {
 
   const isDataLoaded = useRef(false);
 
-  // Sync Ref with State
   useEffect(() => {
     currentChannelIdRef.current = currentChannelId;
   }, [currentChannelId]);
 
-  const addNotification = useCallback((title: string, message: string, type: 'info' | 'success' | 'urgent' = 'info') => {
+  const addNotification = useCallback((title: string, message: any, type: 'info' | 'success' | 'urgent' = 'info') => {
     const id = generateUUID();
-    const safeMessage = typeof message === 'string' ? message : JSON.stringify(message);
+    const safeMessage = safeErrorMsg(message);
     setNotifications(prev => [...prev, { id, title, message: safeMessage, type }]);
   }, []);
 
@@ -116,7 +124,7 @@ const App: React.FC = () => {
       return links;
   };
 
-  const mapTasksFromDB = (tasksData: any[], commentsData: any[]): Task[] => {
+  const mapTasksFromDB = (tasksData: any[], commentsData: any[], subtasksData: any[]): Task[] => {
       return tasksData.map((t) => {
           const taskComments = commentsData
               .filter(c => c.task_id === t.id)
@@ -130,33 +138,36 @@ const App: React.FC = () => {
           
           const derivedAttachments = extractAttachmentsFromComments(taskComments);
 
+          const taskSubtasks = subtasksData
+              .filter(s => s.task_id === t.id)
+              .map(s => ({
+                  id: s.id,
+                  taskId: s.task_id,
+                  title: s.title,
+                  isCompleted: s.is_completed
+              }));
+
           return {
               id: t.id, title: t.title, description: t.description, assigneeId: t.assignee_id,
               dueDate: t.due_date, status: t.status as TaskStatus, type: t.type, priority: t.priority,
               comments: taskComments, 
               attachments: derivedAttachments, 
+              subtasks: taskSubtasks,
               price: t.price
           };
       });
   };
 
-  // Heartbeat pour mettre à jour last_seen
   useEffect(() => {
     if (!currentUser) return;
-
-    // Update immediately on mount
     const updatePresence = async () => {
       await supabase.from('users').update({ last_seen: new Date().toISOString() }).eq('id', currentUser.id);
     };
     updatePresence();
-
-    // Update every 2 minutes
     const interval = setInterval(updatePresence, 120000);
-
     return () => clearInterval(interval);
   }, [currentUser]);
 
-  // Auth Effect
   useEffect(() => {
     if (!isConfigured) {
       setIsLoading(false);
@@ -183,7 +194,6 @@ const App: React.FC = () => {
                 notificationPref: 'all',
                 status: 'active'
              };
-             
              setCurrentUser(optimisticUser);
              setIsLoading(false);
              setIsAuthProcessing(false);
@@ -203,17 +213,14 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Realtime Subscriptions Effect (Presence & Data)
   useEffect(() => {
     if (!currentUser) return;
 
-    // 1. Presence Channel (Who is online NOW)
     const presenceChannel = supabase.channel('online-users');
     presenceChannel
       .on('presence', { event: 'sync' }, () => {
         const state = presenceChannel.presenceState();
         const onlineIds = new Set<string>();
-        // Extract all user_ids from presence state
         Object.values(state).forEach((presences: any) => {
              presences.forEach((p: any) => {
                  if(p.user_id) onlineIds.add(p.user_id);
@@ -227,7 +234,6 @@ const App: React.FC = () => {
           }
       });
 
-    // 2. Data Subscriptions
     const messageChannel = supabase
       .channel('public:messages')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, (payload) => {
@@ -273,11 +279,12 @@ const App: React.FC = () => {
     const commentChannel = supabase
       .channel('public:task_comments')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'task_comments' }, async (payload) => {
-        const { data } = await supabase.from('tasks').select('*');
-        if (data) {
-           const allCommentsResult = await supabase.from('task_comments').select('*');
-           const allComments = allCommentsResult.data || [];
-           setTasks(mapTasksFromDB(data, allComments));
+        const { data: tasksData } = await supabase.from('tasks').select('*');
+        const { data: commentsData } = await supabase.from('task_comments').select('*');
+        const { data: subtasksData } = await supabase.from('subtasks').select('*');
+        
+        if (tasksData && commentsData && subtasksData) {
+           setTasks(mapTasksFromDB(tasksData, commentsData, subtasksData));
         }
       })
       .subscribe();
@@ -287,14 +294,16 @@ const App: React.FC = () => {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'file_links' }, (payload) => {
          if (payload.eventType === 'INSERT') {
             const newLink = payload.new as any;
-            const formattedLink: FileLink = {
-                id: newLink.id,
-                name: newLink.name,
-                url: newLink.url,
-                createdBy: newLink.created_by,
-                createdAt: new Date(newLink.created_at).toISOString().split('T')[0]
-            };
-            setFileLinks(prev => [...prev, formattedLink]);
+            setFileLinks(prev => {
+                if (prev.some(f => f.id === newLink.id)) return prev;
+                return [...prev, {
+                    id: newLink.id,
+                    name: newLink.name,
+                    url: newLink.url,
+                    createdBy: newLink.created_by,
+                    createdAt: new Date(newLink.created_at).toISOString().split('T')[0]
+                }];
+            });
          } else if (payload.eventType === 'DELETE') {
              const deletedId = (payload.old as any).id;
              setFileLinks(prev => prev.filter(f => f.id !== deletedId));
@@ -305,20 +314,32 @@ const App: React.FC = () => {
     const tasksChannel = supabase
       .channel('public:tasks')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, async (payload) => {
-          const { data } = await supabase.from('tasks').select('*');
-          if (data) {
-             const allCommentsResult = await supabase.from('task_comments').select('*');
-             const allComments = allCommentsResult.data || [];
-             setTasks(mapTasksFromDB(data, allComments));
+          const { data: tasksData } = await supabase.from('tasks').select('*');
+          const { data: commentsData } = await supabase.from('task_comments').select('*');
+          const { data: subtasksData } = await supabase.from('subtasks').select('*');
+          
+          if (tasksData && commentsData && subtasksData) {
+             setTasks(mapTasksFromDB(tasksData, commentsData, subtasksData));
           }
       })
       .subscribe();
 
-    // Listen to Users Table for Last Seen updates from others
+    const subtasksChannel = supabase
+      .channel('public:subtasks')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'subtasks' }, async (payload) => {
+          const { data: tasksData } = await supabase.from('tasks').select('*');
+          const { data: commentsData } = await supabase.from('task_comments').select('*');
+          const { data: subtasksData } = await supabase.from('subtasks').select('*');
+          
+          if (tasksData && commentsData && subtasksData) {
+             setTasks(mapTasksFromDB(tasksData, commentsData, subtasksData));
+          }
+      })
+      .subscribe();
+
     const usersChannel = supabase
       .channel('public:users')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, (payload) => {
-          // Handle UPDATE
           if (payload.eventType === 'UPDATE') {
               const updatedUser = payload.new as any;
               setUsers(prev => prev.map(u => 
@@ -332,7 +353,6 @@ const App: React.FC = () => {
                  } : u
               ));
           }
-          // Handle INSERT (New User from another admin/tab)
           if (payload.eventType === 'INSERT') {
                const newUser = payload.new as any;
                setUsers(prev => {
@@ -351,7 +371,6 @@ const App: React.FC = () => {
                    }];
                });
           }
-          // Handle DELETE
           if (payload.eventType === 'DELETE') {
                const deletedId = (payload.old as any).id;
                setUsers(prev => prev.filter(u => u.id !== deletedId));
@@ -360,12 +379,7 @@ const App: React.FC = () => {
       .subscribe();
 
     return () => {
-      supabase.removeChannel(presenceChannel);
-      supabase.removeChannel(messageChannel);
-      supabase.removeChannel(commentChannel);
-      supabase.removeChannel(filesChannel);
-      supabase.removeChannel(tasksChannel);
-      supabase.removeChannel(usersChannel);
+      supabase.removeAllChannels();
     };
   }, [currentUser, addNotification]); 
 
@@ -374,16 +388,9 @@ const App: React.FC = () => {
         const { data } = await supabase.from('users').select('*').eq('id', userId).single();
         if (data) {
             setCurrentUser({
-                id: data.id,
-                name: data.name,
-                email: data.email,
-                role: data.role as UserRole,
-                avatar: data.avatar,
-                phoneNumber: data.phone_number,
-                notificationPref: data.notification_pref,
-                status: data.status,
-                permissions: data.permissions || {},
-                lastSeen: data.last_seen
+                id: data.id, name: data.name, email: data.email, role: data.role as UserRole, avatar: data.avatar,
+                phoneNumber: data.phone_number, notificationPref: data.notification_pref, status: data.status,
+                permissions: data.permissions || {}, lastSeen: data.last_seen
             });
         }
     } catch (e) { console.error(e); }
@@ -391,13 +398,14 @@ const App: React.FC = () => {
 
   const fetchInitialData = async (userId?: string) => {
     try {
-        const [usersResult, channelsResult, messagesResult, tasksResult, commentsResult, filesResult] = await Promise.all([
+        const [usersResult, channelsResult, messagesResult, tasksResult, commentsResult, filesResult, subtasksResult] = await Promise.all([
             supabase.from('users').select('*'),
             supabase.from('channels').select('*'),
             supabase.from('messages').select('*').order('created_at', { ascending: true }),
             supabase.from('tasks').select('*'),
             supabase.from('task_comments').select('*').order('created_at', { ascending: true }),
-            supabase.from('file_links').select('*').order('created_at', { ascending: false })
+            supabase.from('file_links').select('*').order('created_at', { ascending: false }),
+            supabase.from('subtasks').select('*').order('created_at', { ascending: true })
         ]);
 
         if (usersResult.data) {
@@ -438,8 +446,7 @@ const App: React.FC = () => {
         setCurrentChannelId(defaultChannelId);
 
         if (tasksResult.data) {
-            const allComments = commentsResult.data || [];
-            setTasks(mapTasksFromDB(tasksResult.data, allComments));
+            setTasks(mapTasksFromDB(tasksResult.data, commentsResult.data || [], subtasksResult.data || []));
         }
         setIsLoading(false);
     } catch (e) {
@@ -448,63 +455,61 @@ const App: React.FC = () => {
     }
   };
 
-  // ----------------- OPTIMISTIC UI HANDLERS FOR USER MANAGEMENT -----------------
+  // --- HANDLERS ---
+
+  const handleAddSubtask = useCallback(async (taskId: string, title: string) => {
+      if (!currentUser) return;
+      const id = generateUUID();
+      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, subtasks: [...(t.subtasks || []), { id, taskId, title, isCompleted: false }] } : t));
+      const { error } = await supabase.from('subtasks').insert({ id, task_id: taskId, title, is_completed: false });
+      if (error) addNotification("Erreur", "Impossible d'ajouter la sous-tâche", "urgent");
+  }, [currentUser, addNotification]);
+
+  const handleToggleSubtask = useCallback(async (taskId: string, subtaskId: string, isCompleted: boolean) => {
+      if (!currentUser) return;
+      setTasks(prev => prev.map(t => t.id === taskId && t.subtasks ? { ...t, subtasks: t.subtasks.map(s => s.id === subtaskId ? { ...s, isCompleted } : s) } : t));
+      const { error } = await supabase.from('subtasks').update({ is_completed: isCompleted }).eq('id', subtaskId);
+      if (error) addNotification("Erreur", "Impossible de mettre à jour", "urgent");
+  }, [currentUser, addNotification]);
+
+  const handleDeleteSubtask = useCallback(async (taskId: string, subtaskId: string) => {
+      if (!currentUser) return;
+      setTasks(prev => prev.map(t => t.id === taskId && t.subtasks ? { ...t, subtasks: t.subtasks.filter(s => s.id !== subtaskId) } : t));
+      const { error } = await supabase.from('subtasks').delete().eq('id', subtaskId);
+      if (error) addNotification("Erreur", "Impossible de supprimer", "urgent");
+  }, [currentUser, addNotification]);
 
   const handleAddUser = useCallback(async (user: User) => {
       if (!currentUser) return;
-      
-      // Generate valid UUID if current ID is temp
       const finalId = (user.id && !user.id.startsWith('temp')) ? user.id : generateUUID();
-      
-      // 1. Optimistic Update (Update UI Immediately)
       const optimisticUser: User = { ...user, id: finalId, status: 'active' };
       setUsers(prev => [...prev, optimisticUser]);
       addNotification("Succès", `${user.name} a été ajouté.`, "success");
-
-      // 2. DB Insert
       const { error } = await supabase.from('users').insert({
-          id: finalId,
-          name: optimisticUser.name,
-          email: optimisticUser.email,
-          role: optimisticUser.role,
-          avatar: optimisticUser.avatar,
-          status: optimisticUser.status,
-          permissions: optimisticUser.permissions,
-          phone_number: optimisticUser.phoneNumber
+          id: finalId, name: optimisticUser.name, email: optimisticUser.email, role: optimisticUser.role,
+          avatar: optimisticUser.avatar, status: optimisticUser.status, permissions: optimisticUser.permissions, phone_number: optimisticUser.phoneNumber
       });
-
       if (error) {
-          // 3. Revert on Error
           setUsers(prev => prev.filter(u => u.id !== finalId));
-          addNotification("Erreur", "Impossible d'ajouter l'utilisateur: " + error.message, "urgent");
+          addNotification("Erreur", "Impossible d'ajouter l'utilisateur: " + safeErrorMsg(error), "urgent");
       }
   }, [currentUser, addNotification]);
 
   const handleRemoveUser = useCallback(async (userId: string) => {
       const previousUsers = users;
-      
-      // 1. Optimistic Update
       setUsers(prev => prev.filter(u => u.id !== userId));
       addNotification("Suppression", "Membre supprimé.", "info");
-
-      // 2. DB Delete
       const { error } = await supabase.from('users').delete().eq('id', userId);
-
       if (error) {
-          // 3. Revert
           setUsers(previousUsers);
-          addNotification("Erreur", "Echec de la suppression: " + error.message, "urgent");
+          addNotification("Erreur", "Echec suppression: " + safeErrorMsg(error), "urgent");
       }
   }, [users, addNotification]);
 
   const handleUpdateUser = useCallback(async (userId: string, data: Partial<User>) => {
       const previousUsers = users;
-      
-      // 1. Optimistic Update
       setUsers(prev => prev.map(u => u.id === userId ? { ...u, ...data } : u));
       addNotification("Mise à jour", "Modifications enregistrées.", "success");
-
-      // 2. Prepare DB Payload
       const dbUpdates: any = {};
       if (data.name !== undefined) dbUpdates.name = data.name;
       if (data.email !== undefined) dbUpdates.email = data.email;
@@ -512,59 +517,85 @@ const App: React.FC = () => {
       if (data.status !== undefined) dbUpdates.status = data.status;
       if (data.permissions !== undefined) dbUpdates.permissions = data.permissions;
       if (data.phoneNumber !== undefined) dbUpdates.phone_number = data.phoneNumber;
-
       if (Object.keys(dbUpdates).length === 0) return;
-
-      // 3. DB Update
       const { error } = await supabase.from('users').update(dbUpdates).eq('id', userId);
-
       if (error) {
-          // 4. Revert
           setUsers(previousUsers);
-          addNotification("Erreur", "Echec de la mise à jour: " + error.message, "urgent");
+          addNotification("Erreur", "Echec mise à jour: " + safeErrorMsg(error), "urgent");
       }
   }, [users, addNotification]);
-
-  // ----------------------------------------------------------------------------
 
   const handleTaskComment = useCallback(async (taskId: string, content: string) => {
       if(!currentUser) return;
       const newId = generateUUID();
       const now = new Date();
       const optimisticComment: Comment = {
-          id: newId, userId: currentUser.id, content: content, timestamp: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}), fullTimestamp: now.toISOString(),
+          id: newId, userId: currentUser.id, content: content, 
+          timestamp: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}), fullTimestamp: now.toISOString()
       };
       setTasks(prev => prev.map(t => t.id === taskId ? { ...t, comments: [...(t.comments || []), optimisticComment] } : t));
       const { error } = await supabase.from('task_comments').insert({ id: newId, task_id: taskId, user_id: currentUser.id, content: content });
       if (error) {
           setTasks(prev => prev.map(t => t.id === taskId ? { ...t, comments: t.comments?.filter(c => c.id !== newId) } : t));
-          addNotification("Erreur", "Message non envoyé : " + error.message, "urgent");
+          addNotification("Erreur", "Message non envoyé: " + safeErrorMsg(error), "urgent");
       }
   }, [currentUser, addNotification]);
 
   const handleSendMessage = useCallback(async (text: string, channelId: string, attachments?: string[]) => {
       if (!currentUser) return;
+      
+      // Resolving Channel ID logic (Self Healing)
+      let targetChannelId = channelId;
+      if (targetChannelId === 'general') {
+          const realGeneral = channels.find(c => c.name.toLowerCase().includes('general'));
+          if (realGeneral) {
+              targetChannelId = realGeneral.id;
+          } else {
+              // Create it if missing
+              const newId = generateUUID();
+              setChannels(prev => [...prev, { id: newId, name: 'Général', type: 'global', unread: 0 }]);
+              const { error } = await supabase.from('channels').insert({ id: newId, name: 'Général', type: 'global' });
+              if (!error) targetChannelId = newId;
+              else {
+                  addNotification("Erreur Technique", "Impossible de localiser le canal Général.", "urgent");
+                  return;
+              }
+          }
+          setCurrentChannelId(targetChannelId); // Sync state
+      }
+
       const newId = generateUUID();
       const now = new Date();
       const optimisticMsg: Message = {
-          id: newId, userId: currentUser.id, channelId: channelId, content: text, timestamp: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}), fullTimestamp: now.toISOString(), attachments: attachments || []
+          id: newId, userId: currentUser.id, channelId: targetChannelId, content: text, 
+          timestamp: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}), fullTimestamp: now.toISOString(), attachments: attachments || []
       };
       setMessages(prev => [...prev, optimisticMsg]);
-      const { error } = await supabase.from('messages').insert({ id: newId, user_id: currentUser.id, channel_id: channelId, content: text, attachments: attachments });
+      const { error } = await supabase.from('messages').insert({ id: newId, user_id: currentUser.id, channel_id: targetChannelId, content: text, attachments: attachments });
       if (error) {
           setMessages(prev => prev.filter(m => m.id !== newId));
           addNotification("Erreur", "Message non envoyé", "urgent");
       }
-  }, [currentUser, addNotification]);
+  }, [currentUser, channels, addNotification]);
 
   const handleAddFileLink = useCallback(async (name: string, url: string) => {
       if (!currentUser) return;
+      const id = generateUUID();
+      const now = new Date();
+      
+      // Optimistic UI Update
+      const optimisticLink: FileLink = {
+          id, name, url, createdBy: currentUser.id, createdAt: now.toISOString().split('T')[0]
+      };
+      setFileLinks(prev => [optimisticLink, ...prev]);
+      addNotification("Fichier ajouté", "Le lien a été ajouté avec succès.", "success");
+
       try {
-          const { error } = await supabase.from('file_links').insert({ id: generateUUID(), name, url, created_by: currentUser.id });
+          const { error } = await supabase.from('file_links').insert({ id, name, url, created_by: currentUser.id });
           if (error) throw error;
-          addNotification("Fichier ajouté", "Le lien a été sauvegardé avec succès.", "success");
       } catch (e: any) {
-          addNotification("Erreur", "Impossible d'ajouter le fichier: " + e.message, "urgent");
+          setFileLinks(prev => prev.filter(f => f.id !== id));
+          addNotification("Erreur", "Impossible d'ajouter le fichier: " + safeErrorMsg(e), "urgent");
       }
   }, [currentUser, addNotification]);
   
@@ -573,6 +604,7 @@ const App: React.FC = () => {
       try {
           if (compositeId.startsWith('link|')) {
              const cleanId = compositeId.split('|')[1];
+             setFileLinks(prev => prev.filter(f => f.id !== cleanId)); // Optimistic
              const { error } = await supabase.from('file_links').delete().eq('id', cleanId);
              if(error) throw error;
           } else if (compositeId.startsWith('task|')) {
@@ -598,7 +630,7 @@ const App: React.FC = () => {
           }
           addNotification("Suppression", "Le fichier a été supprimé.", "info");
       } catch (e: any) {
-          addNotification("Erreur", "Impossible de supprimer: " + e.message, "urgent");
+          addNotification("Erreur", "Impossible de supprimer: " + safeErrorMsg(e), "urgent");
       }
   }, [currentUser, addNotification]);
 
@@ -613,7 +645,7 @@ const App: React.FC = () => {
              const { error } = await supabase.from('task_comments').delete().eq('id', commentToDelete.id);
              if (error) throw error;
           } catch (e: any) {
-             addNotification("Erreur", "Echec suppression: " + e.message, "urgent");
+             addNotification("Erreur", "Echec suppression: " + safeErrorMsg(e), "urgent");
           }
       }
   }, [currentUser, tasks, addNotification]);
@@ -633,26 +665,38 @@ const App: React.FC = () => {
 
   const handleAddTask = useCallback(async (task: Task) => {
       if (!currentUser) return;
-      const newTaskId = (task.id && !task.id.startsWith('temp')) ? task.id : generateUUID();
+      const newTaskId = generateUUID();
+      
+      // Optimistic UI - Include attachments immediately as comments-like structure if needed visually
       const optimisticTask: Task = { ...task, id: newTaskId };
       setTasks(prev => [...prev, optimisticTask]);
+      addNotification("Succès", "Tâche créée avec succès", "success");
+
+      // Separate Insert: Task
       const taskPayload = {
           id: newTaskId, title: task.title, description: task.description, assignee_id: task.assigneeId,
           due_date: task.dueDate, status: task.status, type: task.type, priority: task.priority, price: task.price
       };
+      
       const { data: newTaskData, error } = await supabase.from('tasks').insert(taskPayload).select().single();
+      
       if (error) {
           setTasks(prev => prev.filter(t => t.id !== newTaskId));
-          addNotification("Erreur", `Impossible de créer la tâche: ${error.message}`, "urgent");
+          addNotification("Erreur", `Impossible de créer la tâche: ${safeErrorMsg(error)}`, "urgent");
           return;
       }
+
+      // Separate Insert: Attachments as Comments
       if (newTaskData && task.attachments && task.attachments.length > 0) {
            const commentsPayload = task.attachments.map(url => ({
                id: generateUUID(), task_id: newTaskData.id, user_id: currentUser.id, content: `📎 Fichier attaché: ${url}` 
            }));
-           await supabase.from('task_comments').insert(commentsPayload);
+           
+           const { error: commentsError } = await supabase.from('task_comments').insert(commentsPayload);
+           if(commentsError) {
+                addNotification("Attention", "Tâche créée mais les fichiers n'ont pas pu être attachés.", "urgent");
+           }
       }
-      addNotification("Succès", "Tâche créée avec succès", "success");
   }, [currentUser, addNotification]);
 
   const handleUpdateTask = useCallback(async (updatedTask: Task) => {
@@ -683,181 +727,186 @@ const App: React.FC = () => {
       if (error) { setTasks(previousTasks); addNotification("Erreur", "Impossible de changer le statut", "urgent"); }
   }, [tasks, addNotification]);
 
+  const handleAddChannel = useCallback(async (channel: { name: string; type: 'global' | 'project'; members?: string[] }) => {
+      const id = generateUUID();
+      setChannels(prev => [...prev, { id, name: channel.name, type: channel.type, unread: 0, members: channel.members }]);
+      const { error } = await supabase.from('channels').insert({ id, name: channel.name, type: channel.type });
+      if (error) {
+          setChannels(prev => prev.filter(c => c.id !== id));
+          addNotification("Erreur", "Impossible de créer le canal", "urgent");
+      }
+  }, [addNotification]);
+
+  const handleDeleteChannel = useCallback(async (channelId: string) => {
+      const previousChannels = channels;
+      setChannels(prev => prev.filter(c => c.id !== channelId));
+      const { error } = await supabase.from('channels').delete().eq('id', channelId);
+      if (error) {
+          setChannels(previousChannels);
+          addNotification("Erreur", "Impossible de supprimer le canal", "urgent");
+      }
+  }, [channels, addNotification]);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsAuthProcessing(true);
-    try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw error;
-    } catch (error: any) {
-      addNotification("Erreur de connexion", error.message || "Identifiants incorrects", "urgent");
-      setIsAuthProcessing(false);
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+        addNotification('Erreur', error.message, 'urgent');
+        setIsAuthProcessing(false);
+    } else {
+        addNotification('Bienvenue', 'Connexion réussie.', 'success');
     }
   };
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!email || !password || !registerName) { addNotification('Erreur', 'Champs manquants.', 'urgent'); return; }
     setIsAuthProcessing(true);
-    try {
-      const { data, error } = await supabase.auth.signUp({
-        email, password,
-        options: { data: { name: registerName, role: 'Membre', phone_number: registerPhone } }
-      });
-      if (error) throw error;
-      if (data.user) {
-         await supabase.from('users').insert({
-            id: data.user.id, name: registerName, email: email, role: 'Membre',
-            avatar: `https://ui-avatars.com/api/?name=${registerName}&background=random`,
-            phone_number: registerPhone, status: 'active'
-         });
-         addNotification("Compte créé", "Bienvenue sur iVISION !", "success");
-      }
-    } catch (error: any) {
-      addNotification("Erreur d'inscription", error.message, "urgent");
-    } finally { setIsAuthProcessing(false); }
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+        email, password, options: { data: { name: registerName, avatar: `https://ui-avatars.com/api/?name=${registerName.replace(' ', '+')}&background=random` } }
+    });
+    if (authError) {
+        addNotification('Erreur', authError.message, 'urgent');
+        setIsAuthProcessing(false);
+    } else if (authData.user) {
+        addNotification('Compte créé', 'Connexion en cours...', 'success');
+    } else {
+        addNotification('Info', 'Vérifiez vos emails.', 'info');
+        setIsAuthProcessing(false);
+    }
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    setCurrentView('dashboard');
+      await supabase.auth.signOut();
+      setCurrentUser(null);
+      setTasks([]); setMessages([]); setFileLinks([]);
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex h-screen w-screen items-center justify-center bg-white flex-col">
-        <div className="font-bold text-2xl mb-4 text-slate-900"><span className="text-primary">i</span>VISION</div>
-        <Loader2 className="animate-spin text-primary" size={32} />
-      </div>
-    );
+  const handleUpdateProfile = async (updatedData: Partial<User> & { password?: string }) => {
+    if (!currentUser) return;
+    if (updatedData.password) {
+        const { error } = await supabase.auth.updateUser({ password: updatedData.password });
+        if(error) { addNotification("Erreur Mot de Passe", error.message, "urgent"); return; }
+    }
+    const { error } = await supabase.from('users').update({ name: updatedData.name, email: updatedData.email, phone_number: updatedData.phoneNumber, avatar: updatedData.avatar }).eq('id', currentUser.id);
+    if (!error) { 
+        setCurrentUser({ ...currentUser, ...updatedData }); 
+        addNotification("Profil mis à jour", "Vos modifications ont été enregistrées.", 'success'); 
+    } else {
+        addNotification("Erreur", "Echec de la mise à jour du profil.", "urgent");
+    }
+  };
+
+  const handleApproveUser = async (userId: string) => {
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, status: 'active' } : u));
+      const { error } = await supabase.from('users').update({ status: 'active' }).eq('id', userId);
+      if(error) addNotification("Erreur", "Validation échouée", "urgent");
+  };
+
+  const handleUpdateMember = async (userId: string, updatedData: Partial<User>) => {
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, ...updatedData } : u));
+      try {
+          const dbData: any = {};
+          if(updatedData.role) dbData.role = updatedData.role;
+          if(updatedData.permissions) dbData.permissions = updatedData.permissions;
+          const { error } = await supabase.from('users').update(dbData).eq('id', userId);
+          if(error) throw error;
+          addNotification('Succès', 'Permissions mises à jour.', 'success');
+      } catch (e: any) {
+          const { error } = await supabase.from('users').update({ role: updatedData.role }).eq('id', userId);
+          if(!error) addNotification('Info', 'Rôle mis à jour, mais les permissions avancées nécessitent une mise à jour de la base de données.', 'info');
+          else addNotification('Erreur', safeErrorMsg(e), 'urgent');
+      }
+  };
+
+  // Navigation helper component to use hook inside App
+  const NavigationHandler = ({ navigate }: { navigate: (view: ViewState) => void }) => {
+      const nav = useNavigate();
+      // expose nav? No, just use useNavigate inside components.
+      // But we passed onNavigate prop to Dashboard.
+      // Dashboard uses it.
+      // Let's fix Dashboard to use useNavigate internally or pass a wrapper.
+      return null; 
   }
+
+  const handleNavigate = (view: ViewState) => {
+      // This function is deprecated with Router but kept for compatibility if needed
+      // With Router, components use useNavigate()
+  }
+
+  if (!isConfigured) return <div className="h-screen w-screen flex items-center justify-center"><p>Configuration manquante.</p></div>;
+  if (isLoading) return null;
 
   if (!currentUser) {
     return (
-      <div className="flex h-screen w-screen bg-slate-50 items-center justify-center p-4 font-sans text-slate-900">
-        <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-slate-100 relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary to-blue-400"></div>
+      <div className="min-h-[100dvh] bg-slate-50 flex items-center justify-center p-4 overflow-y-auto">
+        <ToastContainer notifications={notifications} onDismiss={removeNotification} />
+        <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full border border-slate-200 relative overflow-hidden animate-in zoom-in-95 duration-300">
+          <div className="absolute top-0 left-0 right-0 h-1.5 bg-primary"></div>
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-slate-900 tracking-tight"><span className="text-primary">i</span>VISION</h1>
-            <p className="text-slate-500 mt-2">Plateforme de gestion d'agence</p>
+            <h1 className="text-3xl font-bold text-slate-900 mb-2 tracking-tight"><span className="text-primary">i</span>VISION AGENCY</h1>
+            <p className="text-slate-500">{isRegistering ? "Créer un nouveau compte" : "Connexion Espace de Travail"}</p>
           </div>
-
-          <div className="flex bg-slate-100 p-1 rounded-lg mb-6">
-            <button 
-              className={`flex-1 py-2 rounded-md text-sm font-medium transition-all ${!isRegistering ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-              onClick={() => setIsRegistering(false)}
-            >
-              Connexion
-            </button>
-            <button 
-              className={`flex-1 py-2 rounded-md text-sm font-medium transition-all ${isRegistering ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-              onClick={() => setIsRegistering(true)}
-            >
-              Inscription
-            </button>
-          </div>
-
-          <form onSubmit={isRegistering ? handleRegister : handleLogin} className="space-y-4">
-            {isRegistering && (
-              <div className="space-y-4 animate-in slide-in-from-left duration-300">
-                <div>
-                   <label className="block text-sm font-medium text-slate-700 mb-1">Nom complet</label>
-                   <div className="relative">
-                      <UserIcon className="absolute left-3 top-3 text-slate-400" size={18} />
-                      <input type="text" required className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all" placeholder="John Doe" value={registerName} onChange={e => setRegisterName(e.target.value)} />
-                   </div>
-                </div>
-                 <div>
-                   <label className="block text-sm font-medium text-slate-700 mb-1">Téléphone</label>
-                   <div className="relative">
-                      <input type="tel" className="w-full pl-4 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all" placeholder="+33 6 12 34 56 78" value={registerPhone} onChange={e => setRegisterPhone(e.target.value)} />
-                   </div>
-                </div>
-              </div>
-            )}
-            
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Email professionnel</label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-3 text-slate-400" size={18} />
-                <input type="email" required className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all" placeholder="nom@agence.com" value={email} onChange={e => setEmail(e.target.value)} />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Mot de passe</label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-3 text-slate-400" size={18} />
-                <input type="password" required className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} />
-              </div>
-            </div>
-
-            <button 
-              type="submit" 
-              disabled={isAuthProcessing}
-              className="w-full bg-primary hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg transition-all transform hover:scale-[1.02] active:scale-95 shadow-lg shadow-blue-500/30 flex items-center justify-center mt-6 disabled:opacity-70 disabled:cursor-not-allowed"
-            >
-              {isAuthProcessing ? <Loader2 className="animate-spin mr-2" size={20} /> : (isRegistering ? <UserPlus className="mr-2" size={20} /> : <LogIn className="mr-2" size={20} />)}
-              {isAuthProcessing ? 'Traitement...' : (isRegistering ? "Créer un compte" : "Se connecter")}
-            </button>
-          </form>
+          {isRegistering ? (
+            <form onSubmit={handleRegister} className="space-y-5">
+               <div><label className="block text-sm font-medium text-slate-700 mb-1">Nom complet</label><div className="relative group"><UserIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} /><input type="text" value={registerName} onChange={(e) => setRegisterName(e.target.value)} className="w-full pl-10 pr-4 py-3 bg-gray-200 text-black border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all" placeholder="Jean Dupont" required /></div></div>
+               <div><label className="block text-sm font-medium text-slate-700 mb-1">Email</label><div className="relative group"><Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} /><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full pl-10 pr-4 py-3 bg-gray-200 text-black border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all" placeholder="nom@ivision.com" required /></div></div>
+               <div><label className="block text-sm font-medium text-slate-700 mb-1">Mot de passe</label><div className="relative group"><Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} /><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full pl-10 pr-4 py-3 bg-gray-200 text-black border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all" placeholder="Créer un mot de passe" required /></div></div>
+               <button type="submit" disabled={isAuthProcessing} className="w-full bg-primary hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-all flex items-center justify-center space-x-2 shadow-lg shadow-primary/20 disabled:opacity-70">{isAuthProcessing ? <Loader2 className="animate-spin" /> : <UserPlus size={18} />}<span>S'inscrire</span></button>
+               <button type="button" onClick={() => setIsRegistering(false)} className="w-full text-slate-500 text-sm font-medium hover:text-slate-800 py-2 flex items-center justify-center"><ArrowLeft size={14} className="mr-2" /> Retour à la connexion</button>
+            </form>
+          ) : (
+            <form onSubmit={handleLogin} className="space-y-6">
+              <div><label className="block text-sm font-medium text-slate-700 mb-1">Email professionnel</label><div className="relative group"><Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} /><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full pl-10 pr-4 py-3 bg-gray-200 text-black border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none" placeholder="nom@ivision.com" required /></div></div>
+              <div><div className="flex justify-between items-center mb-1"><label className="block text-sm font-medium text-slate-700">Mot de passe</label></div><div className="relative group"><Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} /><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full pl-10 pr-4 py-3 bg-gray-200 text-black border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none" placeholder="••••••••" /></div></div>
+              <div className="flex flex-col space-y-3"><button type="submit" disabled={isAuthProcessing} className="w-full bg-primary hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-all flex items-center justify-center space-x-2 shadow-lg shadow-primary/20 disabled:opacity-70">{isAuthProcessing ? <Loader2 className="animate-spin" /> : <LogIn size={18} />}<span>Connexion</span></button><button type="button" onClick={() => setIsRegistering(true)} className="w-full bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-medium py-2.5 rounded-lg transition-all flex items-center justify-center space-x-2"><UserPlus size={18} /><span>Créer un compte</span></button></div>
+            </form>
+          )}
         </div>
       </div>
     );
   }
 
+  const unreadCount = channels.reduce((acc, c) => acc + (c.unread || 0), 0);
+
+  // Wrapper to pass navigation prop to Dashboard which might still use it,
+  // though ideally Dashboard should be refactored to use useNavigate too.
+  // For now, we pass a dummy function or wrap useNavigate.
+  const DashboardWrapper = () => {
+      const navigate = useNavigate();
+      return <Dashboard 
+        currentUser={currentUser} 
+        tasks={tasks} 
+        messages={messages} 
+        notifications={notifications} 
+        channels={channels} 
+        onNavigate={(view) => navigate(`/${view}`)} 
+        onDeleteTask={handleDeleteTask} 
+        unreadMessageCount={unreadCount} 
+      />;
+  }
+
   return (
-    <Layout currentUser={currentUser} currentView={currentView} onNavigate={setCurrentView} onLogout={handleLogout} unreadMessageCount={channels.reduce((acc, c) => acc + (c.unread || 0), 0)}>
-      <Suspense fallback={<div className="flex h-full items-center justify-center"><Loader2 className="animate-spin text-primary" size={40} /></div>}>
-        {currentView === 'dashboard' && <Dashboard currentUser={currentUser} tasks={tasks} messages={messages} notifications={notifications} channels={channels} onNavigate={setCurrentView} onDeleteTask={handleDeleteTask} unreadMessageCount={channels.reduce((acc, c) => acc + (c.unread || 0), 0)} />}
-        {currentView === 'tasks' && <Tasks tasks={tasks} users={users} currentUser={currentUser} onUpdateStatus={handleUpdateStatus} onAddTask={handleAddTask} onUpdateTask={handleUpdateTask} onDeleteTask={handleDeleteTask} onAddComment={handleTaskComment} onAddFileLink={handleAddFileLink} onDeleteAttachment={handleDeleteTaskAttachment} onDeleteComment={handleDeleteComment} />}
-        {currentView === 'chat' && (
-          <Chat 
-            currentUser={currentUser} 
-            users={users} 
-            channels={channels} 
-            currentChannelId={currentChannelId} 
-            messages={messages} 
-            onlineUserIds={onlineUserIds}
-            onChannelChange={setCurrentChannelId} 
-            onSendMessage={handleSendMessage} 
-            onAddChannel={async (c) => { 
-                await supabase.from('channels').insert({ id: generateUUID(), name: c.name, type: c.type, members: c.members });
-            }} 
-            onDeleteChannel={async (cid) => {
-                await supabase.from('channels').delete().eq('id', cid);
-                setChannels(prev => prev.filter(c => c.id !== cid));
-                if(currentChannelId === cid) setCurrentChannelId('general');
-            }} 
-            onReadChannel={(cid) => {
-                const key = `ivision_last_read_${currentUser.id}`;
-                const current = JSON.parse(localStorage.getItem(key) || '{}');
-                current[cid] = new Date().toISOString();
-                localStorage.setItem(key, JSON.stringify(current));
-                setChannels(prev => prev.map(c => c.id === cid ? { ...c, unread: 0 } : c));
-            }} 
-          />
-        )}
-        {currentView === 'files' && <Files tasks={tasks} messages={messages} fileLinks={fileLinks} currentUser={currentUser} onAddFileLink={handleAddFileLink} onDeleteFileLink={handleGlobalFileDelete} />}
-        {currentView === 'team' && (
-          <Team 
-            currentUser={currentUser} 
-            users={users} 
-            tasks={tasks} 
-            onlineUserIds={onlineUserIds} 
-            activities={[]} 
-            onAddUser={handleAddUser} 
-            onRemoveUser={handleRemoveUser} 
-            onUpdateRole={(uid, role) => handleUpdateUser(uid, { role })} 
-            onApproveUser={(uid) => handleUpdateUser(uid, { status: 'active' })} 
-            onUpdateMember={(uid, data) => handleUpdateUser(uid, data)} 
-          />
-        )}
-        {currentView === 'settings' && <Settings currentUser={currentUser} onUpdateProfile={async (data) => { await supabase.from('users').update(data).eq('id', currentUser.id); setCurrentUser(prev => prev ? { ...prev, ...data } : null); addNotification("Profil mis à jour", "Vos modifications ont été enregistrées.", "success"); }} />}
-        {currentView === 'reports' && <Reports currentUser={currentUser} tasks={tasks} users={users} />}
-        {currentView === 'campaigns' && <Campaigns currentUser={currentUser} campaignsData={[]} tasks={tasks} users={users} />}
-      </Suspense>
-      <ToastContainer notifications={notifications} onDismiss={removeNotification} />
-    </Layout>
+    <HashRouter>
+        <Layout currentUser={currentUser} onLogout={handleLogout} unreadMessageCount={unreadCount}>
+        <ToastContainer notifications={notifications} onDismiss={removeNotification} />
+        <Suspense fallback={<div className="h-full flex items-center justify-center"><Loader2 className="animate-spin text-primary" /></div>}>
+            <Routes>
+                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                <Route path="/dashboard" element={<DashboardWrapper />} />
+                <Route path="/reports" element={<Reports currentUser={currentUser} tasks={tasks} users={users} />} />
+                <Route path="/tasks" element={<Tasks tasks={tasks} users={users.filter(u => u.status === 'active')} currentUser={currentUser} onUpdateStatus={handleUpdateStatus} onAddTask={handleAddTask} onUpdateTask={handleUpdateTask} onDeleteTask={handleDeleteTask} onAddComment={handleTaskComment} onAddFileLink={handleAddFileLink} onDeleteAttachment={handleDeleteTaskAttachment} onDeleteComment={handleDeleteComment} handleAddSubtask={handleAddSubtask} handleToggleSubtask={handleToggleSubtask} handleDeleteSubtask={handleDeleteSubtask} />} />
+                <Route path="/chat" element={<Chat currentUser={currentUser} users={users.filter(u => u.status === 'active')} channels={channels.length > 0 ? channels : [{ id: 'general', name: 'Général', type: 'global' }]} currentChannelId={currentChannelId} messages={messages} onlineUserIds={onlineUserIds} onChannelChange={setCurrentChannelId} onSendMessage={handleSendMessage} onAddChannel={handleAddChannel} onDeleteChannel={handleDeleteChannel} />} />
+                <Route path="/files" element={currentUser && <Files tasks={tasks} messages={messages} fileLinks={fileLinks} currentUser={currentUser} onAddFileLink={handleAddFileLink} onDeleteFileLink={handleGlobalFileDelete} />} />
+                <Route path="/team" element={<Team currentUser={currentUser} users={users} tasks={tasks} activities={[]} onlineUserIds={onlineUserIds} onAddUser={handleAddUser} onRemoveUser={handleRemoveUser} onUpdateRole={(userId, role) => handleUpdateMember(userId, { role })} onApproveUser={handleApproveUser} onUpdateMember={handleUpdateMember} />} />
+                <Route path="/settings" element={<Settings currentUser={currentUser} onUpdateProfile={handleUpdateProfile} />} />
+                <Route path="/campaigns" element={<Campaigns currentUser={currentUser} campaignsData={[]} tasks={tasks} users={users} />} />
+                <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            </Routes>
+        </Suspense>
+        </Layout>
+    </HashRouter>
   );
 };
 

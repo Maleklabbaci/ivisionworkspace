@@ -2,18 +2,23 @@
 import React, { useState } from 'react';
 import { LayoutDashboard, CheckSquare, MessageSquare, Users as UsersIcon, FolderOpen, Menu, X, Settings, LogOut, BarChart3 } from 'lucide-react';
 import { User, ViewState, UserRole } from '../types';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 interface LayoutProps {
   children: React.ReactNode;
   currentUser: User;
-  currentView: ViewState;
-  onNavigate: (view: ViewState) => void;
   onLogout: () => void;
   unreadMessageCount?: number;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, currentUser, currentView, onNavigate, onLogout, unreadMessageCount = 0 }) => {
+const Layout: React.FC<LayoutProps> = ({ children, currentUser, onLogout, unreadMessageCount = 0 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // Derive current view from path (e.g., "/dashboard" -> "dashboard")
+  // Default to 'dashboard' if root
+  const currentPath = location.pathname.replace('/', '') || 'dashboard';
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: [UserRole.ADMIN, UserRole.MEMBER, UserRole.PROJECT_MANAGER, UserRole.COMMUNITY_MANAGER, UserRole.ANALYST] },
@@ -39,8 +44,8 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, currentView, onN
     return item.roles.includes(currentUser.role);
   });
 
-  const handleNavigate = (view: ViewState) => {
-    onNavigate(view);
+  const handleNavigate = (view: string) => {
+    navigate(`/${view}`);
     setIsMobileMenuOpen(false);
   };
 
@@ -59,13 +64,13 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, currentView, onN
       <nav className="flex-1 px-3 space-y-1">
         {visibleNavItems.map((item) => {
             const Icon = item.icon;
-            const isActive = currentView === item.id;
+            const isActive = currentPath === item.id;
             const isChat = item.id === 'chat';
             
             return (
               <button
                 key={item.id}
-                onClick={() => handleNavigate(item.id as ViewState)}
+                onClick={() => handleNavigate(item.id)}
                 className={`w-full flex items-center justify-between px-3 py-3 rounded-lg transition-all duration-200 text-sm group relative ${
                   isActive 
                     ? 'bg-primary text-white shadow-lg shadow-primary/30 translate-x-1' 
@@ -102,7 +107,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, currentView, onN
         <div className="grid grid-cols-2 gap-2">
           <button 
             onClick={() => handleNavigate('settings')}
-            className={`flex items-center justify-center space-x-2 p-2 rounded-lg border transition-all text-xs font-medium ${currentView === 'settings' ? 'bg-slate-700 text-white border-slate-600' : 'border-slate-700 hover:bg-slate-800 text-slate-400 hover:text-white'}`}
+            className={`flex items-center justify-center space-x-2 p-2 rounded-lg border transition-all text-xs font-medium ${currentPath === 'settings' ? 'bg-slate-700 text-white border-slate-600' : 'border-slate-700 hover:bg-slate-800 text-slate-400 hover:text-white'}`}
             title="Paramètres"
           >
             <Settings size={14} />
@@ -159,7 +164,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, currentView, onN
 
         {/* Content Scroll Area with Page Transitions */}
         <main className="flex-1 overflow-y-auto p-4 md:p-8 relative w-full">
-           <div key={currentView} className="h-full animate-in fade-in slide-in-from-bottom-2 duration-300 ease-out">
+           <div key={currentPath} className="h-full animate-in fade-in slide-in-from-bottom-2 duration-300 ease-out">
              {children}
            </div>
         </main>
