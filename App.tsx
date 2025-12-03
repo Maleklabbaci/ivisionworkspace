@@ -1,11 +1,10 @@
-
 import React, { useState, useEffect, useRef, Suspense, lazy, useCallback } from 'react';
 import { LogIn, Lock, Mail, UserPlus, ArrowLeft, User as UserIcon, Loader2, AlertCircle, Info } from 'lucide-react';
 import { supabase, isConfigured } from './services/supabaseClient';
 import { HashRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import ToastContainer from './components/Toast';
-import { User, UserRole, ViewState, Task, TaskStatus, Channel, ActivityLog, ToastNotification, Message, Comment, FileLink, Subtask } from './types';
+import { User, UserRole, ViewState, Task, TaskStatus, Channel, ActivityLog, ToastNotification, Message, Comment, FileLink, Subtask, Client } from './types';
 
 // Lazy Load Components pour optimiser le chargement initial
 const Dashboard = lazy(() => import('./components/Dashboard'));
@@ -16,6 +15,7 @@ const Files = lazy(() => import('./components/Files'));
 const Settings = lazy(() => import('./components/Settings'));
 const Reports = lazy(() => import('./components/Reports'));
 const Campaigns = lazy(() => import('./components/Campaigns'));
+const Clients = lazy(() => import('./components/Clients'));
 
 // Robust UUID generator safe for all contexts
 const generateUUID = () => {
@@ -56,7 +56,8 @@ const App: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [channels, setChannels] = useState<Channel[]>([]);
-  const [fileLinks, setFileLinks] = useState<FileLink[]>([]); 
+  const [fileLinks, setFileLinks] = useState<FileLink[]>([]);
+  const [clients, setClients] = useState<Client[]>([]); 
   
   // Presence State
   const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
@@ -80,6 +81,13 @@ const App: React.FC = () => {
   useEffect(() => {
     currentChannelIdRef.current = currentChannelId;
   }, [currentChannelId]);
+
+  // Request Notification Permission on Login
+  useEffect(() => {
+    if (currentUser && "Notification" in window && Notification.permission === "default") {
+        Notification.requestPermission().catch(err => console.error("Erreur permission notification:", err));
+    }
+  }, [currentUser]);
 
   const addNotification = useCallback((title: string, message: any, type: 'info' | 'success' | 'urgent' = 'info') => {
     const id = generateUUID();
@@ -153,7 +161,8 @@ const App: React.FC = () => {
               comments: taskComments, 
               attachments: derivedAttachments, 
               subtasks: taskSubtasks,
-              price: t.price
+              price: t.price,
+              clientId: t.client_id
           };
       });
   };
@@ -180,6 +189,7 @@ const App: React.FC = () => {
         setTasks([]);
         setMessages([]);
         setFileLinks([]);
+        setClients([]);
         setOnlineUserIds(new Set());
         isDataLoaded.current = false;
         setIsLoading(false);
@@ -262,11 +272,37 @@ const App: React.FC = () => {
                     setChannels(prev => prev.map(c => 
                         c.id === newMsg.channel_id ? { ...c, unread: (c.unread || 0) + 1 } : c
                     ));
-                } else {
-                     const myMentionTag = `@${currentUser.name.replace(/\s+/g, '')}`;
-                     if (newMsg.content.includes(myMentionTag)) {
-                        addNotification("Nouvelle mention !", "Vous avez été mentionné dans le chat.", "info");
-                     }
+                }
+                
+                // MENTION & NOTIFICATION LOGIC
+                const myMentionTag = `@${currentUser.name.replace(/\s+/g, '')}`;
+                if (newMsg.content.includes(myMentionTag)) {
+                    // 1. Toast Notification
+                    addNotification("Nouvelle mention !", "Vous avez été mentionné dans le chat.", "info");
+
+                    // 2. Push Notification (Async & Permissions Check)
+                    const sendPush = async () => {
+                        if (!("Notification" in window)) return;
+                        
+                        let permission = Notification.permission;
+                        if (permission === 'default') {
+                            permission = await Notification.requestPermission();
+                        }
+
+                        if (permission === 'granted') {
+                            const notif = new Notification(`Mention dans iVISION`, {
+                                body: newMsg.content,
+                                icon: '/favicon.ico', // Fallback
+                                tag: `mention-${newMsg.id}`
+                            });
+                            
+                            notif.onclick = () => {
+                                window.focus();
+                                setCurrentChannelId(newMsg.channel_id);
+                            };
+                        }
+                    };
+                    sendPush().catch(err => console.error("Push Notification Failed", err));
                 }
             }
         } else if (eventType === 'DELETE') {
@@ -300,6 +336,7 @@ const App: React.FC = () => {
                     id: newLink.id,
                     name: newLink.name,
                     url: newLink.url,
+                    clientId: newLink.client_id,
                     createdBy: newLink.created_by,
                     createdAt: new Date(newLink.created_at).toISOString().split('T')[0]
                 }];
@@ -320,6 +357,19 @@ const App: React.FC = () => {
           
           if (tasksData && commentsData && subtasksData) {
              setTasks(mapTasksFromDB(tasksData, commentsData, subtasksData));
+          }
+      })
+      .subscribe();
+      
+    const clientsChannel = supabase
+      .channel('public:clients')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'clients' }, (payload) => {
+          if (payload.eventType === 'INSERT') {
+             setClients(prev => [...prev, payload.new as Client]);
+          } else if (payload.eventType === 'UPDATE') {
+             setClients(prev => prev.map(c => c.id === payload.new.id ? payload.new as Client : c));
+          } else if (payload.eventType === 'DELETE') {
+             setClients(prev => prev.filter(c => c.id !== payload.old.id));
           }
       })
       .subscribe();
@@ -398,14 +448,15 @@ const App: React.FC = () => {
 
   const fetchInitialData = async (userId?: string) => {
     try {
-        const [usersResult, channelsResult, messagesResult, tasksResult, commentsResult, filesResult, subtasksResult] = await Promise.all([
+        const [usersResult, channelsResult, messagesResult, tasksResult, commentsResult, filesResult, subtasksResult, clientsResult] = await Promise.all([
             supabase.from('users').select('*'),
             supabase.from('channels').select('*'),
             supabase.from('messages').select('*').order('created_at', { ascending: true }),
             supabase.from('tasks').select('*'),
             supabase.from('task_comments').select('*').order('created_at', { ascending: true }),
             supabase.from('file_links').select('*').order('created_at', { ascending: false }),
-            supabase.from('subtasks').select('*').order('created_at', { ascending: true })
+            supabase.from('subtasks').select('*').order('created_at', { ascending: true }),
+            supabase.from('clients').select('*')
         ]);
 
         if (usersResult.data) {
@@ -414,6 +465,10 @@ const App: React.FC = () => {
                 phoneNumber: u.phone_number, notificationPref: u.notification_pref, status: u.status, permissions: u.permissions || {},
                 lastSeen: u.last_seen
             })));
+        }
+
+        if (clientsResult.data) {
+            setClients(clientsResult.data as Client[]);
         }
 
         let fetchedMessages: Message[] = [];
@@ -428,7 +483,7 @@ const App: React.FC = () => {
 
         if (filesResult.data) {
             setFileLinks(filesResult.data.map(f => ({
-                id: f.id, name: f.name, url: f.url, createdBy: f.created_by,
+                id: f.id, name: f.name, url: f.url, clientId: f.client_id, createdBy: f.created_by,
                 createdAt: new Date(f.created_at).toISOString().split('T')[0]
             })));
         }
@@ -554,358 +609,423 @@ const App: React.FC = () => {
               // Create it if missing
               const newId = generateUUID();
               setChannels(prev => [...prev, { id: newId, name: 'Général', type: 'global', unread: 0 }]);
-              const { error } = await supabase.from('channels').insert({ id: newId, name: 'Général', type: 'global' });
+              const { error } = await supabase.from('channels').insert({ id: newId, name: 'Général', type: 'global', created_by: currentUser.id });
               if (!error) targetChannelId = newId;
-              else {
-                  addNotification("Erreur Technique", "Impossible de localiser le canal Général.", "urgent");
-                  return;
-              }
           }
-          setCurrentChannelId(targetChannelId); // Sync state
       }
 
-      const newId = generateUUID();
+      const newMessageId = generateUUID();
       const now = new Date();
+      
       const optimisticMsg: Message = {
-          id: newId, userId: currentUser.id, channelId: targetChannelId, content: text, 
-          timestamp: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}), fullTimestamp: now.toISOString(), attachments: attachments || []
+        id: newMessageId,
+        userId: currentUser.id,
+        channelId: targetChannelId,
+        content: text,
+        timestamp: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+        fullTimestamp: now.toISOString(),
+        attachments: attachments || []
       };
+
       setMessages(prev => [...prev, optimisticMsg]);
-      const { error } = await supabase.from('messages').insert({ id: newId, user_id: currentUser.id, channel_id: targetChannelId, content: text, attachments: attachments });
+
+      const { error } = await supabase.from('messages').insert({
+        id: newMessageId,
+        channel_id: targetChannelId,
+        user_id: currentUser.id,
+        content: text,
+        attachments: attachments || []
+      });
+
       if (error) {
-          setMessages(prev => prev.filter(m => m.id !== newId));
-          addNotification("Erreur", "Message non envoyé", "urgent");
+         setMessages(prev => prev.filter(m => m.id !== newMessageId));
+         addNotification("Erreur", "Message non envoyé: " + safeErrorMsg(error), "urgent");
       }
   }, [currentUser, channels, addNotification]);
 
-  const handleAddFileLink = useCallback(async (name: string, url: string) => {
-      if (!currentUser) return;
-      const id = generateUUID();
-      const now = new Date();
-      
-      // Optimistic UI Update
-      const optimisticLink: FileLink = {
-          id, name, url, createdBy: currentUser.id, createdAt: now.toISOString().split('T')[0]
-      };
-      setFileLinks(prev => [optimisticLink, ...prev]);
-      addNotification("Fichier ajouté", "Le lien a été ajouté avec succès.", "success");
-
-      try {
-          const { error } = await supabase.from('file_links').insert({ id, name, url, created_by: currentUser.id });
-          if (error) throw error;
-      } catch (e: any) {
-          setFileLinks(prev => prev.filter(f => f.id !== id));
-          addNotification("Erreur", "Impossible d'ajouter le fichier: " + safeErrorMsg(e), "urgent");
-      }
-  }, [currentUser, addNotification]);
-  
-  const handleGlobalFileDelete = useCallback(async (compositeId: string) => {
-      if (!currentUser) return;
-      try {
-          if (compositeId.startsWith('link|')) {
-             const cleanId = compositeId.split('|')[1];
-             setFileLinks(prev => prev.filter(f => f.id !== cleanId)); // Optimistic
-             const { error } = await supabase.from('file_links').delete().eq('id', cleanId);
-             if(error) throw error;
-          } else if (compositeId.startsWith('task|')) {
-             const parts = compositeId.split('|');
-             if(parts.length >= 3) {
-                 const commentId = parts[2];
-                 const { error } = await supabase.from('task_comments').delete().eq('id', commentId);
-                 if(error) throw error;
-             }
-          } else if (compositeId.startsWith('chat|')) {
-             const parts = compositeId.split('|');
-             if(parts.length >= 3) {
-                 const msgId = parts[1];
-                 const fileName = parts.slice(2).join('|'); 
-                 const { data: msgData, error: fetchError } = await supabase.from('messages').select('attachments').eq('id', msgId).single();
-                 if(fetchError) throw fetchError;
-                 if(msgData && msgData.attachments) {
-                     const updatedAttachments = msgData.attachments.filter((a: string) => a !== fileName);
-                     const { error: updateError } = await supabase.from('messages').update({ attachments: updatedAttachments }).eq('id', msgId);
-                     if(updateError) throw updateError;
-                 }
-             }
-          }
-          addNotification("Suppression", "Le fichier a été supprimé.", "info");
-      } catch (e: any) {
-          addNotification("Erreur", "Impossible de supprimer: " + safeErrorMsg(e), "urgent");
-      }
-  }, [currentUser, addNotification]);
-
-  const handleDeleteTaskAttachment = useCallback(async (taskId: string, url: string) => {
-      if (!currentUser) return;
-      const task = tasks.find(t => t.id === taskId);
-      if (!task || !task.comments) return;
-      const commentToDelete = task.comments.find(c => c.content.includes(url));
-      if (commentToDelete) {
-          try {
-             setTasks(prev => prev.map(t => t.id === taskId && t.comments ? { ...t, comments: t.comments.filter(c => c.id !== commentToDelete.id) } : t));
-             const { error } = await supabase.from('task_comments').delete().eq('id', commentToDelete.id);
-             if (error) throw error;
-          } catch (e: any) {
-             addNotification("Erreur", "Echec suppression: " + safeErrorMsg(e), "urgent");
-          }
-      }
-  }, [currentUser, tasks, addNotification]);
-
-  const handleDeleteComment = useCallback(async (taskId: string, commentId: string) => {
-      if (!currentUser) return;
-      const prevTasks = tasks;
-      setTasks(prev => prev.map(t => t.id !== taskId ? t : { ...t, comments: t.comments?.filter(c => c.id !== commentId) }));
-      try {
-          const { error } = await supabase.from('task_comments').delete().eq('id', commentId);
-          if (error) throw error;
-      } catch (e: any) {
-          setTasks(prevTasks);
-          addNotification("Erreur", "Impossible de supprimer le commentaire.", "urgent");
-      }
-  }, [currentUser, tasks, addNotification]);
-
   const handleAddTask = useCallback(async (task: Task) => {
-      if (!currentUser) return;
-      const newTaskId = generateUUID();
-      
-      // Optimistic UI - Include attachments immediately as comments-like structure if needed visually
-      const optimisticTask: Task = { ...task, id: newTaskId };
-      setTasks(prev => [...prev, optimisticTask]);
-      addNotification("Succès", "Tâche créée avec succès", "success");
-
-      // Separate Insert: Task
-      const taskPayload = {
-          id: newTaskId, title: task.title, description: task.description, assignee_id: task.assigneeId,
-          due_date: task.dueDate, status: task.status, type: task.type, priority: task.priority, price: task.price
-      };
-      
-      const { data: newTaskData, error } = await supabase.from('tasks').insert(taskPayload).select().single();
-      
-      if (error) {
-          setTasks(prev => prev.filter(t => t.id !== newTaskId));
-          addNotification("Erreur", `Impossible de créer la tâche: ${safeErrorMsg(error)}`, "urgent");
-          return;
-      }
-
-      // Separate Insert: Attachments as Comments
-      if (newTaskData && task.attachments && task.attachments.length > 0) {
-           const commentsPayload = task.attachments.map(url => ({
-               id: generateUUID(), task_id: newTaskData.id, user_id: currentUser.id, content: `📎 Fichier attaché: ${url}` 
-           }));
-           
-           const { error: commentsError } = await supabase.from('task_comments').insert(commentsPayload);
-           if(commentsError) {
-                addNotification("Attention", "Tâche créée mais les fichiers n'ont pas pu être attachés.", "urgent");
-           }
-      }
+    if(!currentUser) return;
+    const finalId = task.id.startsWith('temp') ? generateUUID() : task.id;
+    const newTask = { ...task, id: finalId };
+    setTasks(prev => [...prev, newTask]);
+    addNotification("Tâche créée", "La tâche a été ajoutée avec succès.", "success");
+    const { error } = await supabase.from('tasks').insert({
+        id: finalId, title: newTask.title, description: newTask.description,
+        assignee_id: newTask.assigneeId, due_date: newTask.dueDate, status: newTask.status,
+        type: newTask.type, priority: newTask.priority, price: newTask.price || 0,
+        client_id: newTask.clientId
+    });
+    if (error) {
+        setTasks(prev => prev.filter(t => t.id !== finalId));
+        addNotification("Erreur", "Echec création tâche: " + safeErrorMsg(error), "urgent");
+    }
   }, [currentUser, addNotification]);
 
-  const handleUpdateTask = useCallback(async (updatedTask: Task) => {
-      if (!currentUser) return;
-      setTasks(prev => prev.map(t => t.id === updatedTask.id ? updatedTask : t));
-      const taskPayload = {
-          title: updatedTask.title, description: updatedTask.description, status: updatedTask.status,
-          priority: updatedTask.priority, due_date: updatedTask.dueDate, assignee_id: updatedTask.assigneeId,
-          type: updatedTask.type, price: updatedTask.price
-      };
-      const { error } = await supabase.from('tasks').update(taskPayload).eq('id', updatedTask.id);
-      if (error) addNotification("Erreur", "Impossible de mettre à jour la tâche", "urgent");
-  }, [currentUser, addNotification]);
-
-  const handleDeleteTask = useCallback(async (taskId: string) => {
-      if (!currentUser) return;
-      const previousTasks = tasks; 
-      setTasks(prev => prev.filter(t => t.id !== taskId));
-      const { error } = await supabase.from('tasks').delete().eq('id', taskId);
-      if (error) { setTasks(previousTasks); addNotification("Erreur", "Impossible de supprimer la tâche", "urgent"); } 
-      else { addNotification("Suppression", "Tâche supprimée.", "info"); }
-  }, [currentUser, tasks, addNotification]);
-
-  const handleUpdateStatus = useCallback(async (taskId: string, newStatus: TaskStatus) => {
-      const previousTasks = tasks;
-      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
-      const { error } = await supabase.from('tasks').update({ status: newStatus }).eq('id', taskId);
-      if (error) { setTasks(previousTasks); addNotification("Erreur", "Impossible de changer le statut", "urgent"); }
-  }, [tasks, addNotification]);
-
-  const handleAddChannel = useCallback(async (channel: { name: string; type: 'global' | 'project'; members?: string[] }) => {
-      const id = generateUUID();
-      setChannels(prev => [...prev, { id, name: channel.name, type: channel.type, unread: 0, members: channel.members }]);
-      const { error } = await supabase.from('channels').insert({ id, name: channel.name, type: channel.type });
-      if (error) {
-          setChannels(prev => prev.filter(c => c.id !== id));
-          addNotification("Erreur", "Impossible de créer le canal", "urgent");
-      }
+  const handleUpdateTask = useCallback(async (task: Task) => {
+    setTasks(prev => prev.map(t => t.id === task.id ? task : t));
+    const { error } = await supabase.from('tasks').update({
+        title: task.title, description: task.description, assignee_id: task.assigneeId,
+        due_date: task.dueDate, status: task.status, type: task.type, priority: task.priority, price: task.price,
+        client_id: task.clientId
+    }).eq('id', task.id);
+    if (error) addNotification("Erreur", "Echec mise à jour tâche", "urgent");
   }, [addNotification]);
 
-  const handleDeleteChannel = useCallback(async (channelId: string) => {
-      const previousChannels = channels;
-      setChannels(prev => prev.filter(c => c.id !== channelId));
-      const { error } = await supabase.from('channels').delete().eq('id', channelId);
+  const handleDeleteTask = useCallback(async (taskId: string) => {
+    setTasks(prev => prev.filter(t => t.id !== taskId));
+    const { error } = await supabase.from('tasks').delete().eq('id', taskId);
+    if (error) addNotification("Erreur", "Echec suppression tâche", "urgent");
+  }, [addNotification]);
+
+  const handleUpdateStatus = useCallback(async (taskId: string, newStatus: TaskStatus) => {
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
+    const { error } = await supabase.from('tasks').update({ status: newStatus }).eq('id', taskId);
+    if (error) addNotification("Erreur", "Echec mise à jour statut", "urgent");
+  }, [addNotification]);
+
+  const handleAddFileLink = useCallback(async (name: string, url: string, clientId?: string) => {
+      if(!currentUser) return;
+      const newId = generateUUID();
+      const optimisticLink: FileLink = {
+          id: newId, name, url, clientId, createdBy: currentUser.id, createdAt: new Date().toISOString().split('T')[0]
+      };
+      setFileLinks(prev => [optimisticLink, ...prev]);
+      const { error } = await supabase.from('file_links').insert({
+          id: newId, name, url, client_id: clientId, created_by: currentUser.id
+      });
       if (error) {
-          setChannels(previousChannels);
-          addNotification("Erreur", "Impossible de supprimer le canal", "urgent");
+          setFileLinks(prev => prev.filter(f => f.id !== newId));
+          addNotification("Erreur", "Echec ajout lien", "urgent");
+      } else {
+          addNotification("Succès", "Lien ajouté à la bibliothèque", "success");
       }
-  }, [channels, addNotification]);
+  }, [currentUser, addNotification]);
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsAuthProcessing(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-        addNotification('Erreur', error.message, 'urgent');
-        setIsAuthProcessing(false);
-    } else {
-        addNotification('Bienvenue', 'Connexion réussie.', 'success');
-    }
-  };
+  const handleDeleteFileLink = useCallback(async (id: string) => {
+      setFileLinks(prev => prev.filter(f => f.id !== id));
+      const { error } = await supabase.from('file_links').delete().eq('id', id);
+      if (error) addNotification("Erreur", "Echec suppression lien", "urgent");
+  }, [addNotification]);
+  
+  const handleAddClient = useCallback(async (client: Client) => {
+      const newId = generateUUID();
+      const newClient = { ...client, id: newId };
+      setClients(prev => [...prev, newClient]);
+      addNotification("Succès", "Client ajouté.", "success");
+      const { error } = await supabase.from('clients').insert({
+          id: newId, name: client.name, company: client.company, email: client.email, phone: client.phone, address: client.address
+      });
+      if (error) addNotification("Erreur", "Impossible d'ajouter le client", "urgent");
+  }, [addNotification]);
 
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email || !password || !registerName) { addNotification('Erreur', 'Champs manquants.', 'urgent'); return; }
-    setIsAuthProcessing(true);
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-        email, password, options: { data: { name: registerName, avatar: `https://ui-avatars.com/api/?name=${registerName.replace(' ', '+')}&background=random` } }
-    });
-    if (authError) {
-        addNotification('Erreur', authError.message, 'urgent');
-        setIsAuthProcessing(false);
-    } else if (authData.user) {
-        addNotification('Compte créé', 'Connexion en cours...', 'success');
-    } else {
-        addNotification('Info', 'Vérifiez vos emails.', 'info');
-        setIsAuthProcessing(false);
-    }
-  };
+  const handleUpdateClient = useCallback(async (client: Client) => {
+      setClients(prev => prev.map(c => c.id === client.id ? client : c));
+      addNotification("Succès", "Informations client mises à jour.", "success");
+      const { error } = await supabase.from('clients').update({
+          name: client.name, company: client.company, email: client.email, phone: client.phone, address: client.address
+      }).eq('id', client.id);
+      if (error) addNotification("Erreur", "Impossible de mettre à jour le client", "urgent");
+  }, [addNotification]);
 
-  const handleLogout = async () => {
-      await supabase.auth.signOut();
-      setCurrentUser(null);
-      setTasks([]); setMessages([]); setFileLinks([]);
-  };
+  const handleDeleteClient = useCallback(async (id: string) => {
+      setClients(prev => prev.filter(c => c.id !== id));
+      addNotification("Info", "Client supprimé.", "info");
+      const { error } = await supabase.from('clients').delete().eq('id', id);
+      if (error) addNotification("Erreur", "Impossible de supprimer le client", "urgent");
+  }, [addNotification]);
 
-  const handleUpdateProfile = async (updatedData: Partial<User> & { password?: string }) => {
-    if (!currentUser) return;
-    if (updatedData.password) {
-        const { error } = await supabase.auth.updateUser({ password: updatedData.password });
-        if(error) { addNotification("Erreur Mot de Passe", error.message, "urgent"); return; }
-    }
-    const { error } = await supabase.from('users').update({ name: updatedData.name, email: updatedData.email, phone_number: updatedData.phoneNumber, avatar: updatedData.avatar }).eq('id', currentUser.id);
-    if (!error) { 
-        setCurrentUser({ ...currentUser, ...updatedData }); 
-        addNotification("Profil mis à jour", "Vos modifications ont été enregistrées.", 'success'); 
-    } else {
-        addNotification("Erreur", "Echec de la mise à jour du profil.", "urgent");
-    }
-  };
+  const handleCreateChannel = useCallback(async (channel: { name: string; type: 'global' | 'project'; members?: string[] }) => {
+      if(!currentUser) return;
+      const newId = generateUUID();
+      const optimisticChannel: Channel = {
+          id: newId, name: channel.name, type: channel.type, unread: 0, members: channel.members
+      };
+      setChannels(prev => [...prev, optimisticChannel]);
+      const { error } = await supabase.from('channels').insert({
+          id: newId, name: channel.name, type: channel.type, created_by: currentUser.id, members: channel.members
+      });
+      if (error) {
+          setChannels(prev => prev.filter(c => c.id !== newId));
+          addNotification("Erreur", "Impossible de créer le canal", "urgent");
+      } else {
+          addNotification("Succès", `Canal #${channel.name} créé`, "success");
+      }
+  }, [currentUser, addNotification]);
 
-  const handleApproveUser = async (userId: string) => {
-      setUsers(prev => prev.map(u => u.id === userId ? { ...u, status: 'active' } : u));
-      const { error } = await supabase.from('users').update({ status: 'active' }).eq('id', userId);
-      if(error) addNotification("Erreur", "Validation échouée", "urgent");
-  };
+  const handleDeleteChannel = useCallback(async (channelId: string) => {
+      setChannels(prev => prev.filter(c => c.id !== channelId));
+      if (currentChannelId === channelId) setCurrentChannelId('general');
+      const { error } = await supabase.from('channels').delete().eq('id', channelId);
+      if (error) addNotification("Erreur", "Impossible de supprimer le canal", "urgent");
+  }, [currentChannelId, addNotification]);
 
-  const handleUpdateMember = async (userId: string, updatedData: Partial<User>) => {
-      setUsers(prev => prev.map(u => u.id === userId ? { ...u, ...updatedData } : u));
+  const handleReadChannel = useCallback((channelId: string) => {
+      if (!currentUser) return;
+      const storageKey = `ivision_last_read_${currentUser.id}`;
+      const storage = JSON.parse(localStorage.getItem(storageKey) || '{}');
+      storage[channelId] = new Date().toISOString();
+      localStorage.setItem(storageKey, JSON.stringify(storage));
+      
+      setChannels(prev => prev.map(c => c.id === channelId ? { ...c, unread: 0 } : c));
+  }, [currentUser]);
+
+  const handleUpdateProfile = useCallback(async (updatedData: Partial<User> & { password?: string }) => {
+      if (!currentUser) return;
       try {
-          const dbData: any = {};
-          if(updatedData.role) dbData.role = updatedData.role;
-          if(updatedData.permissions) dbData.permissions = updatedData.permissions;
-          const { error } = await supabase.from('users').update(dbData).eq('id', userId);
-          if(error) throw error;
-          addNotification('Succès', 'Permissions mises à jour.', 'success');
+          if (updatedData.password) {
+              const { error } = await supabase.auth.updateUser({ password: updatedData.password });
+              if (error) throw error;
+          }
+          const { error } = await supabase.from('users').update({
+              name: updatedData.name,
+              phone_number: updatedData.phoneNumber,
+              avatar: updatedData.avatar
+          }).eq('id', currentUser.id);
+
+          if (error) throw error;
+          
+          setCurrentUser(prev => prev ? ({ ...prev, ...updatedData }) : null);
+          addNotification("Profil mis à jour", "Vos informations ont été enregistrées.", "success");
       } catch (e: any) {
-          const { error } = await supabase.from('users').update({ role: updatedData.role }).eq('id', userId);
-          if(!error) addNotification('Info', 'Rôle mis à jour, mais les permissions avancées nécessitent une mise à jour de la base de données.', 'info');
-          else addNotification('Erreur', safeErrorMsg(e), 'urgent');
+          addNotification("Erreur", e.message || "Erreur de mise à jour", "urgent");
+      }
+  }, [currentUser, addNotification]);
+
+
+  // AUTH LOGIC
+  const handleAuth = async (e: React.FormEvent) => {
+      e.preventDefault();
+      setIsAuthProcessing(true);
+      try {
+          if (isRegistering) {
+              const { data, error } = await supabase.auth.signUp({
+                  email, password,
+                  options: {
+                      data: { name: registerName, avatar: `https://ui-avatars.com/api/?name=${registerName.replace(/\s+/g, '+')}&background=random` }
+                  }
+              });
+              if (error) throw error;
+              if (data.user) {
+                  const newUser = {
+                      id: data.user.id, name: registerName, email: email, role: UserRole.MEMBER,
+                      avatar: data.user.user_metadata.avatar, status: 'active', notification_pref: 'all',
+                      permissions: {}, phone_number: registerPhone
+                  };
+                  await supabase.from('users').insert(newUser);
+                  addNotification("Bienvenue !", "Votre compte a été créé.", "success");
+              }
+          } else {
+              const { error } = await supabase.auth.signInWithPassword({ email, password });
+              if (error) throw error;
+          }
+      } catch (err: any) {
+          addNotification("Erreur d'authentification", err.message, "urgent");
+      } finally {
+          setIsAuthProcessing(false);
       }
   };
 
-  // Navigation helper component to use hook inside App
-  const NavigationHandler = ({ navigate }: { navigate: (view: ViewState) => void }) => {
-      const nav = useNavigate();
-      // expose nav? No, just use useNavigate inside components.
-      // But we passed onNavigate prop to Dashboard.
-      // Dashboard uses it.
-      // Let's fix Dashboard to use useNavigate internally or pass a wrapper.
-      return null; 
-  }
+  const totalUnread = channels.reduce((acc, curr) => acc + (curr.unread || 0), 0);
 
-  const handleNavigate = (view: ViewState) => {
-      // This function is deprecated with Router but kept for compatibility if needed
-      // With Router, components use useNavigate()
+  if (isLoading) {
+      return (
+          <div className="h-screen w-screen bg-white flex items-center justify-center flex-col">
+              <div className="text-4xl font-extrabold tracking-tighter text-slate-900 mb-4 animate-pulse"><span className="text-primary">i</span>VISION</div>
+              <Loader2 className="animate-spin text-primary" size={32} />
+          </div>
+      );
   }
-
-  if (!isConfigured) return <div className="h-screen w-screen flex items-center justify-center"><p>Configuration manquante.</p></div>;
-  if (isLoading) return null;
 
   if (!currentUser) {
-    return (
-      <div className="min-h-[100dvh] bg-slate-50 flex items-center justify-center p-4 overflow-y-auto">
-        <ToastContainer notifications={notifications} onDismiss={removeNotification} />
-        <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full border border-slate-200 relative overflow-hidden animate-in zoom-in-95 duration-300">
-          <div className="absolute top-0 left-0 right-0 h-1.5 bg-primary"></div>
-          <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-slate-900 mb-2 tracking-tight"><span className="text-primary">i</span>VISION AGENCY</h1>
-            <p className="text-slate-500">{isRegistering ? "Créer un nouveau compte" : "Connexion Espace de Travail"}</p>
-          </div>
-          {isRegistering ? (
-            <form onSubmit={handleRegister} className="space-y-5">
-               <div><label className="block text-sm font-medium text-slate-700 mb-1">Nom complet</label><div className="relative group"><UserIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} /><input type="text" value={registerName} onChange={(e) => setRegisterName(e.target.value)} className="w-full pl-10 pr-4 py-3 bg-gray-200 text-black border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all" placeholder="Jean Dupont" required /></div></div>
-               <div><label className="block text-sm font-medium text-slate-700 mb-1">Email</label><div className="relative group"><Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} /><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full pl-10 pr-4 py-3 bg-gray-200 text-black border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all" placeholder="nom@ivision.com" required /></div></div>
-               <div><label className="block text-sm font-medium text-slate-700 mb-1">Mot de passe</label><div className="relative group"><Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} /><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full pl-10 pr-4 py-3 bg-gray-200 text-black border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all" placeholder="Créer un mot de passe" required /></div></div>
-               <button type="submit" disabled={isAuthProcessing} className="w-full bg-primary hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-all flex items-center justify-center space-x-2 shadow-lg shadow-primary/20 disabled:opacity-70">{isAuthProcessing ? <Loader2 className="animate-spin" /> : <UserPlus size={18} />}<span>S'inscrire</span></button>
-               <button type="button" onClick={() => setIsRegistering(false)} className="w-full text-slate-500 text-sm font-medium hover:text-slate-800 py-2 flex items-center justify-center"><ArrowLeft size={14} className="mr-2" /> Retour à la connexion</button>
-            </form>
-          ) : (
-            <form onSubmit={handleLogin} className="space-y-6">
-              <div><label className="block text-sm font-medium text-slate-700 mb-1">Email professionnel</label><div className="relative group"><Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} /><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full pl-10 pr-4 py-3 bg-gray-200 text-black border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none" placeholder="nom@ivision.com" required /></div></div>
-              <div><div className="flex justify-between items-center mb-1"><label className="block text-sm font-medium text-slate-700">Mot de passe</label></div><div className="relative group"><Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} /><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full pl-10 pr-4 py-3 bg-gray-200 text-black border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none" placeholder="••••••••" /></div></div>
-              <div className="flex flex-col space-y-3"><button type="submit" disabled={isAuthProcessing} className="w-full bg-primary hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-all flex items-center justify-center space-x-2 shadow-lg shadow-primary/20 disabled:opacity-70">{isAuthProcessing ? <Loader2 className="animate-spin" /> : <LogIn size={18} />}<span>Connexion</span></button><button type="button" onClick={() => setIsRegistering(true)} className="w-full bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-medium py-2.5 rounded-lg transition-all flex items-center justify-center space-x-2"><UserPlus size={18} /><span>Créer un compte</span></button></div>
-            </form>
-          )}
+      return (
+        <div className="h-screen w-screen bg-slate-50 flex items-center justify-center p-4">
+             <ToastContainer notifications={notifications} onDismiss={removeNotification} />
+             <div className="bg-white w-full max-w-md rounded-2xl shadow-xl overflow-hidden border border-slate-100 flex flex-col">
+                 <div className="p-8 pb-0 text-center">
+                      <div className="text-3xl font-extrabold tracking-tighter text-slate-900 mb-2"><span className="text-primary">i</span>VISION</div>
+                      <p className="text-slate-500 text-sm">Plateforme de gestion d'agence tout-en-un</p>
+                 </div>
+                 <div className="p-8">
+                     <form onSubmit={handleAuth} className="space-y-4">
+                         {isRegistering && (
+                             <>
+                                 <div className="space-y-1">
+                                    <label className="text-xs font-bold text-slate-500 uppercase">Nom Complet</label>
+                                    <input type="text" required value={registerName} onChange={e => setRegisterName(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary outline-none transition-all" placeholder="John Doe" />
+                                 </div>
+                                 <div className="space-y-1">
+                                    <label className="text-xs font-bold text-slate-500 uppercase">Téléphone</label>
+                                    <input type="tel" value={registerPhone} onChange={e => setRegisterPhone(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary outline-none transition-all" placeholder="+33 6..." />
+                                 </div>
+                             </>
+                         )}
+                         <div className="space-y-1">
+                            <label className="text-xs font-bold text-slate-500 uppercase">Email</label>
+                            <div className="relative">
+                                <Mail className="absolute left-3 top-3.5 text-slate-400" size={18} />
+                                <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="w-full pl-10 p-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary outline-none transition-all" placeholder="vous@ivision.com" />
+                            </div>
+                         </div>
+                         <div className="space-y-1">
+                            <label className="text-xs font-bold text-slate-500 uppercase">Mot de passe</label>
+                            <div className="relative">
+                                <Lock className="absolute left-3 top-3.5 text-slate-400" size={18} />
+                                <input type="password" required value={password} onChange={e => setPassword(e.target.value)} className="w-full pl-10 p-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary outline-none transition-all" placeholder="••••••••" />
+                            </div>
+                         </div>
+
+                         <button disabled={isAuthProcessing} className="w-full py-3 bg-primary text-white font-bold rounded-lg hover:bg-blue-700 transition-all shadow-lg shadow-primary/30 flex items-center justify-center disabled:opacity-70 disabled:cursor-not-allowed">
+                             {isAuthProcessing ? <Loader2 className="animate-spin" /> : isRegistering ? "Créer un compte" : "Se connecter"}
+                         </button>
+                     </form>
+                     <div className="mt-6 text-center">
+                         <button onClick={() => setIsRegistering(!isRegistering)} className="text-sm text-slate-500 hover:text-primary transition-colors font-medium">
+                             {isRegistering ? "Déjà un compte ? Se connecter" : "Pas encore de compte ? S'inscrire"}
+                         </button>
+                     </div>
+                 </div>
+                 {!isConfigured && (
+                   <div className="bg-orange-50 p-4 text-center border-t border-orange-100">
+                     <p className="text-xs text-orange-600 font-bold flex items-center justify-center">
+                       <AlertCircle size={14} className="mr-1" /> Mode Démo (Supabase non configuré)
+                     </p>
+                   </div>
+                 )}
+             </div>
         </div>
-      </div>
-    );
-  }
-
-  const unreadCount = channels.reduce((acc, c) => acc + (c.unread || 0), 0);
-
-  // Wrapper to pass navigation prop to Dashboard which might still use it,
-  // though ideally Dashboard should be refactored to use useNavigate too.
-  // For now, we pass a dummy function or wrap useNavigate.
-  const DashboardWrapper = () => {
-      const navigate = useNavigate();
-      return <Dashboard 
-        currentUser={currentUser} 
-        tasks={tasks} 
-        messages={messages} 
-        notifications={notifications} 
-        channels={channels} 
-        onNavigate={(view) => navigate(`/${view}`)} 
-        onDeleteTask={handleDeleteTask} 
-        unreadMessageCount={unreadCount} 
-      />;
+      );
   }
 
   return (
     <HashRouter>
-        <Layout currentUser={currentUser} onLogout={handleLogout} unreadMessageCount={unreadCount}>
+      <Layout 
+        currentUser={currentUser} 
+        onLogout={() => supabase.auth.signOut()} 
+        unreadMessageCount={totalUnread}
+        // Props for Global Search
+        tasks={tasks}
+        messages={messages}
+        users={users}
+        channels={channels}
+        fileLinks={fileLinks}
+      >
         <ToastContainer notifications={notifications} onDismiss={removeNotification} />
-        <Suspense fallback={<div className="h-full flex items-center justify-center"><Loader2 className="animate-spin text-primary" /></div>}>
-            <Routes>
-                <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                <Route path="/dashboard" element={<DashboardWrapper />} />
-                <Route path="/reports" element={<Reports currentUser={currentUser} tasks={tasks} users={users} />} />
-                <Route path="/tasks" element={<Tasks tasks={tasks} users={users.filter(u => u.status === 'active')} currentUser={currentUser} onUpdateStatus={handleUpdateStatus} onAddTask={handleAddTask} onUpdateTask={handleUpdateTask} onDeleteTask={handleDeleteTask} onAddComment={handleTaskComment} onAddFileLink={handleAddFileLink} onDeleteAttachment={handleDeleteTaskAttachment} onDeleteComment={handleDeleteComment} handleAddSubtask={handleAddSubtask} handleToggleSubtask={handleToggleSubtask} handleDeleteSubtask={handleDeleteSubtask} />} />
-                <Route path="/chat" element={<Chat currentUser={currentUser} users={users.filter(u => u.status === 'active')} channels={channels.length > 0 ? channels : [{ id: 'general', name: 'Général', type: 'global' }]} currentChannelId={currentChannelId} messages={messages} onlineUserIds={onlineUserIds} onChannelChange={setCurrentChannelId} onSendMessage={handleSendMessage} onAddChannel={handleAddChannel} onDeleteChannel={handleDeleteChannel} />} />
-                <Route path="/files" element={currentUser && <Files tasks={tasks} messages={messages} fileLinks={fileLinks} currentUser={currentUser} onAddFileLink={handleAddFileLink} onDeleteFileLink={handleGlobalFileDelete} />} />
-                <Route path="/team" element={<Team currentUser={currentUser} users={users} tasks={tasks} activities={[]} onlineUserIds={onlineUserIds} onAddUser={handleAddUser} onRemoveUser={handleRemoveUser} onUpdateRole={(userId, role) => handleUpdateMember(userId, { role })} onApproveUser={handleApproveUser} onUpdateMember={handleUpdateMember} />} />
-                <Route path="/settings" element={<Settings currentUser={currentUser} onUpdateProfile={handleUpdateProfile} />} />
-                <Route path="/campaigns" element={<Campaigns currentUser={currentUser} campaignsData={[]} tasks={tasks} users={users} />} />
-                <Route path="*" element={<Navigate to="/dashboard" replace />} />
-            </Routes>
+        <Suspense fallback={<div className="flex justify-center items-center h-full"><Loader2 className="animate-spin text-primary" /></div>}>
+          <Routes>
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/dashboard" element={
+              <Dashboard 
+                currentUser={currentUser} 
+                tasks={tasks} 
+                messages={messages}
+                notifications={notifications}
+                channels={channels}
+                onNavigate={(view) => {
+                   // Simple redirect helper if needed, but Links in Layout handle it mostly
+                   window.location.hash = `#/${view}`;
+                }}
+                onDeleteTask={handleDeleteTask}
+                unreadMessageCount={totalUnread}
+              />
+            } />
+            <Route path="/clients" element={
+              <Clients 
+                clients={clients}
+                tasks={tasks}
+                fileLinks={fileLinks}
+                onAddClient={handleAddClient}
+                onUpdateClient={handleUpdateClient}
+                onDeleteClient={handleDeleteClient}
+              />
+            } />
+            <Route path="/tasks" element={
+              <Tasks 
+                tasks={tasks} 
+                users={users} 
+                clients={clients}
+                currentUser={currentUser}
+                onUpdateStatus={handleUpdateStatus} 
+                onAddTask={handleAddTask} 
+                onUpdateTask={handleUpdateTask} 
+                onDeleteTask={handleDeleteTask}
+                onAddComment={handleTaskComment}
+                onAddFileLink={handleAddFileLink}
+                onDeleteAttachment={(taskId, url) => {
+                     // Find task, remove attachment, update
+                     const task = tasks.find(t => t.id === taskId);
+                     if(task) {
+                         const newAttachments = task.attachments?.filter(a => a !== url) || [];
+                         handleUpdateTask({ ...task, attachments: newAttachments });
+                     }
+                }}
+                onDeleteComment={async (taskId, commentId) => {
+                     // Optimistic
+                     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, comments: t.comments?.filter(c => c.id !== commentId) } : t));
+                     await supabase.from('task_comments').delete().eq('id', commentId);
+                }}
+                handleAddSubtask={handleAddSubtask}
+                handleToggleSubtask={handleToggleSubtask}
+                handleDeleteSubtask={handleDeleteSubtask}
+              />
+            } />
+            <Route path="/chat" element={
+              <Chat 
+                currentUser={currentUser} 
+                users={users} 
+                channels={channels}
+                currentChannelId={currentChannelId}
+                messages={messages} 
+                onlineUserIds={onlineUserIds}
+                onChannelChange={setCurrentChannelId}
+                onSendMessage={handleSendMessage}
+                onAddChannel={handleCreateChannel}
+                onDeleteChannel={handleDeleteChannel}
+                onReadChannel={handleReadChannel}
+              />
+            } />
+            <Route path="/files" element={
+              <Files 
+                tasks={tasks} 
+                messages={messages} 
+                fileLinks={fileLinks}
+                clients={clients}
+                currentUser={currentUser}
+                onAddFileLink={handleAddFileLink}
+                onDeleteFileLink={handleDeleteFileLink}
+              />
+            } />
+            <Route path="/team" element={
+              <Team 
+                currentUser={currentUser} 
+                users={users} 
+                tasks={tasks} 
+                activities={[]} // Activities not fully impl in DB yet
+                onlineUserIds={onlineUserIds}
+                onAddUser={handleAddUser}
+                onRemoveUser={handleRemoveUser}
+                onUpdateRole={(uid, role) => handleUpdateUser(uid, { role })}
+                onApproveUser={(uid) => handleUpdateUser(uid, { status: 'active' })}
+                onUpdateMember={handleUpdateUser}
+              />
+            } />
+            <Route path="/settings" element={
+                <Settings currentUser={currentUser} onUpdateProfile={handleUpdateProfile} />
+            } />
+            <Route path="/reports" element={
+                <Reports currentUser={currentUser} tasks={tasks} users={users} />
+            } />
+            <Route path="/campaigns" element={
+                <Campaigns 
+                    currentUser={currentUser} 
+                    tasks={tasks}
+                    users={users}
+                    campaignsData={[]} // Placeholder for campaign specific data table
+                    onAddCampaign={() => addNotification("Info", "Module Campagnes en cours de développement", "info")}
+                />
+            } />
+          </Routes>
         </Suspense>
-        </Layout>
+      </Layout>
     </HashRouter>
   );
 };

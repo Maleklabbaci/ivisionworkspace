@@ -1,20 +1,41 @@
 
-import React, { useState } from 'react';
-import { LayoutDashboard, CheckSquare, MessageSquare, Users as UsersIcon, FolderOpen, Menu, X, Settings, LogOut, BarChart3 } from 'lucide-react';
-import { User, ViewState, UserRole } from '../types';
+
+import React, { useState, useEffect } from 'react';
+import { LayoutDashboard, CheckSquare, MessageSquare, Users as UsersIcon, FolderOpen, Menu, X, Settings, LogOut, BarChart3, Search, Bell, Briefcase } from 'lucide-react';
+import { User, UserRole, Task, Message, Channel, FileLink } from '../types';
 import { useLocation, useNavigate } from 'react-router-dom';
+import GlobalSearch from './GlobalSearch';
 
 interface LayoutProps {
   children: React.ReactNode;
   currentUser: User;
   onLogout: () => void;
   unreadMessageCount?: number;
+  // Search Data Props
+  tasks?: Task[];
+  messages?: Message[];
+  users?: User[];
+  channels?: Channel[];
+  fileLinks?: FileLink[];
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, currentUser, onLogout, unreadMessageCount = 0 }) => {
+const Layout: React.FC<LayoutProps> = ({ children, currentUser, onLogout, unreadMessageCount = 0, tasks, messages, users, channels, fileLinks }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+
+  // Keyboard shortcut for search
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setIsSearchOpen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Derive current view from path (e.g., "/dashboard" -> "dashboard")
   // Default to 'dashboard' if root
@@ -24,6 +45,8 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, onLogout, unread
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: [UserRole.ADMIN, UserRole.MEMBER, UserRole.PROJECT_MANAGER, UserRole.COMMUNITY_MANAGER, UserRole.ANALYST] },
     { id: 'reports', label: 'Rapports', icon: BarChart3, roles: [UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.ANALYST] },
     { id: 'tasks', label: 'Tâches', icon: CheckSquare, roles: [UserRole.ADMIN, UserRole.MEMBER, UserRole.PROJECT_MANAGER, UserRole.COMMUNITY_MANAGER, UserRole.ANALYST] },
+    // Ajout des rôles MEMBER et ANALYST pour que tout le monde puisse voir/gérer les clients
+    { id: 'clients', label: 'Clients', icon: Briefcase, roles: [UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.COMMUNITY_MANAGER, UserRole.MEMBER, UserRole.ANALYST] },
     { id: 'chat', label: 'Chat & Équipe', icon: MessageSquare, roles: [UserRole.ADMIN, UserRole.MEMBER, UserRole.PROJECT_MANAGER, UserRole.COMMUNITY_MANAGER, UserRole.ANALYST] },
     // STRICT : Seul Admin a accès par défaut. Les autres nécessitent la permission explicite 'canViewFiles'
     { id: 'files', label: 'Fichiers', icon: FolderOpen, roles: [UserRole.ADMIN] },
@@ -96,8 +119,9 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, onLogout, unread
         })}
       </nav>
 
+      {/* User & Settings Footer - Visible mainly on mobile now as desktop has header */}
       <div className="p-4 border-t border-slate-800">
-        <div className="flex items-center space-x-3 mb-4 px-1 cursor-pointer hover:bg-slate-800 p-2 rounded-lg transition-colors" onClick={() => handleNavigate('settings')}>
+        <div className="flex items-center space-x-3 mb-4 px-1 cursor-pointer hover:bg-slate-800 p-2 rounded-lg transition-colors md:hidden" onClick={() => handleNavigate('settings')}>
           <img src={currentUser.avatar} alt="Avatar" className="w-8 h-8 rounded-full border border-slate-600 shadow-sm" />
           <div className="overflow-hidden">
             <p className="text-sm font-semibold text-slate-200 truncate">{currentUser.name}</p>
@@ -128,6 +152,17 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, onLogout, unread
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden font-sans text-slate-900">
+      {/* Search Modal */}
+      <GlobalSearch 
+         isOpen={isSearchOpen} 
+         onClose={() => setIsSearchOpen(false)} 
+         tasks={tasks}
+         messages={messages}
+         users={users}
+         channels={channels}
+         fileLinks={fileLinks}
+      />
+
       {/* Desktop Sidebar - DARK THEME */}
       <aside className="w-64 bg-[#0f172a] border-r border-slate-800 hidden md:flex flex-col transition-all duration-300 ease-in-out z-20 shadow-xl">
         <SidebarContent />
@@ -146,8 +181,9 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, onLogout, unread
         </div>
       )}
 
-      {/* Mobile Header & Main Content */}
+      {/* Main Wrapper */}
       <div className="flex-1 flex flex-col h-screen overflow-hidden bg-slate-50">
+        
         {/* Mobile Header */}
         <header className="md:hidden bg-[#0f172a] border-b border-slate-800 p-4 flex justify-between items-center z-10 shadow-sm sticky top-0">
           <button onClick={() => setIsMobileMenuOpen(true)} className="text-slate-400 hover:text-white transition-colors p-1 relative">
@@ -159,11 +195,47 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, onLogout, unread
           <span className="font-bold text-white text-lg">
             <span className="text-primary">i</span>VISION
           </span>
-          <div className="w-6"></div> {/* Spacer for centering logo roughly */}
+          <button onClick={() => setIsSearchOpen(true)} className="text-slate-400 hover:text-white">
+             <Search size={24} />
+          </button>
+        </header>
+
+        {/* Desktop Header */}
+        <header className="hidden md:flex items-center justify-between px-8 py-5 bg-slate-50 shrink-0">
+            <div className="flex-1 max-w-2xl relative group">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <Search className="text-slate-400 group-hover:text-primary transition-colors" size={20} />
+                </div>
+                <input
+                    type="text"
+                    className="block w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-medium shadow-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all cursor-pointer hover:border-slate-300"
+                    placeholder="Rechercher (Tâches, Projets, Messages)..."
+                    onClick={() => setIsSearchOpen(true)}
+                    readOnly
+                />
+                 <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
+                     <kbd className="hidden sm:inline-block px-2 py-0.5 bg-slate-100 border border-slate-300 rounded-md text-[10px] font-bold text-slate-500 shadow-[0_1px_1px_rgba(0,0,0,0.1)]">⌘K</kbd>
+                </div>
+            </div>
+
+            <div className="flex items-center space-x-6 ml-6">
+                <button className="relative text-slate-400 hover:text-primary transition-colors p-2 rounded-full hover:bg-white hover:shadow-sm">
+                    <Bell size={24} />
+                    {unreadMessageCount > 0 && <span className="absolute top-1 right-1 block h-2.5 w-2.5 rounded-full ring-2 ring-white bg-red-500 animate-pulse" />}
+                </button>
+                <div className="h-8 w-px bg-slate-200"></div>
+                 <div className="flex items-center space-x-3 cursor-pointer hover:bg-white p-2 rounded-lg transition-all group" onClick={() => handleNavigate('settings')}>
+                    <div className="text-right hidden lg:block">
+                        <p className="text-sm font-bold text-slate-800 leading-none group-hover:text-primary transition-colors">{currentUser.name}</p>
+                        <p className="text-[11px] text-slate-500 font-medium mt-1 uppercase tracking-wide">{currentUser.role}</p>
+                    </div>
+                    <img src={currentUser.avatar} alt="" className="h-10 w-10 rounded-full bg-slate-100 border-2 border-white shadow-sm group-hover:scale-105 transition-transform" />
+                </div>
+            </div>
         </header>
 
         {/* Content Scroll Area with Page Transitions */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-8 relative w-full">
+        <main className="flex-1 overflow-y-auto p-4 md:p-8 md:pt-4 relative w-full">
            <div key={currentPath} className="h-full animate-in fade-in slide-in-from-bottom-2 duration-300 ease-out">
              {children}
            </div>

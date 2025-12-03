@@ -1,15 +1,16 @@
 
 
 import React, { useState, useMemo } from 'react';
-import { FileText, Image, Archive, Search, ExternalLink, Link as LinkIcon, Plus, X, FolderOpen, Lock, Trash2 } from 'lucide-react';
-import { Task, Message, User, UserRole, FileLink } from '../types';
+import { FileText, Image, Archive, Search, ExternalLink, Link as LinkIcon, Plus, X, FolderOpen, Lock, Trash2, Building2 } from 'lucide-react';
+import { Task, Message, User, UserRole, FileLink, Client } from '../types';
 
 interface FilesProps {
   tasks: Task[];
   messages: Message[];
   fileLinks?: FileLink[]; // Nouveaux liens stockés en DB
+  clients?: Client[]; // Add clients prop
   currentUser: User;
-  onAddFileLink?: (name: string, url: string) => void;
+  onAddFileLink?: (name: string, url: string, clientId?: string) => void;
   onDeleteFileLink?: (id: string) => void;
 }
 
@@ -21,9 +22,10 @@ interface FileItem {
   sourceType: 'task' | 'chat' | 'drive';
   date: string;
   type: 'pdf' | 'image' | 'archive' | 'link' | 'other';
+  clientName?: string;
 }
 
-const Files: React.FC<FilesProps> = ({ tasks, messages, fileLinks = [], currentUser, onAddFileLink, onDeleteFileLink }) => {
+const Files: React.FC<FilesProps> = ({ tasks, messages, fileLinks = [], clients = [], currentUser, onAddFileLink, onDeleteFileLink }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'pdf' | 'image' | 'link'>('all');
   
@@ -31,6 +33,7 @@ const Files: React.FC<FilesProps> = ({ tasks, messages, fileLinks = [], currentU
   const [showAddModal, setShowAddModal] = useState(false);
   const [newFileName, setNewFileName] = useState('');
   const [newFileUrl, setNewFileUrl] = useState('');
+  const [newFileClient, setNewFileClient] = useState('');
 
   // Access Guard: Admin OR Special Permission 'canViewFiles'
   const canAccess = currentUser.role === UserRole.ADMIN || currentUser.permissions?.canViewFiles;
@@ -57,6 +60,7 @@ const Files: React.FC<FilesProps> = ({ tasks, messages, fileLinks = [], currentU
     // 1. Manual File Links (Google Drive, etc.) - From Library
     // ID Format: link|{id}
     fileLinks.forEach(link => {
+        const client = clients.find(c => c.id === link.clientId);
         files.push({
             id: `link|${link.id}`,
             name: link.name,
@@ -64,13 +68,15 @@ const Files: React.FC<FilesProps> = ({ tasks, messages, fileLinks = [], currentU
             source: 'Bibliothèque',
             sourceType: 'drive',
             date: link.createdAt,
-            type: 'link'
+            type: 'link',
+            clientName: client?.name
         });
     });
 
     // 2. Extract from Tasks (Iterate comments for accurate timestamp)
     // ID Format: task|{taskId}|{commentId}
     tasks.forEach(task => {
+      const client = clients.find(c => c.id === task.clientId);
       if (task.comments && task.comments.length > 0) {
         task.comments.forEach((comment) => {
              const foundUrls = comment.content.match(urlRegex);
@@ -87,7 +93,8 @@ const Files: React.FC<FilesProps> = ({ tasks, messages, fileLinks = [], currentU
                         source: `Tâche: ${task.title}`,
                         sourceType: 'task',
                         date: dateStr,
-                        type: getFileType(url)
+                        type: getFileType(url),
+                        clientName: client?.name
                      });
                  });
              }
@@ -117,11 +124,12 @@ const Files: React.FC<FilesProps> = ({ tasks, messages, fileLinks = [], currentU
 
     // Sort by date desc
     return files.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [tasks, messages, fileLinks]);
+  }, [tasks, messages, fileLinks, clients]);
 
   const filteredFiles = allFiles.filter(file => {
     const matchesSearch = file.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          file.source.toLowerCase().includes(searchTerm.toLowerCase());
+                          file.source.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          file.clientName?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesType = filterType === 'all' || file.type === filterType;
     return matchesSearch && matchesType;
   });
@@ -148,10 +156,11 @@ const Files: React.FC<FilesProps> = ({ tasks, messages, fileLinks = [], currentU
   const handleAddSubmit = (e: React.FormEvent) => {
       e.preventDefault();
       if (newFileName && newFileUrl && onAddFileLink) {
-          onAddFileLink(newFileName, newFileUrl);
+          onAddFileLink(newFileName, newFileUrl, newFileClient || undefined);
           setShowAddModal(false);
           setNewFileName('');
           setNewFileUrl('');
+          setNewFileClient('');
       }
   };
 
@@ -220,6 +229,7 @@ const Files: React.FC<FilesProps> = ({ tasks, messages, fileLinks = [], currentU
               <thead className="bg-slate-50 text-xs uppercase font-semibold text-slate-500 sticky top-0">
                 <tr>
                   <th className="px-6 py-4">Nom</th>
+                  <th className="px-6 py-4">Client</th>
                   <th className="px-6 py-4">Source</th>
                   <th className="px-6 py-4 hidden sm:table-cell">Type</th>
                   <th className="px-6 py-4 hidden sm:table-cell">Date d'ajout</th>
@@ -236,6 +246,15 @@ const Files: React.FC<FilesProps> = ({ tasks, messages, fileLinks = [], currentU
                         </div>
                         <span className="font-medium text-slate-900 truncate max-w-[200px]" title={file.name}>{file.name}</span>
                       </div>
+                    </td>
+                    <td className="px-6 py-4">
+                        {file.clientName ? (
+                            <span className="inline-flex items-center text-xs font-medium text-slate-600 bg-slate-100 px-2 py-1 rounded">
+                                <Building2 size={10} className="mr-1" /> {file.clientName}
+                            </span>
+                        ) : (
+                            <span className="text-slate-300 text-xs italic">--</span>
+                        )}
                     </td>
                     <td className="px-6 py-4">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
@@ -313,6 +332,17 @@ const Files: React.FC<FilesProps> = ({ tasks, messages, fileLinks = [], currentU
                             className="w-full p-2.5 bg-gray-200 text-black border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all"
                             placeholder="https://drive.google.com/..."
                           />
+                      </div>
+                      <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-1">Associer à un Client (Optionnel)</label>
+                          <select 
+                            value={newFileClient} 
+                            onChange={e => setNewFileClient(e.target.value)}
+                            className="w-full p-2.5 bg-gray-200 text-black border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all"
+                          >
+                            <option value="">-- Aucun --</option>
+                            {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                          </select>
                       </div>
                       <div className="flex justify-end space-x-3 mt-4">
                           <button type="button" onClick={() => setShowAddModal(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">Annuler</button>

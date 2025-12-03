@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Send, Paperclip, Smile, Hash, Lock, Search, Bell, MessageSquare, File as FileIcon, Image, Menu, X, Plus, Check, Trash2, AtSign, Eye, Download, Circle } from 'lucide-react';
 import { Message, User, Channel, UserRole } from '../types';
@@ -131,6 +132,28 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
   // Permission Checks: Admin OR Special Permission 'canManageChannels'
   const canManageChannels = currentUser.role === UserRole.ADMIN || currentUser.permissions?.canManageChannels;
 
+  // Calcul des mentions non lues pour l'utilisateur actuel
+  const unreadMentionsMap = useMemo(() => {
+    const map = new Set<string>();
+    const myMentionTag = `@${currentUser.name.replace(/\s+/g, '')}`;
+    const storageKey = `ivision_last_read_${currentUser.id}`;
+    const storage = JSON.parse(localStorage.getItem(storageKey) || '{}');
+
+    channels.forEach(channel => {
+        const lastRead = storage[channel.id] || '1970-01-01T00:00:00.000Z';
+        const hasMention = messages.some(m => 
+            m.channelId === channel.id &&
+            m.userId !== currentUser.id &&
+            new Date(m.fullTimestamp) > new Date(lastRead) &&
+            m.content.includes(myMentionTag)
+        );
+        if (hasMention) {
+            map.add(channel.id);
+        }
+    });
+    return map;
+  }, [messages, channels, currentUser]);
+
   // Initial Load: Get last read time from storage to display separator
   useEffect(() => {
       const storageKey = `ivision_last_read_${currentUser.id}`;
@@ -240,6 +263,19 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
   };
 
   const handleChannelSelect = (id: string) => {
+      // Marquer le canal précédent comme lu avant de changer
+      if (currentChannelId) {
+          const storageKey = `ivision_last_read_${currentUser.id}`;
+          const storage = JSON.parse(localStorage.getItem(storageKey) || '{}');
+          
+          // Enregistrer le timestamp actuel pour le canal qu'on quitte
+          storage[currentChannelId] = new Date().toISOString();
+          localStorage.setItem(storageKey, JSON.stringify(storage));
+          
+          // Appeler la fonction parente pour mettre à jour l'état
+          if (onReadChannel) onReadChannel(currentChannelId);
+      }
+
       onChannelChange(id);
       setShowMobileSidebar(false);
   };
@@ -299,6 +335,7 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
             <div className="space-y-1">
                 {channels.filter(c => c.type === 'project').map(channel => {
                     const isUnread = (channel.unread || 0) > 0;
+                    const hasMention = unreadMentionsMap.has(channel.id);
                     const isActive = currentChannelId === channel.id;
                     return (
                         <button
@@ -317,9 +354,13 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
                                 <span className={`truncate ${isUnread ? 'text-orange-900 font-extrabold' : ''}`}>{channel.name}</span>
                             </div>
                             <div className="flex items-center">
+                                {hasMention && (
+                                    <div className="flex items-center justify-center bg-red-500 text-white text-[10px] font-bold w-5 h-5 rounded-full ml-1 shadow-sm animate-pulse" title="Vous avez été mentionné">
+                                        @
+                                    </div>
+                                )}
                                 {isUnread && (
-                                    // CHANGEMENT: Indicateur plus visuel (point/nombre orange vif)
-                                    <div className="flex items-center justify-center bg-orange-500 text-white text-[10px] font-bold min-w-[20px] h-5 rounded-full ml-2 px-1 shadow-sm animate-in zoom-in duration-300">
+                                    <div className={`flex items-center justify-center text-white text-[10px] font-bold min-w-[20px] h-5 rounded-full ml-1 px-1 shadow-sm animate-in zoom-in duration-300 ${hasMention ? 'bg-red-500' : 'bg-orange-500'}`}>
                                         {channel.unread}
                                     </div>
                                 )}
@@ -339,6 +380,7 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
             <div className="space-y-1">
                 {channels.filter(c => c.type === 'global').map(channel => {
                     const isUnread = (channel.unread || 0) > 0;
+                    const hasMention = unreadMentionsMap.has(channel.id);
                     const isActive = currentChannelId === channel.id;
                     return (
                         <button
@@ -357,9 +399,13 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
                                 <span className={isUnread ? 'text-orange-900 font-extrabold' : ''}>{channel.name}</span>
                             </div>
                             <div className="flex items-center">
+                                {hasMention && (
+                                    <div className="flex items-center justify-center bg-red-500 text-white text-[10px] font-bold w-5 h-5 rounded-full ml-1 shadow-sm animate-pulse" title="Vous avez été mentionné">
+                                        @
+                                    </div>
+                                )}
                                 {isUnread && (
-                                    // CHANGEMENT: Indicateur plus visuel (point/nombre orange vif)
-                                    <div className="flex items-center justify-center bg-orange-500 text-white text-[10px] font-bold min-w-[20px] h-5 rounded-full ml-2 px-1 shadow-sm animate-in zoom-in duration-300">
+                                    <div className={`flex items-center justify-center text-white text-[10px] font-bold min-w-[20px] h-5 rounded-full ml-1 px-1 shadow-sm animate-in zoom-in duration-300 ${hasMention ? 'bg-red-500' : 'bg-orange-500'}`}>
                                         {channel.unread}
                                     </div>
                                 )}

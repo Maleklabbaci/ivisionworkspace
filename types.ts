@@ -32,6 +32,15 @@ export interface User {
   lastSeen?: string; // Timestamp ISO de la dernière activité
 }
 
+export interface Client {
+  id: string;
+  name: string;
+  company?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+}
+
 export interface ActivityLog {
   id: string;
   userId: string;
@@ -68,6 +77,7 @@ export interface Task {
   title: string;
   description: string;
   assigneeId: string;
+  clientId?: string; // Lien vers le client
   dueDate: string;
   status: TaskStatus;
   type: 'content' | 'ads' | 'social' | 'seo' | 'admin'; 
@@ -100,6 +110,7 @@ export interface FileLink {
   id: string;
   name: string;
   url: string;
+  clientId?: string; // Lien vers le client
   createdBy: string;
   createdAt: string;
 }
@@ -111,7 +122,7 @@ export interface ToastNotification {
   type: 'info' | 'success' | 'urgent';
 }
 
-export type ViewState = 'dashboard' | 'tasks' | 'chat' | 'files' | 'team' | 'settings' | 'reports' | 'campaigns';
+export type ViewState = 'dashboard' | 'tasks' | 'chat' | 'files' | 'team' | 'settings' | 'reports' | 'campaigns' | 'clients';
 
 export type CampaignCategory = 'content' | 'ads' | 'social' | 'mixed';
 
