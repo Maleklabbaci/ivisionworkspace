@@ -1,7 +1,7 @@
 
 
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Plus, Calendar as CalendarIcon, Clock, Sparkles, Filter, LayoutGrid, List, AlertCircle, Paperclip, Send, X, FileText, Trash2, DollarSign, ChevronLeft, ChevronRight, Lock, CheckCircle, MessageSquare, User as UserIcon, Link as LinkIcon, ExternalLink, Edit2, CheckSquare, Square, ArrowUpDown, ArrowUp, ArrowDown, ListFilter, AtSign, Building2 } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { Plus, Calendar as CalendarIcon, Filter, LayoutGrid, List, AlertCircle, Paperclip, Send, X, FileText, Trash2, DollarSign, ChevronLeft, ChevronRight, CheckCircle, MessageSquare, User as UserIcon, Link as LinkIcon, ExternalLink, Edit2, CheckSquare, Square, ArrowUpDown, ArrowUp, ArrowDown, ListFilter, AtSign, Building2, Sparkles } from 'lucide-react';
 import { Task, TaskStatus, User, Comment, UserRole, Subtask, Client } from '../types';
 import { brainstormTaskIdeas } from '../services/geminiService';
 
@@ -194,6 +194,7 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, clients = [], currentUser, 
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState('');
   const [editDescription, setEditDescription] = useState('');
+  const [editPrice, setEditPrice] = useState<number>(0);
 
   const [brainstormTopic, setBrainstormTopic] = useState('');
   const [isBrainstorming, setIsBrainstorming] = useState(false);
@@ -233,16 +234,17 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, clients = [], currentUser, 
   // Mention Detection Logic
   const myMentionTag = useMemo(() => `@${currentUser.name.replace(/\s+/g, '')}`, [currentUser.name]);
 
-  const canCreateTask = () => currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.PROJECT_MANAGER || currentUser.permissions?.canCreateTasks === true;
-  const canDeleteTask = () => currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.PROJECT_MANAGER || currentUser.permissions?.canDeleteTasks === true;
-  const canViewFinancials = () => currentUser.role === UserRole.ADMIN || currentUser.permissions?.canViewFinancials === true;
+  const isAdmin = currentUser.role === UserRole.ADMIN;
+  const canCreateTask = () => isAdmin || currentUser.role === UserRole.PROJECT_MANAGER || currentUser.permissions?.canCreateTasks === true;
+  const canDeleteTask = () => isAdmin || currentUser.role === UserRole.PROJECT_MANAGER || currentUser.permissions?.canDeleteTasks === true;
+  const canViewFinancials = () => isAdmin || currentUser.permissions?.canViewFinancials === true;
 
   // 1. Initial Visibility Filter (Role based)
   const visibleTasks = useMemo(() => {
-    return (currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.PROJECT_MANAGER || currentUser.permissions?.canCreateTasks)
+    return (isAdmin || currentUser.role === UserRole.PROJECT_MANAGER || currentUser.permissions?.canCreateTasks)
       ? tasks 
       : tasks.filter(t => t.assigneeId === currentUser.id);
-  }, [tasks, currentUser.role, currentUser.permissions, currentUser.id]);
+  }, [tasks, currentUser.role, currentUser.permissions, currentUser.id, isAdmin]);
 
   // 2. Apply Sort and Filters
   const processedTasks = useMemo(() => {
@@ -339,7 +341,7 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, clients = [], currentUser, 
           priority: String(newTask.priority || 'medium') as any,
           comments: [],
           attachments: Array.isArray(newTask.attachments) ? newTask.attachments.map(String) : [],
-          price: Number(newTask.price) || 0
+          price: isAdmin ? (Number(newTask.price) || 0) : 0 // Secure price creation
       };
 
       onAddTask(task);
@@ -410,13 +412,18 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, clients = [], currentUser, 
       if (selectedTask) {
           setEditTitle(selectedTask.title);
           setEditDescription(selectedTask.description);
+          setEditPrice(selectedTask.price || 0);
           setIsEditing(true);
       }
   };
 
   const handleSaveEdit = () => {
       if (selectedTask) {
-          onUpdateTask({ ...selectedTask, title: editTitle, description: editDescription });
+          const updatedTask = { ...selectedTask, title: editTitle, description: editDescription };
+          if (isAdmin) {
+              updatedTask.price = editPrice;
+          }
+          onUpdateTask(updatedTask);
           setIsEditing(false);
       }
   };
@@ -485,7 +492,7 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, clients = [], currentUser, 
         <div>
             <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Espace de Travail</h2>
             <p className="text-slate-500 text-sm flex items-center mt-1">
-                {currentUser.role === UserRole.ADMIN ? 'Vue globale des projets' : 'Mes tâches assignées'}
+                {isAdmin ? 'Vue globale des projets' : 'Mes tâches assignées'}
                 <span className="mx-2 text-slate-300">•</span>
                 <span className="text-primary font-medium">{processedTasks.length} tâches visibles</span>
             </p>
@@ -784,13 +791,17 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, clients = [], currentUser, 
                                       {clients.map(c => <option key={c.id} value={c.id}>{c.name} {c.company ? `(${c.company})` : ''}</option>)}
                                   </select>
                               </div>
-                              {canViewFinancials() && (
+                              {/* RESTRICTION: SEUL L'ADMIN PEUT DÉFINIR LE PRIX A LA CRÉATION */}
+                              {isAdmin && (
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-700 mb-1 flex items-center"><DollarSign size={14} className="mr-1.5 text-slate-400"/> Prix / Budget</label>
+                                    <label className="block text-sm font-bold text-slate-800 mb-1 flex items-center">
+                                        <DollarSign size={14} className="mr-1.5 text-primary"/> Prix / Budget
+                                    </label>
                                     <div className="relative">
                                         <input type="number" min="0" className="w-full p-2.5 pl-4 bg-gray-200 text-black border border-gray-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all font-medium" placeholder="0" value={newTask.price || ''} onChange={e => setNewTask({...newTask, price: parseFloat(e.target.value) || 0})} />
                                         <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-500 text-xs font-bold">DA</span>
                                     </div>
+                                    <p className="text-[10px] text-slate-500 mt-1">* Visible par les admins et rôles autorisés uniquement.</p>
                                 </div>
                               )}
                               <div className="col-span-2">
@@ -864,9 +875,23 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, clients = [], currentUser, 
                            </div>
                        )}
 
-                       {canViewFinancials() && typeof selectedTask.price === 'number' && (
-                           <div className="mb-4 flex items-center"><div className="bg-slate-100 text-slate-700 px-3 py-1 rounded-lg border border-slate-200 text-sm font-medium flex items-center"><DollarSign size={14} className="mr-1 text-slate-400" /> Budget : {selectedTask.price} DA</div></div>
+                       {/* FINANCIALS DISPLAY / EDIT */}
+                       {isEditing && isAdmin ? (
+                           <div className="mb-4">
+                               <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Budget (DA)</label>
+                               <input type="number" min="0" className="w-full md:w-1/3 p-2 bg-slate-50 border border-slate-200 rounded outline-none focus:ring-2 focus:ring-primary font-mono text-sm" value={editPrice} onChange={(e) => setEditPrice(parseFloat(e.target.value) || 0)} />
+                           </div>
+                       ) : (
+                           canViewFinancials() && typeof selectedTask.price === 'number' && (
+                                <div className="mb-4 flex items-center">
+                                    <div className="bg-slate-100 text-slate-700 px-3 py-1 rounded-lg border border-slate-200 text-sm font-medium flex items-center">
+                                        <DollarSign size={14} className="mr-1 text-slate-400" /> 
+                                        Budget : {selectedTask.price} DA
+                                    </div>
+                                </div>
+                           )
                        )}
+
                        <div className="flex items-center space-x-4 mb-6 text-sm text-slate-600">
                            {users.filter(u => u.id === selectedTask.assigneeId).map(u => (
                                <div key={u.id} className="flex items-center space-x-2"><img src={u.avatar} className="w-6 h-6 rounded-full" alt={u.name} /><span>{u.name}</span></div>
@@ -980,7 +1005,7 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, clients = [], currentUser, 
                                ) : (
                                    sortedComments.map(comment => {
                                        const user = userMap.get(comment.userId);
-                                       const canDeleteComment = comment.userId === currentUser.id || currentUser.role === UserRole.ADMIN;
+                                       const canDeleteComment = comment.userId === currentUser.id || isAdmin;
                                        return (
                                            <div key={comment.id} className="flex space-x-3 animate-in slide-in-from-bottom-2 group/comment">
                                                <img src={user?.avatar} className="w-8 h-8 rounded-full mt-1" alt="Avatar" />

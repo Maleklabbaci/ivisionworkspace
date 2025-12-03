@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { User, UserRole, ActivityLog, Task, TaskStatus, UserPermissions } from '../types';
-import { MoreHorizontal, Mail, Shield, Trash2, UserPlus, History, Briefcase, CheckCircle, X, Edit2, ToggleLeft, ToggleRight, Save, AlertTriangle, Key, Lock, Eye, Folder } from 'lucide-react';
+import { MoreHorizontal, Mail, Shield, Trash2, UserPlus, History, Briefcase, CheckCircle, X, Edit2, ToggleLeft, ToggleRight, Save, AlertTriangle, Key, Lock, Eye, Folder, Megaphone, Download, FileMinus } from 'lucide-react';
 
 interface TeamProps {
   currentUser: User;
@@ -26,13 +26,17 @@ interface PermissionConfig {
 
 const PERMISSIONS_LIST: PermissionConfig[] = [
   { key: 'canCreateTasks', label: 'Créer des tâches', description: 'Peut créer et assigner des nouvelles tâches.', icon: <Edit2 size={14} /> },
+  { key: 'canEditAllTasks', label: 'Modifier toutes les tâches', description: 'Peut modifier les tâches des autres.', icon: <CheckCircle size={14} /> },
   { key: 'canDeleteTasks', label: 'Supprimer des tâches', description: 'Peut supprimer définitivement des tâches.', icon: <Trash2 size={14} /> },
   { key: 'canManageChat', label: 'Gérer le Chat', description: 'Peut supprimer des messages et créer des canaux.', icon: <AlertTriangle size={14} /> },
-  { key: 'canViewFiles', label: 'Accès Fichiers', description: 'Accès complet au gestionnaire de fichiers.', icon: <Folder size={14} /> },
+  { key: 'canViewFiles', label: 'Voir les Fichiers', description: 'Accès en lecture au gestionnaire de fichiers.', icon: <Folder size={14} /> },
+  { key: 'canDeleteFiles', label: 'Supprimer Fichiers', description: 'Peut supprimer des fichiers de la bibliothèque.', icon: <FileMinus size={14} /> },
   { key: 'canViewFinancials', label: 'Données Financières', description: 'Peut voir les prix et budgets.', icon: <Eye size={14} /> },
   { key: 'canManageTeam', label: 'Gérer l\'équipe', description: 'Peut ajouter ou modifier des membres.', icon: <UserPlus size={14} /> },
   { key: 'canManageChannels', label: 'Gérer les Canaux', description: 'Créer/Supprimer des canaux de discussion.', icon: <Lock size={14} /> },
   { key: 'canViewReports', label: 'Voir les Rapports', description: 'Accès aux statistiques globales.', icon: <History size={14} /> },
+  { key: 'canExportReports', label: 'Exporter Rapports', description: 'Peut télécharger les données (CSV/PDF).', icon: <Download size={14} /> },
+  { key: 'canManageClients', label: 'Gérer les Clients', description: 'Accès au portefeuille clients (Lecture/Écriture).', icon: <Briefcase size={14} /> },
 ];
 
 // Helper pour formater le temps

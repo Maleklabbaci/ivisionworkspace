@@ -12,20 +12,21 @@ interface GlobalSearchProps {
   users?: User[];
   channels?: Channel[];
   fileLinks?: FileLink[];
+  initialQuery?: string; // Ajout pour recevoir la requête depuis le Layout
 }
 
-const GlobalSearch: React.FC<GlobalSearchProps> = ({ isOpen, onClose, tasks = [], messages = [], users = [], channels = [], fileLinks = [] }) => {
+const GlobalSearch: React.FC<GlobalSearchProps> = ({ isOpen, onClose, tasks = [], messages = [], users = [], channels = [], fileLinks = [], initialQuery = '' }) => {
   const [query, setQuery] = useState('');
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isOpen) {
+      // Si une requête initiale existe, on l'utilise, sinon on vide ou on focus
+      setQuery(initialQuery || '');
       setTimeout(() => inputRef.current?.focus(), 50);
-    } else {
-      setQuery('');
     }
-  }, [isOpen]);
+  }, [isOpen, initialQuery]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') onClose();

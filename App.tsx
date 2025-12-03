@@ -1,3 +1,5 @@
+
+
 import React, { useState, useEffect, useRef, Suspense, lazy, useCallback } from 'react';
 import { LogIn, Lock, Mail, UserPlus, ArrowLeft, User as UserIcon, Loader2, AlertCircle, Info } from 'lucide-react';
 import { supabase, isConfigured } from './services/supabaseClient';
@@ -14,7 +16,6 @@ const Team = lazy(() => import('./components/Team'));
 const Files = lazy(() => import('./components/Files'));
 const Settings = lazy(() => import('./components/Settings'));
 const Reports = lazy(() => import('./components/Reports'));
-const Campaigns = lazy(() => import('./components/Campaigns'));
 const Clients = lazy(() => import('./components/Clients'));
 
 // Robust UUID generator safe for all contexts
@@ -649,11 +650,14 @@ const App: React.FC = () => {
     const newTask = { ...task, id: finalId };
     setTasks(prev => [...prev, newTask]);
     addNotification("Tâche créée", "La tâche a été ajoutée avec succès.", "success");
+    // Ensure client_id is null if empty string
+    const clientIdValue = newTask.clientId && newTask.clientId.trim() !== "" ? newTask.clientId : null;
+
     const { error } = await supabase.from('tasks').insert({
         id: finalId, title: newTask.title, description: newTask.description,
         assignee_id: newTask.assigneeId, due_date: newTask.dueDate, status: newTask.status,
         type: newTask.type, priority: newTask.priority, price: newTask.price || 0,
-        client_id: newTask.clientId
+        client_id: clientIdValue
     });
     if (error) {
         setTasks(prev => prev.filter(t => t.id !== finalId));
@@ -663,10 +667,13 @@ const App: React.FC = () => {
 
   const handleUpdateTask = useCallback(async (task: Task) => {
     setTasks(prev => prev.map(t => t.id === task.id ? task : t));
+    // Ensure client_id is null if empty string
+    const clientIdValue = task.clientId && task.clientId.trim() !== "" ? task.clientId : null;
+
     const { error } = await supabase.from('tasks').update({
         title: task.title, description: task.description, assignee_id: task.assigneeId,
         due_date: task.dueDate, status: task.status, type: task.type, priority: task.priority, price: task.price,
-        client_id: task.clientId
+        client_id: clientIdValue
     }).eq('id', task.id);
     if (error) addNotification("Erreur", "Echec mise à jour tâche", "urgent");
   }, [addNotification]);
@@ -686,12 +693,14 @@ const App: React.FC = () => {
   const handleAddFileLink = useCallback(async (name: string, url: string, clientId?: string) => {
       if(!currentUser) return;
       const newId = generateUUID();
+      const clientIdValue = clientId && clientId.trim() !== "" ? clientId : null;
+
       const optimisticLink: FileLink = {
-          id: newId, name, url, clientId, createdBy: currentUser.id, createdAt: new Date().toISOString().split('T')[0]
+          id: newId, name, url, clientId: clientIdValue || undefined, createdBy: currentUser.id, createdAt: new Date().toISOString().split('T')[0]
       };
       setFileLinks(prev => [optimisticLink, ...prev]);
       const { error } = await supabase.from('file_links').insert({
-          id: newId, name, url, client_id: clientId, created_by: currentUser.id
+          id: newId, name, url, client_id: clientIdValue, created_by: currentUser.id
       });
       if (error) {
           setFileLinks(prev => prev.filter(f => f.id !== newId));
@@ -713,7 +722,7 @@ const App: React.FC = () => {
       setClients(prev => [...prev, newClient]);
       addNotification("Succès", "Client ajouté.", "success");
       const { error } = await supabase.from('clients').insert({
-          id: newId, name: client.name, company: client.company, email: client.email, phone: client.phone, address: client.address
+          id: newId, name: client.name, company: client.company, email: client.email, phone: client.phone, address: client.address, description: client.description
       });
       if (error) addNotification("Erreur", "Impossible d'ajouter le client", "urgent");
   }, [addNotification]);
@@ -722,7 +731,7 @@ const App: React.FC = () => {
       setClients(prev => prev.map(c => c.id === client.id ? client : c));
       addNotification("Succès", "Informations client mises à jour.", "success");
       const { error } = await supabase.from('clients').update({
-          name: client.name, company: client.company, email: client.email, phone: client.phone, address: client.address
+          name: client.name, company: client.company, email: client.email, phone: client.phone, address: client.address, description: client.description
       }).eq('id', client.id);
       if (error) addNotification("Erreur", "Impossible de mettre à jour le client", "urgent");
   }, [addNotification]);
@@ -936,6 +945,7 @@ const App: React.FC = () => {
                 onAddClient={handleAddClient}
                 onUpdateClient={handleUpdateClient}
                 onDeleteClient={handleDeleteClient}
+                currentUser={currentUser || undefined}
               />
             } />
             <Route path="/tasks" element={
@@ -1013,15 +1023,6 @@ const App: React.FC = () => {
             } />
             <Route path="/reports" element={
                 <Reports currentUser={currentUser} tasks={tasks} users={users} />
-            } />
-            <Route path="/campaigns" element={
-                <Campaigns 
-                    currentUser={currentUser} 
-                    tasks={tasks}
-                    users={users}
-                    campaignsData={[]} // Placeholder for campaign specific data table
-                    onAddCampaign={() => addNotification("Info", "Module Campagnes en cours de développement", "info")}
-                />
             } />
           </Routes>
         </Suspense>

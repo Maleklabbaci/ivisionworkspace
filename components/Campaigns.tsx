@@ -1,4 +1,5 @@
 
+
 import React, { useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { CampaignMetric, User, UserRole, Task, TaskStatus, CampaignCategory } from '../types';
@@ -27,8 +28,18 @@ const Campaigns: React.FC<CampaignsProps> = ({ currentUser, campaignsData, onUpd
   const [newCampaignBudget, setNewCampaignBudget] = useState(0);
   const [newCampaignCategory, setNewCampaignCategory] = useState<CampaignCategory>('content');
 
-  // Admin Guard
-  if (currentUser.role !== UserRole.ADMIN) {
+  // Permission Checks
+  const canManage = currentUser.role === UserRole.ADMIN || currentUser.permissions?.canManageCampaigns;
+  const canExport = currentUser.role === UserRole.ADMIN || currentUser.permissions?.canExportReports;
+
+  // View Access: Admin, PM, Analyst OR canManageCampaigns permission
+  const canView = 
+      currentUser.role === UserRole.ADMIN || 
+      currentUser.role === UserRole.PROJECT_MANAGER || 
+      currentUser.role === UserRole.ANALYST ||
+      currentUser.permissions?.canManageCampaigns;
+
+  if (!canView) {
       return (
           <div className="h-full flex flex-col items-center justify-center text-center p-8">
               <div className="bg-red-50 p-6 rounded-full mb-4">
@@ -36,13 +47,14 @@ const Campaigns: React.FC<CampaignsProps> = ({ currentUser, campaignsData, onUpd
               </div>
               <h2 className="text-2xl font-bold text-slate-900 mb-2">Accès Restreint</h2>
               <p className="text-slate-500 max-w-md">
-                  Cette section contient des données sensibles et est réservée aux administrateurs.
+                  Cette section est réservée aux administrateurs ou aux membres disposant d'une permission spéciale.
               </p>
           </div>
       );
   }
 
   const handleStartEdit = (campaign: CampaignMetric) => {
+      if (!canManage) return;
       setEditingCampaign(campaign.name);
       setEditSpendValue(campaign.spend);
       setEditBudgetValue(campaign.budget || 0);
@@ -115,23 +127,28 @@ const Campaigns: React.FC<CampaignsProps> = ({ currentUser, campaignsData, onUpd
             <p className="text-slate-500">Suivi des projets clients (Vidéos, Design, Ads)</p>
         </div>
         <div className="flex flex-wrap gap-3">
-            <button 
-                onClick={() => setShowAddModal(true)}
-                className="flex items-center space-x-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-blue-700 transition-colors shadow-md shadow-primary/20 text-sm font-medium"
-            >
-                <PlusCircle size={16} />
-                <span>Nouvelle Campagne</span>
-            </button>
-            <div className="flex space-x-2">
-                <button className="flex items-center space-x-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 hover:text-primary transition-colors shadow-sm text-sm font-medium">
-                    <FileText size={16} />
-                    <span>CSV</span>
+            {canManage && (
+                <button 
+                    onClick={() => setShowAddModal(true)}
+                    className="flex items-center space-x-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-blue-700 transition-colors shadow-md shadow-primary/20 text-sm font-medium"
+                >
+                    <PlusCircle size={16} />
+                    <span>Nouvelle Campagne</span>
                 </button>
-                <button className="flex items-center space-x-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 hover:text-primary transition-colors shadow-sm text-sm font-medium">
-                    <Download size={16} />
-                    <span>PDF</span>
-                </button>
-            </div>
+            )}
+            
+            {canExport && (
+                <div className="flex space-x-2">
+                    <button className="flex items-center space-x-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 hover:text-primary transition-colors shadow-sm text-sm font-medium">
+                        <FileText size={16} />
+                        <span>CSV</span>
+                    </button>
+                    <button className="flex items-center space-x-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 hover:text-primary transition-colors shadow-sm text-sm font-medium">
+                        <Download size={16} />
+                        <span>PDF</span>
+                    </button>
+                </div>
+            )}
         </div>
       </div>
 
@@ -291,12 +308,14 @@ const Campaigns: React.FC<CampaignsProps> = ({ currentUser, campaignsData, onUpd
                                         <td className="px-6 py-4">{row.conversions}</td>
                                         <td className="px-6 py-4 flex items-center justify-between">
                                             <span className="text-success font-bold">{cpa} DA</span>
-                                            <button 
-                                                onClick={() => handleStartEdit(row)}
-                                                className="ml-2 text-slate-300 hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity"
-                                            >
-                                                <Edit2 size={14} />
-                                            </button>
+                                            {canManage && (
+                                                <button 
+                                                    onClick={() => handleStartEdit(row)}
+                                                    className="ml-2 text-slate-300 hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity"
+                                                >
+                                                    <Edit2 size={14} />
+                                                </button>
+                                            )}
                                         </td>
                                     </>
                                 )}

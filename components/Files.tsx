@@ -37,6 +37,9 @@ const Files: React.FC<FilesProps> = ({ tasks, messages, fileLinks = [], clients 
 
   // Access Guard: Admin OR Special Permission 'canViewFiles'
   const canAccess = currentUser.role === UserRole.ADMIN || currentUser.permissions?.canViewFiles;
+  
+  // Delete Permission Guard
+  const canDelete = currentUser.role === UserRole.ADMIN || currentUser.permissions?.canDeleteFiles;
 
   if (!canAccess) {
     return (
@@ -279,7 +282,7 @@ const Files: React.FC<FilesProps> = ({ tasks, messages, fileLinks = [], clients 
                         ) : null}
                         
                         {/* Delete Button for ALL files if permission granted */}
-                        {onDeleteFileLink && canAccess && (
+                        {onDeleteFileLink && canDelete && (
                             <button 
                                 onClick={() => handleDeleteClick(file.id, file.name)}
                                 className="text-slate-400 hover:text-red-500 p-2 hover:bg-red-50 rounded-full transition-colors"

@@ -10,13 +10,18 @@ export enum UserRole {
 
 export interface UserPermissions {
   canCreateTasks?: boolean;
+  canEditAllTasks?: boolean;     // Modifier toutes les tâches
   canDeleteTasks?: boolean;
   canManageChat?: boolean;       // Supprimer messages
   canViewFiles?: boolean;        // Accès aux fichiers
+  canDeleteFiles?: boolean;      // Supprimer des fichiers
   canViewFinancials?: boolean;   // Accès aux budgets
   canManageTeam?: boolean;       // Ajouter/Modifier des membres
   canManageChannels?: boolean;   // Créer/Supprimer des channels
   canViewReports?: boolean;      // Accès aux rapports
+  canExportReports?: boolean;    // Exporter PDF/CSV
+  canManageClients?: boolean;    // Accès et gestion des clients
+  canManageCampaigns?: boolean;  // Accès et gestion des campagnes
 }
 
 export interface User {
@@ -39,6 +44,7 @@ export interface Client {
   email?: string;
   phone?: string;
   address?: string;
+  description?: string;
 }
 
 export interface ActivityLog {
@@ -122,7 +128,7 @@ export interface ToastNotification {
   type: 'info' | 'success' | 'urgent';
 }
 
-export type ViewState = 'dashboard' | 'tasks' | 'chat' | 'files' | 'team' | 'settings' | 'reports' | 'campaigns' | 'clients';
+export type ViewState = 'dashboard' | 'tasks' | 'chat' | 'files' | 'team' | 'settings' | 'reports' | 'clients';
 
 export type CampaignCategory = 'content' | 'ads' | 'social' | 'mixed';
 

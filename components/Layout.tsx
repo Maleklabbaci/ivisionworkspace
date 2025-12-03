@@ -1,7 +1,7 @@
 
 
-import React, { useState, useEffect } from 'react';
-import { LayoutDashboard, CheckSquare, MessageSquare, Users as UsersIcon, FolderOpen, Menu, X, Settings, LogOut, BarChart3, Search, Bell, Briefcase } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { LayoutDashboard, CheckSquare, MessageSquare, Users as UsersIcon, FolderOpen, Menu, X, Settings, LogOut, BarChart3, Search, Bell, Briefcase, FileText, CheckCircle, ArrowRight } from 'lucide-react';
 import { User, UserRole, Task, Message, Channel, FileLink } from '../types';
 import { useLocation, useNavigate } from 'react-router-dom';
 import GlobalSearch from './GlobalSearch';
@@ -19,9 +19,15 @@ interface LayoutProps {
   fileLinks?: FileLink[];
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, currentUser, onLogout, unreadMessageCount = 0, tasks, messages, users, channels, fileLinks }) => {
+const Layout: React.FC<LayoutProps> = ({ children, currentUser, onLogout, unreadMessageCount = 0, tasks = [], messages = [], users = [], channels = [], fileLinks = [] }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  
+  // Header Search State
+  const [headerSearchQuery, setHeaderSearchQuery] = useState('');
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -37,6 +43,28 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, onLogout, unread
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  // Click outside to close suggestions
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Filter suggestions for Header Search (limited to top 3 each)
+  const headerSuggestions = useMemo(() => {
+    if (!headerSearchQuery.trim()) return { tasks: [], files: [] };
+    const lowerQuery = headerSearchQuery.toLowerCase();
+
+    const matchedTasks = tasks.filter(t => t.title.toLowerCase().includes(lowerQuery)).slice(0, 3);
+    const matchedFiles = fileLinks.filter(f => f.name.toLowerCase().includes(lowerQuery)).slice(0, 3);
+
+    return { tasks: matchedTasks, files: matchedFiles };
+  }, [headerSearchQuery, tasks, fileLinks]);
+
   // Derive current view from path (e.g., "/dashboard" -> "dashboard")
   // Default to 'dashboard' if root
   const currentPath = location.pathname.replace('/', '') || 'dashboard';
@@ -45,8 +73,8 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, onLogout, unread
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: [UserRole.ADMIN, UserRole.MEMBER, UserRole.PROJECT_MANAGER, UserRole.COMMUNITY_MANAGER, UserRole.ANALYST] },
     { id: 'reports', label: 'Rapports', icon: BarChart3, roles: [UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.ANALYST] },
     { id: 'tasks', label: 'Tâches', icon: CheckSquare, roles: [UserRole.ADMIN, UserRole.MEMBER, UserRole.PROJECT_MANAGER, UserRole.COMMUNITY_MANAGER, UserRole.ANALYST] },
-    // Ajout des rôles MEMBER et ANALYST pour que tout le monde puisse voir/gérer les clients
-    { id: 'clients', label: 'Clients', icon: Briefcase, roles: [UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.COMMUNITY_MANAGER, UserRole.MEMBER, UserRole.ANALYST] },
+    // CLIENTS : Restreint par défaut à Admin/PM/Analyste, OU permission spéciale 'canManageClients'
+    { id: 'clients', label: 'Clients', icon: Briefcase, roles: [UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.ANALYST] },
     { id: 'chat', label: 'Chat & Équipe', icon: MessageSquare, roles: [UserRole.ADMIN, UserRole.MEMBER, UserRole.PROJECT_MANAGER, UserRole.COMMUNITY_MANAGER, UserRole.ANALYST] },
     // STRICT : Seul Admin a accès par défaut. Les autres nécessitent la permission explicite 'canViewFiles'
     { id: 'files', label: 'Fichiers', icon: FolderOpen, roles: [UserRole.ADMIN] },
@@ -57,10 +85,10 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, onLogout, unread
   // Filter items based on Role OR Special Permissions
   const visibleNavItems = navItems.filter(item => {
     // 1. Special Permissions Override (PRIORITÉ ABSOLUE)
-    // Si l'admin a coché la case, on affiche, peu importe le rôle.
     if (item.id === 'files' && currentUser.permissions?.canViewFiles) return true;
     if (item.id === 'reports' && currentUser.permissions?.canViewReports) return true;
     if (item.id === 'team' && currentUser.permissions?.canManageTeam) return true;
+    if (item.id === 'clients' && currentUser.permissions?.canManageClients) return true;
     
     // 2. Default Role Check
     // Si ce n'est pas une permission spéciale, on regarde si le rôle est dans la liste par défaut.
@@ -70,6 +98,19 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, onLogout, unread
   const handleNavigate = (view: string) => {
     navigate(`/${view}`);
     setIsMobileMenuOpen(false);
+  };
+
+  const handleSuggestionClick = (path: string) => {
+    navigate(path);
+    setShowSuggestions(false);
+    setHeaderSearchQuery('');
+  };
+
+  const handleHeaderSearchKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+       setIsSearchOpen(true);
+       setShowSuggestions(false);
+    }
   };
 
   const SidebarContent = () => (
@@ -156,6 +197,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, onLogout, unread
       <GlobalSearch 
          isOpen={isSearchOpen} 
          onClose={() => setIsSearchOpen(false)} 
+         initialQuery={headerSearchQuery} // Pass current input
          tasks={tasks}
          messages={messages}
          users={users}
@@ -201,27 +243,77 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, onLogout, unread
         </header>
 
         {/* Desktop Header */}
-        <header className="hidden md:flex items-center justify-between px-8 py-5 bg-slate-50 shrink-0">
-            <div className="flex-1 max-w-2xl relative group">
+        <header className="hidden md:flex items-center justify-between px-8 py-5 bg-slate-50 shrink-0 z-30">
+            <div className="flex-1 max-w-2xl relative group" ref={searchContainerRef}>
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                     <Search className="text-slate-400 group-hover:text-primary transition-colors" size={20} />
                 </div>
                 <input
                     type="text"
-                    className="block w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-medium shadow-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all cursor-pointer hover:border-slate-300"
+                    className="block w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-medium shadow-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all hover:border-slate-300"
                     placeholder="Rechercher (Tâches, Projets, Messages)..."
-                    onClick={() => setIsSearchOpen(true)}
-                    readOnly
+                    value={headerSearchQuery}
+                    onChange={(e) => {
+                      setHeaderSearchQuery(e.target.value);
+                      setShowSuggestions(true);
+                    }}
+                    onFocus={() => setShowSuggestions(true)}
+                    onKeyDown={handleHeaderSearchKeyDown}
                 />
                  <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
                      <kbd className="hidden sm:inline-block px-2 py-0.5 bg-slate-100 border border-slate-300 rounded-md text-[10px] font-bold text-slate-500 shadow-[0_1px_1px_rgba(0,0,0,0.1)]">⌘K</kbd>
                 </div>
+
+                {/* Inline Suggestions Dropdown */}
+                {showSuggestions && headerSearchQuery.trim() && (
+                  <div className="absolute top-full left-0 w-full mt-2 bg-white rounded-xl shadow-xl border border-slate-100 animate-in fade-in slide-in-from-top-2 duration-200 overflow-hidden">
+                     {headerSuggestions.tasks.length === 0 && headerSuggestions.files.length === 0 ? (
+                        <div className="p-4 text-center text-slate-400 text-sm">Aucune suggestion rapide. <br/><span className="text-xs">Appuyez sur Entrée pour une recherche complète.</span></div>
+                     ) : (
+                        <div className="py-2">
+                           {headerSuggestions.tasks.length > 0 && (
+                              <div className="mb-1">
+                                <h5 className="px-4 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tâches</h5>
+                                {headerSuggestions.tasks.map(task => (
+                                   <button key={task.id} onClick={() => handleSuggestionClick(`/tasks?taskId=${task.id}`)} className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center justify-between group">
+                                      <div className="flex items-center space-x-2 overflow-hidden">
+                                        <CheckCircle size={14} className="text-primary flex-shrink-0" />
+                                        <span className="text-sm text-slate-700 truncate font-medium">{task.title}</span>
+                                      </div>
+                                      <ArrowRight size={12} className="text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                   </button>
+                                ))}
+                              </div>
+                           )}
+                           {headerSuggestions.files.length > 0 && (
+                              <div className="mb-1">
+                                <h5 className="px-4 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Fichiers</h5>
+                                {headerSuggestions.files.map(file => (
+                                   <button key={file.id} onClick={() => { window.open(file.url, '_blank'); setShowSuggestions(false); }} className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center justify-between group">
+                                      <div className="flex items-center space-x-2 overflow-hidden">
+                                        <FileText size={14} className="text-orange-500 flex-shrink-0" />
+                                        <span className="text-sm text-slate-700 truncate font-medium">{file.name}</span>
+                                      </div>
+                                      <ArrowRight size={12} className="text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                   </button>
+                                ))}
+                              </div>
+                           )}
+                           <div className="border-t border-slate-100 mt-1 pt-1">
+                              <button onClick={() => { setIsSearchOpen(true); setShowSuggestions(false); }} className="w-full text-left px-4 py-2 text-xs font-bold text-primary hover:bg-blue-50 transition-colors">
+                                 Voir tous les résultats pour "{headerSearchQuery}"
+                              </button>
+                           </div>
+                        </div>
+                     )}
+                  </div>
+                )}
             </div>
 
             <div className="flex items-center space-x-6 ml-6">
                 <button className="relative text-slate-400 hover:text-primary transition-colors p-2 rounded-full hover:bg-white hover:shadow-sm">
                     <Bell size={24} />
-                    {unreadMessageCount > 0 && <span className="absolute top-1 right-1 block h-2.5 w-2.5 rounded-full ring-2 ring-white bg-red-500 animate-pulse" />}
+                    {unreadMessageCount > 0 && <span className="absolute top-1 right-1 block h-2.5 w-2.5 rounded-full ring-2 ring-white bg-red-50 animate-pulse" />}
                 </button>
                 <div className="h-8 w-px bg-slate-200"></div>
                  <div className="flex items-center space-x-3 cursor-pointer hover:bg-white p-2 rounded-lg transition-all group" onClick={() => handleNavigate('settings')}>
