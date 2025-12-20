@@ -20,9 +20,8 @@ export interface UserPermissions {
   canManageChannels?: boolean;   // Créer/Supprimer des channels
   canViewReports?: boolean;      // Accès aux rapports
   canExportReports?: boolean;    // Exporter PDF/CSV
-  canManageClients?: boolean;    // Accès aux clients (Lecture)
-  canEditClients?: boolean;      // Modifier/Supprimer les clients
-  canManageCampaigns?: boolean;  // Gérer les campagnes
+  canManageClients?: boolean;    // Accès et gestion des clients
+  canManageCampaigns?: boolean;  // Accès et gestion des campagnes
 }
 
 export interface User {

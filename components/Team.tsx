@@ -36,8 +36,7 @@ const PERMISSIONS_LIST: PermissionConfig[] = [
   { key: 'canManageChannels', label: 'Gérer les Canaux', description: 'Créer/Supprimer des canaux de discussion.', icon: <Lock size={14} /> },
   { key: 'canViewReports', label: 'Voir les Rapports', description: 'Accès aux statistiques globales.', icon: <History size={14} /> },
   { key: 'canExportReports', label: 'Exporter Rapports', description: 'Peut télécharger les données (CSV/PDF).', icon: <Download size={14} /> },
-  { key: 'canManageClients', label: 'Voir les Clients', description: 'Accès au portefeuille clients (Lecture seule).', icon: <Eye size={14} /> },
-  { key: 'canEditClients', label: 'Modifier les Clients', description: 'Créer, modifier et supprimer des clients.', icon: <Briefcase size={14} /> },
+  { key: 'canManageClients', label: 'Gérer les Clients', description: 'Accès au portefeuille clients (Lecture/Écriture).', icon: <Briefcase size={14} /> },
 ];
 
 // Helper pour formater le temps
@@ -330,7 +329,7 @@ const Team: React.FC<TeamProps> = ({ currentUser, users, tasks, activities, onli
                                         </div>
                                         <div className="flex-1">
                                             <p className="text-sm font-bold text-slate-800">{perm.label}</p>
-                                            <p className="text-xs text-slate-500 leading-tight mt-0.5">{perm.description}</p>
+                                            <p className="text-[10px] text-slate-500 leading-tight mt-0.5">{perm.description}</p>
                                         </div>
                                     </div>
                                     <button 

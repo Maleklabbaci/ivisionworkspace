@@ -34,20 +34,12 @@ const Clients: React.FC<ClientsProps> = ({ clients, tasks, fileLinks, onAddClien
     description: ''
   });
 
-  // ACCESS GUARD (VIEW)
+  // ACCESS GUARD
   const canAccess = !currentUser || (
     currentUser.role === UserRole.ADMIN || 
     currentUser.role === UserRole.PROJECT_MANAGER || 
     currentUser.role === UserRole.ANALYST ||
-    currentUser.permissions?.canManageClients ||
-    currentUser.permissions?.canEditClients
-  );
-
-  // ACTION GUARD (EDIT/DELETE)
-  const canEdit = !currentUser || (
-    currentUser.role === UserRole.ADMIN ||
-    currentUser.role === UserRole.PROJECT_MANAGER ||
-    currentUser.permissions?.canEditClients
+    currentUser.permissions?.canManageClients
   );
 
   if (!canAccess) {
@@ -174,7 +166,7 @@ const Clients: React.FC<ClientsProps> = ({ clients, tasks, fileLinks, onAddClien
               className="pl-9 pr-4 py-2 bg-gray-200 text-black border border-gray-300 rounded-lg text-sm focus:outline-none focus:bg-white focus:ring-2 focus:ring-primary w-full md:w-64 transition-all placeholder-gray-500 font-medium" 
             />
           </div>
-          {onAddClient && canEdit && (
+          {onAddClient && (
             <button 
               onClick={() => handleOpenModal()}
               className="bg-primary text-white p-2 px-4 rounded-lg hover:bg-blue-700 transition-colors shadow-md flex items-center text-sm font-medium whitespace-nowrap"
@@ -219,7 +211,7 @@ const Clients: React.FC<ClientsProps> = ({ clients, tasks, fileLinks, onAddClien
                                   </div>
                               </div>
                               <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  {onUpdateClient && canEdit && (
+                                  {onUpdateClient && (
                                       <button 
                                           onClick={(e) => { e.stopPropagation(); handleOpenModal(client); }}
                                           className="p-1.5 text-slate-400 hover:text-primary hover:bg-blue-50 rounded-lg transition-colors"
@@ -227,7 +219,7 @@ const Clients: React.FC<ClientsProps> = ({ clients, tasks, fileLinks, onAddClien
                                           <Edit2 size={14} />
                                       </button>
                                   )}
-                                  {onDeleteClient && canEdit && (
+                                  {onDeleteClient && (
                                       <button 
                                           onClick={(e) => handleDelete(client.id, e)}
                                           className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
