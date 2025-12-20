@@ -36,6 +36,17 @@ const AppContent: React.FC<{
 }> = ({ currentUser, setCurrentUser, users, setUsers, tasks, setTasks, clients, channels, messages, fileLinks, addNotification, removeNotification, notifications }) => {
   const navigate = useNavigate();
 
+  // Surveillance des retards de missions
+  useEffect(() => {
+    const today = new Date().toISOString().split('T')[0];
+    const overdue = tasks.filter(t => t.dueDate < today && t.status !== TaskStatus.DONE);
+    
+    if (overdue.length > 0) {
+      // Notification groupée pour les retards
+      addNotification("Retard Critique", `${overdue.length} mission(s) dépassée(s) !`, "urgent");
+    }
+  }, [tasks.length, addNotification]);
+
   const handleAddTask = async (task: Task) => {
     const newTask = { ...task, id: generateUUID() };
     setTasks(prev => [newTask, ...prev]);

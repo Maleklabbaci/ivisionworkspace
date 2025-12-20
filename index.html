@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="fr">
   <head>
@@ -24,7 +25,16 @@
               warning: '#FF9500',
               slate: { 50: '#F2F2F7', 100: '#E5E5EA', 200: '#D1D1D6', 400: '#8E8E93', 500: '#636366', 800: '#2C2C2E', 900: '#1C1C1E' }
             },
-            borderRadius: { '3xl': '24px', '4xl': '32px', '5xl': '44px' }
+            borderRadius: { '3xl': '24px', '4xl': '32px', '5xl': '44px' },
+            animation: {
+              'pulse-subtle': 'pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            },
+            keyframes: {
+              'pulse-subtle': {
+                '0%, 100%': { opacity: 1, boxShadow: '0 0 0 0 rgba(255, 59, 48, 0)' },
+                '50%': { opacity: 0.9, boxShadow: '0 0 20px 0 rgba(255, 59, 48, 0.1)' },
+              }
+            }
           }
         }
       }
