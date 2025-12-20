@@ -1,7 +1,6 @@
 
 import React, { useState, useMemo, useCallback, memo } from 'react';
-// Added Users to the lucide-react icons list
-import { Plus, LayoutGrid, List, CheckCircle, X, Trash2, Tag, ChevronRight, AlertCircle, Clock, CheckSquare, Loader2, Edit2, PlayCircle, PauseCircle, Users } from 'lucide-react';
+import { Plus, LayoutGrid, List, CheckCircle, X, Trash2, Tag, ChevronRight, AlertCircle, Clock, CheckSquare, Loader2, Edit2, PlayCircle, PauseCircle, Users, Calendar, Flag } from 'lucide-react';
 import { Task, TaskStatus, User, Client } from '../types';
 
 interface TasksProps {
@@ -15,38 +14,45 @@ interface TasksProps {
   onDeleteTask: (taskId: string) => void;
 }
 
-const TaskCard = memo(({ task, onClick, clientName }: { task: Task; onClick: () => void; clientName: string }) => (
-  <div 
-    onClick={onClick}
-    className="bg-white p-5 rounded-[2rem] border border-slate-50 shadow-sm active-scale transition-all flex items-center justify-between group cursor-pointer mb-3"
-  >
-    <div className="flex items-center space-x-4 overflow-hidden">
-      <div className={`w-1.5 h-10 rounded-full flex-shrink-0 ${
-        task.status === TaskStatus.DONE ? 'bg-success' : 
-        task.status === TaskStatus.BLOCKED ? 'bg-urgent' :
-        task.status === TaskStatus.IN_PROGRESS ? 'bg-primary' : 'bg-slate-300'
-      }`}></div>
-      <div className="overflow-hidden">
-        <h4 className={`font-bold text-slate-900 truncate text-sm ${task.status === TaskStatus.DONE ? 'opacity-40 line-through' : ''}`}>
-          {task.title}
-        </h4>
-        <p className="text-[10px] text-slate-400 font-extrabold uppercase mt-0.5 tracking-widest truncate">
-          {clientName}
-        </p>
+const TaskCard = memo(({ task, onClick, clientName }: { task: Task; onClick: () => void; clientName: string }) => {
+  const isLate = task.dueDate < new Date().toISOString().split('T')[0] && task.status !== TaskStatus.DONE;
+  
+  return (
+    <div 
+      onClick={onClick}
+      className={`bg-white p-5 rounded-[2rem] border shadow-sm active-scale transition-all flex items-center justify-between group cursor-pointer mb-3 ${isLate ? 'border-urgent border-2' : 'border-slate-50'}`}
+    >
+      <div className="flex items-center space-x-4 overflow-hidden">
+        <div className={`w-1.5 h-10 rounded-full flex-shrink-0 ${
+          task.status === TaskStatus.DONE ? 'bg-success' : 
+          task.status === TaskStatus.BLOCKED || isLate ? 'bg-urgent' :
+          task.status === TaskStatus.IN_PROGRESS ? 'bg-primary' : 'bg-slate-300'
+        }`}></div>
+        <div className="overflow-hidden">
+          <div className="flex items-center space-x-2">
+            <h4 className={`font-bold text-slate-900 truncate text-sm ${task.status === TaskStatus.DONE ? 'opacity-40 line-through' : ''}`}>
+              {task.title}
+            </h4>
+            {isLate && <span className="text-[8px] bg-urgent text-white px-1.5 py-0.5 rounded font-black uppercase">RETARD</span>}
+          </div>
+          <p className="text-[10px] text-slate-400 font-extrabold uppercase mt-0.5 tracking-widest truncate">
+            {clientName}
+          </p>
+        </div>
+      </div>
+      <div className="flex items-center space-x-2">
+         <span className={`text-[8px] font-black px-2 py-0.5 rounded-md uppercase tracking-tighter ${
+           task.status === TaskStatus.BLOCKED ? 'bg-urgent/10 text-urgent' : 
+           task.status === TaskStatus.IN_PROGRESS ? 'bg-primary/10 text-primary' : 
+           task.status === TaskStatus.DONE ? 'bg-success/10 text-success' : 'bg-slate-100 text-slate-400'
+         }`}>
+           {task.status}
+         </span>
+         <ChevronRight size={14} className="text-slate-200" />
       </div>
     </div>
-    <div className="flex items-center space-x-2">
-       <span className={`text-[8px] font-black px-2 py-0.5 rounded-md uppercase tracking-tighter ${
-         task.status === TaskStatus.BLOCKED ? 'bg-urgent/10 text-urgent' : 
-         task.status === TaskStatus.IN_PROGRESS ? 'bg-primary/10 text-primary' : 
-         task.status === TaskStatus.DONE ? 'bg-success/10 text-success' : 'bg-slate-100 text-slate-400'
-       }`}>
-         {task.status}
-       </span>
-       <ChevronRight size={14} className="text-slate-200" />
-    </div>
-  </div>
-));
+  );
+});
 
 const Tasks: React.FC<TasksProps> = ({ 
   tasks, users, clients = [], currentUser, 
@@ -73,7 +79,7 @@ const Tasks: React.FC<TasksProps> = ({
     }
     setShowFormModal(false);
     setEditingTask(null);
-    setFormData({ title: '', status: TaskStatus.TODO, assigneeId: currentUser.id });
+    setFormData({ title: '', status: TaskStatus.TODO, assigneeId: currentUser.id, dueDate: new Date().toISOString().split('T')[0], priority: 'medium' });
   }, [formData, editingTask, onAddTask, onUpdateTask, currentUser.id]);
 
   const boardData = useMemo(() => ({
@@ -152,7 +158,7 @@ const Tasks: React.FC<TasksProps> = ({
       </div>
 
       <button 
-        onClick={() => { setEditingTask(null); setFormData({ title: '', status: TaskStatus.TODO, assigneeId: currentUser.id }); setShowFormModal(true); }}
+        onClick={() => { setEditingTask(null); setFormData({ title: '', status: TaskStatus.TODO, assigneeId: currentUser.id, dueDate: new Date().toISOString().split('T')[0], priority: 'medium' }); setShowFormModal(true); }}
         className="fixed bottom-[calc(90px+env(safe-area-inset-bottom))] right-6 w-16 h-16 bg-primary text-white rounded-3xl shadow-[0_15px_45px_rgba(0,102,255,0.4)] flex items-center justify-center z-30 active-scale border-4 border-white transition-all hover:scale-105"
       >
         <Plus size={32} strokeWidth={3} />
@@ -174,10 +180,9 @@ const Tasks: React.FC<TasksProps> = ({
             <div className="space-y-8">
               <div>
                 <h4 className="text-3xl font-black text-slate-900 leading-tight tracking-tighter">{currentTask.title}</h4>
-                <p className="text-[11px] font-black text-slate-300 uppercase tracking-widest mt-2">{clientMap.get(currentTask.clientId || '')?.name || 'Projet Interne'}</p>
+                <p className="text-[11px] font-black text-slate-300 uppercase tracking-widest mt-2">{clientMap.get(currentTask.clientId || '')?.name || 'Projet Interne'} • Échéance : {currentTask.dueDate}</p>
               </div>
 
-              {/* SÉLECTEUR D'ÉTAT À 4 CHOIX */}
               <div className="space-y-4">
                 <label className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] px-1">Changer l'état opérationnel</label>
                 <div className="grid grid-cols-2 gap-3">
@@ -209,7 +214,7 @@ const Tasks: React.FC<TasksProps> = ({
               </div>
 
               <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 max-h-[120px] overflow-y-auto">
-                <p className="text-slate-500 font-bold text-sm leading-relaxed">{currentTask.description || 'Aucune consigne rédigée.'}</p>
+                <p className="text-slate-600 font-bold text-sm leading-relaxed">{currentTask.description || 'Aucune consigne rédigée.'}</p>
               </div>
 
               <div className="grid grid-cols-1 pt-2">
@@ -224,40 +229,78 @@ const Tasks: React.FC<TasksProps> = ({
 
       {showFormModal && (
         <div className="fixed inset-0 z-[120] bg-white animate-in slide-in-from-bottom duration-400 flex flex-col safe-pt">
-          <header className="px-6 py-5 flex items-center justify-between border-b border-slate-50">
+          <header className="px-6 py-5 flex items-center justify-between border-b border-slate-100 bg-white sticky top-0 z-10">
             <button onClick={() => { setShowFormModal(false); setEditingTask(null); }} className="p-3 bg-slate-50 rounded-2xl text-slate-400 active-scale"><X size={22}/></button>
             <h3 className="font-black text-slate-900 tracking-tighter uppercase text-sm">{editingTask ? 'Éditer Flux' : 'Initialiser Mission'}</h3>
-            <button onClick={handleSubmit} className="text-primary font-black text-xs tracking-widest bg-primary/5 px-5 py-3 rounded-2xl active-scale">VALIDER</button>
+            <button onClick={handleSubmit} className="text-primary font-black text-xs tracking-widest bg-primary/5 px-6 py-3 rounded-2xl active-scale">VALIDER</button>
           </header>
-          <div className="p-8 space-y-8 flex-1 overflow-y-auto no-scrollbar pb-20">
-            <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase text-slate-300 tracking-[0.2em] px-1">Intitulé de mission</label>
-                <input type="text" className="w-full text-4xl font-black outline-none placeholder-slate-100 text-slate-900 caret-primary" placeholder="Titre..." value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} autoFocus />
+          <div className="p-8 space-y-10 flex-1 overflow-y-auto no-scrollbar pb-32 bg-white">
+            <div className="space-y-3">
+                <label className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] px-1 opacity-70">Intitulé de mission</label>
+                <input 
+                  type="text" 
+                  className="w-full text-4xl font-black outline-none placeholder-slate-200 text-slate-900 caret-primary bg-transparent" 
+                  placeholder="Ex: Refonte UI/UX..." 
+                  value={formData.title} 
+                  onChange={e => setFormData({...formData, title: e.target.value})} 
+                  autoFocus 
+                />
             </div>
-            <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase text-slate-300 tracking-[0.2em] px-1">Description opérationnelle</label>
-                <textarea className="w-full h-40 text-lg font-bold outline-none placeholder-slate-100 text-slate-500 resize-none leading-relaxed" placeholder="Détails techniques..." value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
+            <div className="space-y-3">
+                <label className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] px-1 opacity-70">Description opérationnelle</label>
+                <textarea 
+                  className="w-full h-40 text-lg font-bold outline-none placeholder-slate-100 text-slate-600 resize-none leading-relaxed bg-transparent" 
+                  placeholder="Décrivez les objectifs et les contraintes techniques ici..." 
+                  value={formData.description} 
+                  onChange={e => setFormData({...formData, description: e.target.value})} 
+                />
             </div>
-            <div className="grid grid-cols-1 gap-4 pt-6">
-              <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 flex items-center justify-between">
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-4">
+              <div className="p-6 bg-slate-50 rounded-[2.5rem] border border-slate-100 flex items-center justify-between focus-within:ring-4 focus-within:ring-primary/5 transition-all">
                 <div className="w-full">
-                    <p className="text-[10px] font-black uppercase text-slate-400 mb-1 tracking-widest">Client associé</p>
-                    <select className="bg-transparent font-black outline-none w-full text-slate-900" value={formData.clientId} onChange={e => setFormData({...formData, clientId: e.target.value})}>
+                    <p className="text-[10px] font-black uppercase text-slate-400 mb-2 tracking-widest opacity-60">Client associé</p>
+                    <select className="bg-transparent font-black outline-none w-full text-slate-900 cursor-pointer" value={formData.clientId} onChange={e => setFormData({...formData, clientId: e.target.value})}>
                         <option value="">Projet Interne</option>
                         {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                 </div>
-                <Tag size={18} className="text-slate-200" />
+                <Tag size={18} className="text-slate-300" />
               </div>
-              <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 flex items-center justify-between">
+
+              <div className="p-6 bg-slate-50 rounded-[2.5rem] border border-slate-100 flex items-center justify-between focus-within:ring-4 focus-within:ring-primary/5 transition-all">
                 <div className="w-full">
-                    <p className="text-[10px] font-black uppercase text-slate-400 mb-1 tracking-widest">Assigner le flux à</p>
-                    <select className="bg-transparent font-black outline-none w-full text-slate-900" value={formData.assigneeId} onChange={e => setFormData({...formData, assigneeId: e.target.value})}>
-                    {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                    <p className="text-[10px] font-black uppercase text-slate-400 mb-2 tracking-widest opacity-60">Assigner le flux</p>
+                    <select className="bg-transparent font-black outline-none w-full text-slate-900 cursor-pointer" value={formData.assigneeId} onChange={e => setFormData({...formData, assigneeId: e.target.value})}>
+                        {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                     </select>
                 </div>
-                {/* Added Users to the lucide-react imports to fix the error below */}
-                <Users size={18} className="text-slate-200" />
+                <Users size={18} className="text-slate-300" />
+              </div>
+
+              <div className="p-6 bg-slate-50 rounded-[2.5rem] border border-slate-100 flex items-center justify-between focus-within:ring-4 focus-within:ring-primary/5 transition-all">
+                <div className="w-full">
+                    <p className="text-[10px] font-black uppercase text-slate-400 mb-2 tracking-widest opacity-60">Date d'échéance</p>
+                    <input 
+                      type="date" 
+                      className="bg-transparent font-black outline-none w-full text-slate-900 cursor-pointer" 
+                      value={formData.dueDate} 
+                      onChange={e => setFormData({...formData, dueDate: e.target.value})} 
+                    />
+                </div>
+                <Calendar size={18} className="text-slate-300" />
+              </div>
+
+              <div className="p-6 bg-slate-50 rounded-[2.5rem] border border-slate-100 flex items-center justify-between focus-within:ring-4 focus-within:ring-primary/5 transition-all">
+                <div className="w-full">
+                    <p className="text-[10px] font-black uppercase text-slate-400 mb-2 tracking-widest opacity-60">Priorité du flux</p>
+                    <select className="bg-transparent font-black outline-none w-full text-slate-900 cursor-pointer" value={formData.priority} onChange={e => setFormData({...formData, priority: e.target.value as any})}>
+                        <option value="low">Basse</option>
+                        <option value="medium">Moyenne</option>
+                        <option value="high">Haute (Urgent)</option>
+                    </select>
+                </div>
+                <Flag size={18} className={`${formData.priority === 'high' ? 'text-urgent' : 'text-slate-300'}`} />
               </div>
             </div>
           </div>
