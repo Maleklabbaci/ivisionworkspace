@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { User, UserRole, Task, ActivityLog } from '../types';
 import { X, UserPlus, ChevronRight, Check, Trash2 } from 'lucide-react';
@@ -17,10 +18,10 @@ interface TeamProps {
 
 const PERMISSIONS_LIST = [
   { key: 'canCreateTasks', label: 'Ajouter Tâches' },
-  { key: 'canViewFinancials', label: 'Voir Finances' },
   { key: 'canManageTeam', label: 'Gérer Équipe' },
   { key: 'canManageClients', label: 'Gérer Clients' },
   { key: 'canViewReports', label: 'Rapports IA' },
+  { key: 'canManageChannels', label: 'Gérer Salons' },
 ];
 
 const Team: React.FC<TeamProps> = ({ currentUser, users, onlineUserIds, onAddUser, onRemoveUser, onUpdateMember }) => {
@@ -65,95 +66,85 @@ const Team: React.FC<TeamProps> = ({ currentUser, users, onlineUserIds, onAddUse
       }
   };
 
-  const inputClasses = "w-full p-4 bg-slate-100/50 border border-slate-200 rounded-2xl font-bold text-slate-900 placeholder-slate-400 focus:bg-white focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all outline-none";
+  const inputClasses = "w-full p-5 bg-slate-50 border border-slate-100 rounded-3xl font-bold text-slate-900 placeholder-slate-300 focus:bg-white focus:border-primary/20 transition-all outline-none";
 
   return (
-    <div className="space-y-6 pb-24 page-transition px-1 safe-top">
+    <div className="space-y-6 pb-24 page-transition px-1">
       <div>
-        <h2 className="text-2xl font-bold">Équipe</h2>
-        <p className="text-xs text-slate-500 font-medium uppercase tracking-widest">Workspace Administration</p>
+        <h2 className="text-3xl font-black text-slate-900 tracking-tighter uppercase">Équipe</h2>
+        <p className="text-slate-400 font-bold text-xs uppercase tracking-widest mt-1">Gestion des collaborateurs</p>
       </div>
 
-      <div className="grid grid-cols-1 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {users.map(user => (
-              <div key={user.id} onClick={() => setEditingUser(user)} className="bg-white p-5 rounded-[2.5rem] border border-slate-100 shadow-sm active:scale-[0.98] transition-all flex items-center justify-between">
-                  <div className="flex items-center space-x-4">
+              <div key={user.id} onClick={() => setEditingUser(user)} className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm active-scale transition-all flex items-center justify-between group hover:shadow-lg cursor-pointer">
+                  <div className="flex items-center space-x-5">
                       <div className="relative">
-                        <img src={user.avatar} className="w-12 h-12 rounded-2xl border-2 border-slate-50" alt="" />
-                        {onlineUserIds.has(user.id) && <span className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 border-4 border-white rounded-full"></span>}
+                        <img src={user.avatar} className="w-14 h-14 rounded-2xl object-cover border-2 border-slate-50 shadow-sm" alt="" />
+                        {onlineUserIds.has(user.id) && <span className="absolute -top-1 -right-1 w-4 h-4 bg-success border-4 border-white rounded-full"></span>}
                       </div>
                       <div>
-                          <h3 className="font-bold text-slate-900 leading-none mb-1">{user.name}</h3>
-                          <p className="text-[10px] font-black uppercase text-slate-400">{user.role}</p>
+                          <h3 className="font-black text-slate-900 leading-none mb-1">{user.name}</h3>
+                          <p className="text-[10px] font-black uppercase text-primary tracking-widest">{user.role}</p>
                       </div>
                   </div>
-                  <ChevronRight size={18} className="text-slate-200" />
+                  <ChevronRight size={18} className="text-slate-200 group-hover:text-primary transition-colors" />
               </div>
           ))}
       </div>
 
-      <button onClick={() => { setErrors({}); setShowAddModal(true); }} className="fixed bottom-24 right-6 w-14 h-14 bg-primary text-white rounded-full shadow-2xl flex items-center justify-center z-[55] border-4 border-white active-scale transition-transform"><UserPlus size={26} /></button>
+      <button onClick={() => { setErrors({}); setShowAddModal(true); }} className="fixed bottom-[calc(90px+env(safe-area-inset-bottom))] right-6 w-16 h-16 bg-primary text-white rounded-3xl shadow-2xl flex items-center justify-center z-30 border-4 border-white active-scale transition-transform"><UserPlus size={28} strokeWidth={3} /></button>
 
-      {/* MODALE AJOUT PLEIN ÉCRAN */}
       {showAddModal && (
-          <div className="fixed inset-0 bg-white z-[100] animate-in slide-in-from-bottom duration-300 flex flex-col safe-top">
-              <header className="p-4 border-b flex items-center justify-between bg-white sticky top-0 z-20">
-                  <button onClick={() => setShowAddModal(false)} className="p-2 text-slate-400"><X size={24}/></button>
-                  <h3 className="font-bold text-slate-900">Nouveau Membre</h3>
-                  <button onClick={handleAddSubmit} className="bg-primary text-white px-5 py-2 rounded-full font-bold text-sm flex items-center space-x-1 active:scale-95 transition-transform">
-                      <Check size={16} />
-                      <span>Ajouter</span>
-                  </button>
+          <div className="fixed inset-0 bg-white z-[120] animate-in slide-in-from-bottom duration-400 flex flex-col safe-pt">
+              <header className="px-6 py-5 flex items-center justify-between border-b border-slate-50">
+                  <button onClick={() => setShowAddModal(false)} className="p-3 bg-slate-50 rounded-2xl text-slate-400 active-scale"><X size={24}/></button>
+                  <h3 className="font-black text-slate-900 tracking-tighter uppercase text-sm">Nouveau Membre</h3>
+                  <button onClick={handleAddSubmit} className="text-primary font-black text-xs tracking-widest bg-primary/5 px-5 py-3 rounded-2xl active-scale">VALIDER</button>
               </header>
-              <form className="p-6 space-y-6 flex-1 overflow-y-auto">
-                  <div className="space-y-4">
-                      <div>
-                          <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">Nom Complet *</label>
-                          <input type="text" className={`${inputClasses} ${errors.name ? 'border-urgent bg-red-50' : ''}`} value={newUser.name} onChange={e => setNewUser({...newUser, name: e.target.value})} placeholder="Ex: Jean Martin" />
-                          {errors.name && <p className="text-urgent text-[10px] font-bold mt-1 px-1">{errors.name}</p>}
+              <form className="p-8 space-y-8 flex-1 overflow-y-auto no-scrollbar pb-32">
+                  <div className="space-y-6">
+                      <div className="space-y-2">
+                          <label className="text-[10px] font-black uppercase text-slate-300 tracking-[0.2em] px-1">Nom Complet</label>
+                          <input type="text" className={`${inputClasses} ${errors.name ? 'border-urgent' : ''}`} value={newUser.name} onChange={e => setNewUser({...newUser, name: e.target.value})} placeholder="Ex: Jean Martin" />
                       </div>
-                      <div>
-                          <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">Email *</label>
-                          <input type="email" className={`${inputClasses} ${errors.email ? 'border-urgent bg-red-50' : ''}`} value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} placeholder="jean@ivision.com" />
-                          {errors.email && <p className="text-urgent text-[10px] font-bold mt-1 px-1">{errors.email}</p>}
+                      <div className="space-y-2">
+                          <label className="text-[10px] font-black uppercase text-slate-300 tracking-[0.2em] px-1">Email professionnel</label>
+                          <input type="email" className={`${inputClasses} ${errors.email ? 'border-urgent' : ''}`} value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} placeholder="jean@ivision.com" />
                       </div>
                   </div>
               </form>
           </div>
       )}
 
-      {/* MODALE ÉDITION DROITS */}
       {editingUser && (
-          <div className="fixed inset-0 bg-white z-[100] animate-in slide-in-from-bottom duration-300 flex flex-col safe-top">
-              <header className="p-4 border-b flex items-center justify-between sticky top-0 bg-white z-20">
-                  <button onClick={() => setEditingUser(null)} className="p-2 text-slate-400"><X size={24}/></button>
-                  <h3 className="font-bold">Permissions</h3>
-                  <button onClick={handleSaveEdit} className="bg-primary text-white px-5 py-2 rounded-full font-bold text-sm flex items-center space-x-1 active:scale-95 transition-transform">
-                      <Check size={16} />
-                      <span>Sauver</span>
-                  </button>
+          <div className="fixed inset-0 bg-white z-[120] animate-in slide-in-from-bottom duration-400 flex flex-col safe-pt">
+              <header className="px-6 py-5 border-b border-slate-50 flex items-center justify-between sticky top-0 bg-white z-20">
+                  <button onClick={() => setEditingUser(null)} className="p-3 bg-slate-50 rounded-2xl text-slate-400 active-scale"><X size={24}/></button>
+                  <h3 className="font-black text-slate-900 tracking-tighter uppercase text-sm">Permissions Collaborateur</h3>
+                  <button onClick={handleSaveEdit} className="text-primary font-black text-xs tracking-widest bg-primary/5 px-5 py-3 rounded-2xl active-scale">ENREGISTRER</button>
               </header>
-              <div className="p-6 space-y-8 flex-1 overflow-y-auto pb-24">
-                  <div className="flex items-center space-x-4 bg-slate-50 p-5 rounded-[2.5rem]">
-                      <img src={editingUser.avatar} className="w-16 h-16 rounded-3xl" alt="" />
+              <div className="p-8 space-y-10 flex-1 overflow-y-auto no-scrollbar pb-32">
+                  <div className="flex items-center space-x-6 bg-slate-50 p-7 rounded-[2.5rem] border border-slate-100">
+                      <img src={editingUser.avatar} className="w-20 h-20 rounded-3xl object-cover shadow-md" alt="" />
                       <div>
-                          <h4 className="font-black text-slate-900 text-lg">{editingUser.name}</h4>
-                          <p className="text-xs font-bold text-slate-400">{editingUser.email}</p>
+                          <h4 className="font-black text-slate-900 text-xl tracking-tight">{editingUser.name}</h4>
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">{editingUser.email}</p>
                       </div>
                   </div>
-                  <div className="space-y-4">
-                      <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest block px-2">Accès Directs</label>
-                      <div className="grid grid-cols-1 gap-3">
+                  <div className="space-y-6">
+                      <label className="text-[10px] font-black uppercase text-slate-400 tracking-[0.3em] block px-2 opacity-60">Accès et Droits</label>
+                      <div className="grid grid-cols-1 gap-4">
                           {PERMISSIONS_LIST.map(perm => {
                               const isEnabled = (editingUser.permissions as any)?.[perm.key] || false;
                               return (
                                   <button key={perm.key} onClick={() => {
                                       const newPerms = { ...(editingUser.permissions || {}), [perm.key]: !isEnabled };
                                       setEditingUser({...editingUser, permissions: newPerms});
-                                  }} className={`flex items-center justify-between p-5 rounded-3xl transition-all border-2 ${isEnabled ? 'bg-primary/5 border-primary/20' : 'bg-slate-50 border-transparent'}`}>
-                                      <span className={`font-bold ${isEnabled ? 'text-primary' : 'text-slate-500'}`}>{perm.label}</span>
-                                      <div className={`w-12 h-7 rounded-full p-1 transition-colors ${isEnabled ? 'bg-primary' : 'bg-slate-200'}`}>
-                                          <div className={`w-5 h-5 bg-white rounded-full shadow-sm transition-transform ${isEnabled ? 'translate-x-5' : 'translate-x-0'}`}></div>
+                                  }} className={`flex items-center justify-between p-6 rounded-[2rem] transition-all border-4 ${isEnabled ? 'bg-primary/5 border-primary/20 shadow-lg shadow-primary/5' : 'bg-slate-50 border-white hover:border-slate-100'}`}>
+                                      <span className={`font-black text-sm uppercase tracking-tight ${isEnabled ? 'text-primary' : 'text-slate-500'}`}>{perm.label}</span>
+                                      <div className={`w-14 h-8 rounded-full p-1 transition-colors ${isEnabled ? 'bg-primary' : 'bg-slate-200'}`}>
+                                          <div className={`w-6 h-6 bg-white rounded-full shadow-md transition-transform ${isEnabled ? 'translate-x-6' : 'translate-x-0'}`}></div>
                                       </div>
                                   </button>
                               );
@@ -161,9 +152,9 @@ const Team: React.FC<TeamProps> = ({ currentUser, users, onlineUserIds, onAddUse
                       </div>
                   </div>
                   {editingUser.id !== currentUser.id && (
-                      <button onClick={() => { if(confirm("Supprimer l'accès ?")) { onRemoveUser(editingUser.id); setEditingUser(null); } }} className="w-full p-5 text-urgent font-bold bg-red-50 rounded-[2rem] flex items-center justify-center space-x-2 active:bg-red-100 transition-colors">
-                          <Trash2 size={20} />
-                          <span>Révoquer l'accès</span>
+                      <button onClick={() => { if(confirm("Supprimer l'accès ?")) { onRemoveUser(editingUser.id); setEditingUser(null); } }} className="w-full p-6 text-urgent font-black bg-red-50 rounded-[2.5rem] flex items-center justify-center space-x-3 active-scale transition-colors border-4 border-white shadow-xl shadow-red-500/5">
+                          <Trash2 size={24} />
+                          <span className="uppercase text-[10px] tracking-widest">Révoquer définitivement</span>
                       </button>
                   )}
               </div>

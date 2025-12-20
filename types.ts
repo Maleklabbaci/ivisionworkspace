@@ -9,18 +9,17 @@ export enum UserRole {
 
 export interface UserPermissions {
   canCreateTasks?: boolean;
-  canEditAllTasks?: boolean;     // Modifier toutes les tâches
+  canEditAllTasks?: boolean;
   canDeleteTasks?: boolean;
-  canManageChat?: boolean;       // Supprimer messages
-  canViewFiles?: boolean;        // Accès aux fichiers
-  canDeleteFiles?: boolean;      // Supprimer des fichiers
-  canViewFinancials?: boolean;   // Accès aux budgets
-  canManageTeam?: boolean;       // Ajouter/Modifier des membres
-  canManageChannels?: boolean;   // Créer/Supprimer des channels
-  canViewReports?: boolean;      // Accès aux rapports
-  canExportReports?: boolean;    // Exporter PDF/CSV
-  canManageClients?: boolean;    // Accès et gestion des clients
-  canManageCampaigns?: boolean;  // Accès et gestion des campagnes
+  canManageChat?: boolean;
+  canViewFiles?: boolean;
+  canDeleteFiles?: boolean;
+  canManageTeam?: boolean;
+  canManageChannels?: boolean;
+  canViewReports?: boolean;
+  canExportReports?: boolean;
+  canManageClients?: boolean;
+  canManageCampaigns?: boolean;
 }
 
 export interface User {
@@ -33,7 +32,7 @@ export interface User {
   notificationPref: 'push' | 'all';
   status: 'active' | 'pending';
   permissions?: UserPermissions;
-  lastSeen?: string; // Timestamp ISO de la dernière activité
+  lastSeen?: string;
 }
 
 export interface Client {
@@ -66,7 +65,7 @@ export interface Comment {
   userId: string;
   content: string;
   timestamp: string;
-  fullTimestamp?: string; // Ajout pour la date exacte
+  fullTimestamp?: string;
   attachments?: string[];
 }
 
@@ -82,7 +81,7 @@ export interface Task {
   title: string;
   description: string;
   assigneeId: string;
-  clientId?: string; // Lien vers le client
+  clientId?: string;
   dueDate: string;
   status: TaskStatus;
   type: 'content' | 'ads' | 'social' | 'seo' | 'admin'; 
@@ -90,7 +89,6 @@ export interface Task {
   comments?: Comment[];
   subtasks?: Subtask[];
   attachments?: string[];
-  price?: number;
 }
 
 export interface Channel {
@@ -107,7 +105,7 @@ export interface Message {
   channelId: string;
   content: string;
   timestamp: string;
-  fullTimestamp: string; // ISO Date string for comparison
+  fullTimestamp: string;
   attachments?: string[];
 }
 
@@ -115,7 +113,7 @@ export interface FileLink {
   id: string;
   name: string;
   url: string;
-  clientId?: string; // Lien vers le client
+  clientId?: string;
   createdBy: string;
   createdAt: string;
 }
@@ -134,8 +132,6 @@ export type CampaignCategory = 'content' | 'ads' | 'social' | 'mixed';
 export interface CampaignMetric {
   name: string;
   category: CampaignCategory;
-  budget: number;
-  spend: number;
   clicks: number;
   conversions: number;
   impressions: number;

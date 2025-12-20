@@ -8,7 +8,7 @@
     <meta name="theme-color" content="#ffffff">
     <meta name="format-detection" content="telephone=no">
     
-    <title>iVISION - Mobile Workspace</title>
+    <title>iVISION - Workspace</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script>
@@ -37,13 +37,11 @@
       * { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
       body { 
         -webkit-tap-highlight-color: transparent; 
-        overscroll-behavior: none; 
         background-color: #ffffff;
         user-select: none;
         height: 100dvh;
+        margin: 0;
         overflow: hidden;
-        position: fixed;
-        width: 100%;
       }
       #root { height: 100%; }
       .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -51,7 +49,6 @@
       .safe-pb { padding-bottom: var(--safe-bottom); }
       .active-scale:active { transform: scale(0.96); transition: transform 0.1s cubic-bezier(0, 0, 0.2, 1); }
       
-      /* Smooth transitions */
       .page-transition {
         animation: slideIn 0.35s cubic-bezier(0.32, 0.72, 0, 1);
       }
@@ -60,20 +57,42 @@
         to { opacity: 1; transform: translateY(0); }
       }
 
-      /* Board Scroller fix */
-      .board-container {
-        display: flex;
-        overflow-x: auto;
-        scroll-snap-type: x mandatory;
-        -webkit-overflow-scrolling: touch;
-      }
-      .board-column {
-        scroll-snap-align: center;
-        flex: 0 0 85%;
-        margin-right: 16px;
-      }
+      /* Desktop Board Overrides */
       @media (min-width: 768px) {
-        .board-column { flex: 0 0 320px; }
+        .board-container {
+            overflow-x: auto;
+            display: flex;
+            gap: 24px;
+            scroll-snap-type: none;
+        }
+        .board-column {
+            flex: 0 0 320px;
+            scroll-snap-align: none;
+            margin-right: 0;
+        }
+        body {
+            overflow: auto;
+            position: relative;
+        }
+      }
+
+      /* Mobile Board Scroller fix */
+      @media (max-width: 767px) {
+        body {
+            position: fixed;
+            width: 100%;
+        }
+        .board-container {
+            display: flex;
+            overflow-x: auto;
+            scroll-snap-type: x mandatory;
+            -webkit-overflow-scrolling: touch;
+        }
+        .board-column {
+            scroll-snap-align: center;
+            flex: 0 0 85%;
+            margin-right: 16px;
+        }
       }
     </style>
     <script type="importmap">

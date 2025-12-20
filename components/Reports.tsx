@@ -2,7 +2,7 @@
 import React, { useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, AreaChart, Area } from 'recharts';
 import { User, UserRole, Task, TaskStatus } from '../types';
-import { Lock, TrendingUp, DollarSign, PieChart as PieChartIcon, Target, AlertCircle } from 'lucide-react';
+import { TrendingUp, PieChart as PieChartIcon, Target, AlertCircle, Layers } from 'lucide-react';
 
 interface ReportsProps {
     currentUser: User;
@@ -10,278 +10,194 @@ interface ReportsProps {
     users: User[];
 }
 
-// Brand Colors
-const COLORS = ['#1D4ED8', '#10B981', '#f59e0b', '#EF4444', '#8b5cf6'];
+// Couleurs fixes pour les 4 statuts
+const STATUS_COLORS = {
+  [TaskStatus.TODO]: '#D1D1D6',      // Gris
+  [TaskStatus.IN_PROGRESS]: '#0066FF', // Bleu
+  [TaskStatus.BLOCKED]: '#FF3B30',     // Rouge
+  [TaskStatus.DONE]: '#34C759',        // Vert
+};
 
 const Reports: React.FC<ReportsProps> = ({ currentUser, tasks, users }) => {
   
-  // Access Guard: Admin, Project Manager, Analyst OR Special Permission
   const canAccess = 
     currentUser.role === UserRole.ADMIN || 
     currentUser.role === UserRole.PROJECT_MANAGER || 
     currentUser.role === UserRole.ANALYST ||
     currentUser.permissions?.canViewReports;
 
-  // Financial Visibility Guard - STRICT
-  // On retire le UserRole.PROJECT_MANAGER par défaut.
-  // Seul l'Admin ou celui qui a "canViewFinancials" coché peut voir l'argent.
-  const showFinancials = 
-    currentUser.role === UserRole.ADMIN || 
-    currentUser.permissions?.canViewFinancials;
-
   if (!canAccess) {
-      return null; // STRICT: Nothing renders if no permission
+      return (
+        <div className="h-full flex flex-col items-center justify-center text-center p-8 pt-20">
+            <div className="bg-red-50 p-10 rounded-full mb-6">
+              <AlertCircle size={48} className="text-urgent" />
+            </div>
+            <h2 className="text-3xl font-black text-slate-900 tracking-tighter uppercase">Accès Restreint</h2>
+            <p className="text-slate-400 font-bold max-w-xs">Les rapports analytiques sont réservés aux administrateurs opérationnels.</p>
+        </div>
+      );
   }
 
-  // 1. Calculate Financials by Service Type (Dynamic)
-  const financialsByType = useMemo(() => {
-      if (!showFinancials) return []; // Don't calculate if not shown
-
-      const data: Record<string, number> = { content: 0, ads: 0, social: 0, seo: 0, admin: 0 };
-      let hasValue = false;
-      
-      tasks.forEach(t => {
-          if (t.price && t.price > 0) {
-              const type = t.type || 'admin';
-              if (data[type] !== undefined) {
-                data[type] += t.price;
-                hasValue = true;
-              }
-          }
-      });
-      
-      if (!hasValue) return [];
-
-      return Object.keys(data)
-        .map(key => ({
-          name: key.charAt(0).toUpperCase() + key.slice(1),
-          value: data[key]
-        }))
-        .filter(item => item.value > 0);
-  }, [tasks, showFinancials]);
-
-  // 2. Task Status Distribution (Dynamic)
   const statusData = useMemo(() => {
-      if (tasks.length === 0) return [];
-      
+      // On force les 4 statuts pour garantir une vue complète du workflow
       return [
-        { name: 'Terminé', value: tasks.filter(t => t.status === TaskStatus.DONE).length },
-        { name: 'En cours', value: tasks.filter(t => t.status === TaskStatus.IN_PROGRESS).length },
-        { name: 'À faire', value: tasks.filter(t => t.status === TaskStatus.TODO).length },
-        { name: 'Bloqué', value: tasks.filter(t => t.status === TaskStatus.BLOCKED).length },
-      ].filter(d => d.value > 0);
+        { name: 'À faire', value: tasks.filter(t => t.status === TaskStatus.TODO).length, status: TaskStatus.TODO },
+        { name: 'En cours', value: tasks.filter(t => t.status === TaskStatus.IN_PROGRESS).length, status: TaskStatus.IN_PROGRESS },
+        { name: 'Bloqué', value: tasks.filter(t => t.status === TaskStatus.BLOCKED).length, status: TaskStatus.BLOCKED },
+        { name: 'Terminé', value: tasks.filter(t => t.status === TaskStatus.DONE).length, status: TaskStatus.DONE },
+      ];
   }, [tasks]);
 
-  // 3. Team Velocity (Dynamic)
   const teamPerformanceData = useMemo(() => {
       if (tasks.length === 0) return [];
-
       return users.map(user => {
           const userTasks = tasks.filter(t => t.assigneeId === user.id);
           return {
               name: user.name.split(' ')[0],
               total: userTasks.length,
               completed: userTasks.filter(t => t.status === TaskStatus.DONE).length,
-              revenue: showFinancials ? userTasks.reduce((acc, curr) => acc + (curr.price || 0), 0) : 0
+              blocked: userTasks.filter(t => t.status === TaskStatus.BLOCKED).length,
           };
       }).filter(d => d.total > 0);
-  }, [users, tasks, showFinancials]);
+  }, [users, tasks]);
 
-  // 4. Monthly/Period Trend (Dynamic based on Due Dates)
   const trendData = useMemo(() => {
       if (tasks.length === 0) return [];
-
-      const groupedData: Record<string, { revenue: number; count: number; timestamp: number }> = {};
+      const groupedData: Record<string, { count: number; timestamp: number }> = {};
 
       tasks.forEach(task => {
           const date = new Date(task.dueDate);
           if (isNaN(date.getTime())) return;
-
-          // Group by "Month YY"
           const key = date.toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' });
-          // Use first day of month for sorting
           const sortKey = new Date(date.getFullYear(), date.getMonth(), 1).getTime();
-
           if (!groupedData[key]) {
-              groupedData[key] = { revenue: 0, count: 0, timestamp: sortKey };
-          }
-          
-          if (showFinancials) {
-            groupedData[key].revenue += (task.price || 0);
+              groupedData[key] = { count: 0, timestamp: sortKey };
           }
           groupedData[key].count += 1;
       });
 
-      // Sort chronologically
       return Object.keys(groupedData)
           .map(key => ({
               name: key,
-              revenue: groupedData[key].revenue,
               tasks: groupedData[key].count,
               timestamp: groupedData[key].timestamp
           }))
           .sort((a, b) => a.timestamp - b.timestamp);
+  }, [tasks]);
 
-  }, [tasks, showFinancials]);
-
-  const totalRevenue = useMemo(() => tasks.reduce((acc, curr) => acc + (curr.price || 0), 0), [tasks]);
   const hasTasks = tasks.length > 0;
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto pb-12 relative animate-in fade-in duration-500">
-       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+    <div className="space-y-10 max-w-7xl mx-auto pb-24 relative animate-in fade-in duration-500 px-2">
+       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div>
-            <h2 className="text-2xl font-bold text-slate-900">Rapports & Analytique</h2>
-            <p className="text-slate-500">Vision globale de la performance{showFinancials ? ', des budgets' : ''} et de l'équipe.</p>
+            <h2 className="text-4xl font-black text-slate-900 tracking-tighter uppercase">Analytique IA</h2>
+            <p className="text-slate-400 font-bold text-sm uppercase tracking-widest mt-1">Intelligence opérationnelle & Flux iVISION</p>
         </div>
         
-        <div className="bg-white px-4 py-2 rounded-lg border border-slate-200 shadow-sm flex items-center space-x-4">
-            {showFinancials && (
-                <>
-                    <div className="flex flex-col">
-                        <span className="text-[10px] text-slate-400 uppercase font-bold">CA Global Estimé</span>
-                        <span className="text-lg font-bold text-slate-900">{totalRevenue} DA</span>
-                    </div>
-                    <div className="h-8 w-px bg-slate-200"></div>
-                </>
-            )}
-             <div className="flex flex-col">
-                <span className="text-[10px] text-slate-400 uppercase font-bold">Tâches Totales</span>
-                <span className="text-lg font-bold text-slate-900">{tasks.length}</span>
+        <div className="bg-white px-8 py-5 rounded-[2.5rem] border border-slate-100 shadow-sm flex items-center space-x-8">
+             <div className="flex flex-col text-center">
+                <span className="text-[10px] text-slate-400 uppercase font-black tracking-widest mb-1">Missions</span>
+                <span className="text-3xl font-black text-slate-900 tracking-tighter">{tasks.length}</span>
+            </div>
+            <div className="h-10 w-px bg-slate-100"></div>
+            <div className="flex flex-col text-center">
+                <span className="text-[10px] text-slate-400 uppercase font-black tracking-widest mb-1">Livrées</span>
+                <span className="text-3xl font-black text-success tracking-tighter">{tasks.filter(t => t.status === TaskStatus.DONE).length}</span>
+            </div>
+            <div className="h-10 w-px bg-slate-100"></div>
+            <div className={`flex flex-col text-center ${tasks.filter(t => t.status === TaskStatus.BLOCKED).length > 0 ? 'text-urgent' : 'text-slate-200'}`}>
+                <span className="text-[10px] text-slate-400 uppercase font-black tracking-widest mb-1">Bloquées</span>
+                <span className="text-3xl font-black tracking-tighter">{tasks.filter(t => t.status === TaskStatus.BLOCKED).length}</span>
             </div>
         </div>
       </div>
 
-      {/* Empty State Check */}
-      {!hasTasks && (
-          <div className="bg-slate-50 rounded-xl border border-slate-200 p-12 text-center">
-              <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-400">
-                  <AlertCircle size={32} />
-              </div>
-              <h3 className="text-lg font-bold text-slate-700">Données insuffisantes</h3>
-              <p className="text-slate-500">Aucune tâche n'a encore été créée pour générer des rapports.</p>
+      {!hasTasks ? (
+          <div className="bg-slate-50 rounded-[3rem] border border-slate-100 p-24 text-center border-dashed">
+              <Layers size={48} className="mx-auto text-slate-200 mb-6 opacity-50" />
+              <h3 className="text-xl font-black text-slate-400 uppercase tracking-[0.2em]">Flux de données vide</h3>
+              <p className="text-xs text-slate-300 font-bold mt-2">Assignez des missions pour générer les rapports d'agence.</p>
           </div>
-      )}
-
-      {hasTasks && (
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Revenue Breakdown Pie - STRICTLY HIDDEN if no permission */}
-          {showFinancials && (
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                <h3 className="text-lg font-bold text-slate-800 mb-1 flex items-center">
-                    <DollarSign size={20} className="mr-2 text-primary" />
-                    Répartition du Chiffre d'Affaires
-                </h3>
-                <p className="text-xs text-slate-400 mb-6">Basé sur les tâches avec un prix défini</p>
-                <div className="h-[300px] flex items-center justify-center">
-                    {financialsByType.length > 0 ? (
-                        <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                                <Pie
-                                    data={financialsByType}
-                                    cx="50%"
-                                    cy="50%"
-                                    innerRadius={80}
-                                    outerRadius={100}
-                                    paddingAngle={5}
-                                    dataKey="value"
-                                >
-                                    {financialsByType.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                    ))}
-                                </Pie>
-                                <Tooltip 
-                                    formatter={(value: number) => `${value} DA`}
-                                    contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} 
-                                />
-                                <Legend verticalAlign="bottom" height={36} />
-                            </PieChart>
-                        </ResponsiveContainer>
-                    ) : (
-                        <p className="text-sm text-slate-400 italic">Aucune donnée financière disponible.</p>
-                    )}
-                </div>
-            </div>
-          )}
-
-          {/* Task Status Distribution - Expanded if financials hidden */}
-          <div className={`bg-white p-6 rounded-xl shadow-sm border border-slate-200 ${!showFinancials ? 'lg:col-span-2' : ''}`}>
-               <h3 className="text-lg font-bold text-slate-800 mb-1 flex items-center">
-                  <PieChartIcon size={20} className="mr-2 text-primary" />
-                  État d'avancement des projets
+      ) : (
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Pie Chart complet avec les 4 états */}
+          <div className="bg-white p-10 rounded-5xl shadow-sm border border-slate-100">
+               <h3 className="text-xl font-black text-slate-900 mb-1 flex items-center uppercase tracking-tight">
+                  <PieChartIcon size={22} className="mr-3 text-primary" />
+                  Santé du Workflow
               </h3>
-              <p className="text-xs text-slate-400 mb-6">Ratio de complétion des tâches actives</p>
-              <div className="h-[300px]">
+              <p className="text-[10px] font-black text-slate-400 mb-10 uppercase tracking-widest">Répartition des 4 statuts opérationnels</p>
+              <div className="h-[320px]">
                   <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={statusData} layout="vertical" margin={{top: 20, right: 30, left: 40, bottom: 5}}>
-                        <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f1f5f9"/>
-                        <XAxis type="number" hide />
-                        <YAxis type="category" dataKey="name" tick={{fontSize: 12}} width={70} />
-                        <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
-                        <Bar dataKey="value" fill="#1D4ED8" radius={[0, 4, 4, 0]} barSize={30}>
-                             {statusData.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={entry.name === 'Bloqué' ? '#EF4444' : entry.name === 'Terminé' ? '#10B981' : '#1D4ED8'} />
-                            ))}
-                        </Bar>
-                      </BarChart>
+                      <PieChart>
+                          <Pie
+                              data={statusData}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={85}
+                              outerRadius={115}
+                              paddingAngle={6}
+                              dataKey="value"
+                          >
+                              {statusData.map((entry, index) => (
+                                  <Cell key={`cell-${index}`} fill={STATUS_COLORS[entry.status]} />
+                              ))}
+                          </Pie>
+                          <Tooltip 
+                            contentStyle={{borderRadius: '24px', border: 'none', boxShadow: '0 20px 40px rgba(0,0,0,0.1)', padding: '16px'}} 
+                            itemStyle={{fontWeight: 'bold', fontSize: '12px'}}
+                          />
+                          <Legend verticalAlign="bottom" height={40} iconType="circle" />
+                      </PieChart>
                   </ResponsiveContainer>
               </div>
           </div>
 
-          {/* Team Performance (Revenue hidden in chart data calculation if no permission) */}
-          <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-              <h3 className="text-lg font-bold text-slate-800 mb-1 flex items-center">
-                  <Target size={20} className="mr-2 text-primary" />
-                  Performance de l'Équipe
+          <div className="bg-white p-10 rounded-5xl shadow-sm border border-slate-100">
+              <h3 className="text-xl font-black text-slate-900 mb-1 flex items-center uppercase tracking-tight">
+                  <Target size={22} className="mr-3 text-primary" />
+                  Productivité Équipe
               </h3>
-              <p className="text-xs text-slate-400 mb-6">Volume de tâches traitées {showFinancials ? 'et valeur générée' : ''} par membre</p>
-              <div className="h-[350px]">
+              <p className="text-[10px] font-black text-slate-400 mb-10 uppercase tracking-widest">Missions traitées et livrées par membre</p>
+              <div className="h-[320px]">
                   <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={teamPerformanceData} margin={{top: 20, right: 30, left: 20, bottom: 5}}>
                           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                          <XAxis dataKey="name" axisLine={false} tickLine={false} />
-                          <YAxis yAxisId="left" orientation="left" stroke="#1D4ED8" axisLine={false} tickLine={false} />
-                          {showFinancials && <YAxis yAxisId="right" orientation="right" stroke="#10B981" axisLine={false} tickLine={false} />}
-                          <Tooltip contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
-                          <Legend />
-                          <Bar yAxisId="left" dataKey="total" name="Tâches Totales" fill="#e2e8f0" radius={[4, 4, 0, 0]} />
-                          <Bar yAxisId="left" dataKey="completed" name="Tâches Terminées" fill="#1D4ED8" radius={[4, 4, 0, 0]} />
-                          {showFinancials && <Bar yAxisId="right" dataKey="revenue" name="Valeur Produite (DA)" fill="#10B981" radius={[4, 4, 0, 0]} />}
+                          <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 800, fill: '#94a3b8'}} />
+                          <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#cbd5e1'}} />
+                          <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '24px', border: 'none', boxShadow: '0 20px 40px rgba(0,0,0,0.1)'}} />
+                          <Legend iconType="rect" />
+                          <Bar dataKey="total" name="Total Assigné" fill="#E5E7EB" radius={[12, 12, 0, 0]} barSize={24} />
+                          <Bar dataKey="completed" name="Livrées" fill="#34C759" radius={[12, 12, 0, 0]} barSize={24} />
+                          <Bar dataKey="blocked" name="Bloquées" fill="#FF3B30" radius={[12, 12, 0, 0]} barSize={24} />
                       </BarChart>
                   </ResponsiveContainer>
               </div>
           </div>
 
-          {/* Monthly Trend (Revenue hidden if no permission) */}
-          <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-               <h3 className="text-lg font-bold text-slate-800 mb-1 flex items-center">
-                  <TrendingUp size={20} className="mr-2 text-primary" />
-                  Croissance Mensuelle
+          <div className="lg:col-span-2 bg-white p-10 rounded-5xl shadow-sm border border-slate-100">
+               <h3 className="text-xl font-black text-slate-900 mb-1 flex items-center uppercase tracking-tight">
+                  <TrendingUp size={22} className="mr-3 text-primary" />
+                  Flux Temporel
               </h3>
-              <p className="text-xs text-slate-400 mb-6">Projection basée sur les dates d'échéance des tâches</p>
-               <div className="h-[300px] flex items-center justify-center">
-                   {trendData.length > 0 ? (
+              <p className="text-[10px] font-black text-slate-400 mb-10 uppercase tracking-widest">Volume total d'activité généré</p>
+               <div className="h-[320px]">
                    <ResponsiveContainer width="100%" height="100%">
                        <AreaChart data={trendData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                             <defs>
-                                {showFinancials && (
-                                    <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor="#1D4ED8" stopOpacity={0.8}/>
-                                    <stop offset="95%" stopColor="#1D4ED8" stopOpacity={0}/>
-                                    </linearGradient>
-                                )}
+                                <linearGradient id="colorTasks" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="#0066FF" stopOpacity={0.2}/>
+                                    <stop offset="95%" stopColor="#0066FF" stopOpacity={0}/>
+                                </linearGradient>
                             </defs>
-                            <XAxis dataKey="name" axisLine={false} tickLine={false} />
-                            <YAxis axisLine={false} tickLine={false} />
+                            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 800, fill: '#94a3b8'}} />
+                            <YAxis axisLine={false} tickLine={false} hide />
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                            <Tooltip contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
-                            {showFinancials && <Area type="monotone" dataKey="revenue" stroke="#1D4ED8" fillOpacity={1} fill="url(#colorRevenue)" name="Revenu (DA)" />}
-                            <Area type="monotone" dataKey="tasks" stroke="#10B981" fillOpacity={0} strokeDasharray="3 3" name="Nombre de tâches" />
+                            <Tooltip contentStyle={{borderRadius: '24px', border: 'none', padding: '16px'}} />
+                            <Area type="monotone" dataKey="tasks" stroke="#0066FF" strokeWidth={5} fillOpacity={1} fill="url(#colorTasks)" name="Intensité" />
                         </AreaChart>
                    </ResponsiveContainer>
-                   ) : (
-                       <p className="text-sm text-slate-400 italic">Pas assez de données temporelles pour afficher une tendance.</p>
-                   )}
                </div>
           </div>
       </div>

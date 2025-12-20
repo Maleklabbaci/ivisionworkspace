@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
 import { supabase, isConfigured } from './services/supabaseClient';
 import { HashRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
@@ -6,7 +7,6 @@ import ToastContainer from './components/Toast';
 import { User, UserRole, Task, TaskStatus, Channel, ToastNotification, Message, Client, FileLink, ViewState } from './types';
 import { Mail, Lock, Loader2, Sparkles, User as UserIcon } from 'lucide-react';
 
-// Lazy loading optimal pour environnement ESM
 const Dashboard = lazy(() => import('./components/Dashboard'));
 const Tasks = lazy(() => import('./components/Tasks'));
 const Chat = lazy(() => import('./components/Chat'));
@@ -169,14 +169,14 @@ const App: React.FC = () => {
         setMessages(messagesRes.data.map((m: any) => ({
           id: m.id, userId: m.user_id, channelId: m.channel_id, content: m.content,
           timestamp: new Date(m.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-          fullTimestamp: m.created_at, attachments: m.attachments || []
+          fullTimestamp: m.created_at
         })));
       }
       if (tasksRes.data) {
         setTasks(tasksRes.data.map((t: any) => ({
           id: t.id, title: t.title, description: t.description, assigneeId: t.assignee_id,
           dueDate: t.due_date, status: t.status as TaskStatus, type: t.type, priority: t.priority,
-          price: t.price, clientId: t.client_id
+          clientId: t.client_id
         })));
       }
     } catch (e) {
