@@ -1,10 +1,12 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 
 export const generateMarketingInsight = async (context: string): Promise<string> => {
   try {
     // Initialize inside function to avoid top-level crash if env is missing at boot
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    const model = 'gemini-2.5-flash';
+    // Use gemini-3-flash-preview for basic text tasks like KPI analysis
+    const model = 'gemini-3-flash-preview';
     
     // Prompt optimisé pour être direct et sans formatage Markdown complexe
     const prompt = `
@@ -24,6 +26,7 @@ export const generateMarketingInsight = async (context: string): Promise<string>
       contents: prompt,
     });
 
+    // Directly access response.text property
     return response.text?.trim() || "Impossible de générer des insights pour le moment.";
   } catch (error) {
     console.error("Erreur Gemini:", error);
@@ -34,7 +37,8 @@ export const generateMarketingInsight = async (context: string): Promise<string>
 export const brainstormTaskIdeas = async (topic: string): Promise<string[]> => {
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    const model = 'gemini-2.5-flash';
+    // Use gemini-3-flash-preview for general brainstorming tasks
+    const model = 'gemini-3-flash-preview';
     
     const prompt = `Génère 5 idées de tâches concrètes et professionnelles pour une campagne marketing sur le sujet : "${topic}".`;
 
@@ -53,6 +57,7 @@ export const brainstormTaskIdeas = async (topic: string): Promise<string[]> => {
       }
     });
 
+    // response.text is a property, not a method
     const text = response.text;
     if (!text) return [];
     

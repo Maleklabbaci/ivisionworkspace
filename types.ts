@@ -1,5 +1,4 @@
 
-
 export enum UserRole {
   ADMIN = 'Admin',
   MEMBER = 'Membre',
@@ -128,7 +127,7 @@ export interface ToastNotification {
   type: 'info' | 'success' | 'urgent';
 }
 
-export type ViewState = 'dashboard' | 'tasks' | 'chat' | 'files' | 'team' | 'settings' | 'reports' | 'clients';
+export type ViewState = 'dashboard' | 'tasks' | 'chat' | 'files' | 'team' | 'settings' | 'reports' | 'clients' | 'calendar';
 
 export type CampaignCategory = 'content' | 'ads' | 'social' | 'mixed';
 

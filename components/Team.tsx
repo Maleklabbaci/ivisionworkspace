@@ -1,15 +1,13 @@
-
-
 import React, { useState } from 'react';
-import { User, UserRole, ActivityLog, Task, TaskStatus, UserPermissions } from '../types';
-import { MoreHorizontal, Mail, Shield, Trash2, UserPlus, History, Briefcase, CheckCircle, X, Edit2, ToggleLeft, ToggleRight, Save, AlertTriangle, Key, Lock, Eye, Folder, Megaphone, Download, FileMinus } from 'lucide-react';
+import { User, UserRole, Task, ActivityLog } from '../types';
+import { X, UserPlus, ChevronRight, Check, Trash2 } from 'lucide-react';
 
 interface TeamProps {
   currentUser: User;
   users: User[];
   tasks: Task[];
   activities: ActivityLog[];
-  onlineUserIds: Set<string>; // New Prop
+  onlineUserIds: Set<string>;
   onAddUser: (user: User) => void;
   onRemoveUser: (userId: string) => void;
   onUpdateRole: (userId: string, role: UserRole) => void;
@@ -17,342 +15,159 @@ interface TeamProps {
   onUpdateMember: (userId: string, data: Partial<User>) => void;
 }
 
-interface PermissionConfig {
-  key: keyof UserPermissions;
-  label: string;
-  description: string;
-  icon: React.ReactNode;
-}
-
-const PERMISSIONS_LIST: PermissionConfig[] = [
-  { key: 'canCreateTasks', label: 'Créer des tâches', description: 'Peut créer et assigner des nouvelles tâches.', icon: <Edit2 size={14} /> },
-  { key: 'canEditAllTasks', label: 'Modifier toutes les tâches', description: 'Peut modifier les tâches des autres.', icon: <CheckCircle size={14} /> },
-  { key: 'canDeleteTasks', label: 'Supprimer des tâches', description: 'Peut supprimer définitivement des tâches.', icon: <Trash2 size={14} /> },
-  { key: 'canManageChat', label: 'Gérer le Chat', description: 'Peut supprimer des messages et créer des canaux.', icon: <AlertTriangle size={14} /> },
-  { key: 'canViewFiles', label: 'Voir les Fichiers', description: 'Accès en lecture au gestionnaire de fichiers.', icon: <Folder size={14} /> },
-  { key: 'canDeleteFiles', label: 'Supprimer Fichiers', description: 'Peut supprimer des fichiers de la bibliothèque.', icon: <FileMinus size={14} /> },
-  { key: 'canViewFinancials', label: 'Données Financières', description: 'Peut voir les prix et budgets.', icon: <Eye size={14} /> },
-  { key: 'canManageTeam', label: 'Gérer l\'équipe', description: 'Peut ajouter ou modifier des membres.', icon: <UserPlus size={14} /> },
-  { key: 'canManageChannels', label: 'Gérer les Canaux', description: 'Créer/Supprimer des canaux de discussion.', icon: <Lock size={14} /> },
-  { key: 'canViewReports', label: 'Voir les Rapports', description: 'Accès aux statistiques globales.', icon: <History size={14} /> },
-  { key: 'canExportReports', label: 'Exporter Rapports', description: 'Peut télécharger les données (CSV/PDF).', icon: <Download size={14} /> },
-  { key: 'canManageClients', label: 'Gérer les Clients', description: 'Accès au portefeuille clients (Lecture/Écriture).', icon: <Briefcase size={14} /> },
+const PERMISSIONS_LIST = [
+  { key: 'canCreateTasks', label: 'Ajouter Tâches' },
+  { key: 'canViewFinancials', label: 'Voir Finances' },
+  { key: 'canManageTeam', label: 'Gérer Équipe' },
+  { key: 'canManageClients', label: 'Gérer Clients' },
+  { key: 'canViewReports', label: 'Rapports IA' },
 ];
 
-// Helper pour formater le temps
-const formatLastSeen = (lastSeen?: string) => {
-    if (!lastSeen) return "Jamais";
-    
-    const date = new Date(lastSeen);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMins / 60);
-    const diffDays = Math.floor(diffHours / 24);
-
-    if (diffMins < 1) return "À l'instant";
-    if (diffMins < 60) return `Il y a ${diffMins} min`;
-    if (diffHours < 24) return `Il y a ${diffHours} h`;
-    return `Il y a ${diffDays} j`;
-};
-
-const Team: React.FC<TeamProps> = ({ currentUser, users, tasks, activities, onlineUserIds, onAddUser, onRemoveUser, onUpdateRole, onApproveUser, onUpdateMember }) => {
+const Team: React.FC<TeamProps> = ({ currentUser, users, onlineUserIds, onAddUser, onRemoveUser, onUpdateMember }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [newUser, setNewUser] = useState<Partial<User>>({
-    name: '',
-    email: '',
-    role: UserRole.MEMBER
-  });
-  
-  // Permission Guard: Admin OR canManageTeam permission
-  const canManage = currentUser.role === UserRole.ADMIN || currentUser.permissions?.canManageTeam;
+  const [newUser, setNewUser] = useState<Partial<User>>({ name: '', email: '', role: UserRole.MEMBER });
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
-  if (!canManage) {
-      return null; // Strict visibility requirement
-  }
+  const validate = () => {
+    const e: Record<string, string> = {};
+    if (!newUser.name?.trim()) e.name = "Nom obligatoire";
+    if (!newUser.email?.includes('@')) e.email = "Email invalide";
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
 
   const handleAddSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (newUser.name && newUser.email && newUser.role) {
-      const user: User = {
-        id: `temp-${Date.now()}`, // Will be replaced by App.tsx / DB
-        name: newUser.name,
-        email: newUser.email,
-        role: newUser.role,
-        avatar: `https://ui-avatars.com/api/?name=${newUser.name.replace(/\s+/g, '+')}&background=random`,
+    if (!validate()) return;
+    onAddUser({
+        id: `temp-${Date.now()}`,
+        name: newUser.name!,
+        email: newUser.email!,
+        role: newUser.role || UserRole.MEMBER,
+        avatar: `https://ui-avatars.com/api/?name=${newUser.name!.replace(/\s+/g, '+')}&background=random`,
         notificationPref: 'all',
         status: 'pending',
-        permissions: {} // Default empty
-      };
-      onAddUser(user);
-      setShowAddModal(false);
-      setNewUser({ name: '', email: '', role: UserRole.MEMBER });
-    }
-  };
-
-  const handleDeleteUser = (targetUser: User) => {
-      // Protection : On ne peut pas se supprimer soi-même via cette interface
-      if (targetUser.id === currentUser.id) {
-        alert("Vous ne pouvez pas supprimer votre propre compte ici.");
-        return;
-      }
-
-      if (window.confirm(`Êtes-vous sûr de vouloir supprimer ${targetUser.name} ? Cette action est irréversible.`)) {
-          onRemoveUser(targetUser.id);
-      }
-  };
-
-  const handlePermissionToggle = (key: keyof UserPermissions) => {
-      if (!editingUser) return;
-      
-      const currentPerms = editingUser.permissions || {};
-      const newValue = !currentPerms[key];
-      
-      const updatedUser = {
-          ...editingUser,
-          permissions: {
-              ...currentPerms,
-              [key]: newValue
-          }
-      };
-      setEditingUser(updatedUser);
+        permissions: {}
+    } as User);
+    setShowAddModal(false);
+    setNewUser({ name: '', email: '', role: UserRole.MEMBER });
   };
 
   const handleSaveEdit = () => {
       if (editingUser) {
           onUpdateMember(editingUser.id, {
               role: editingUser.role,
-              permissions: editingUser.permissions
+              permissions: editingUser.permissions,
+              name: editingUser.name
           });
           setEditingUser(null);
       }
   };
 
+  const inputClasses = "w-full p-4 bg-slate-100/50 border border-slate-200 rounded-2xl font-bold text-slate-900 placeholder-slate-400 focus:bg-white focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all outline-none";
+
   return (
-    <div className="space-y-8 max-w-6xl mx-auto pb-12 animate-in fade-in duration-300">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-900">Gestion de l'équipe</h2>
-          <p className="text-slate-500">Gérez les membres, les rôles et les accès.</p>
-        </div>
-        <button 
-          onClick={() => setShowAddModal(true)}
-          className="bg-primary text-white px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-blue-700 transition-colors shadow-sm"
-        >
-          <UserPlus size={18} />
-          <span>Nouveau Membre</span>
-        </button>
+    <div className="space-y-6 pb-24 page-transition px-1 safe-top">
+      <div>
+        <h2 className="text-2xl font-bold">Équipe</h2>
+        <p className="text-xs text-slate-500 font-medium uppercase tracking-widest">Workspace Administration</p>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-slate-600">
-            <thead className="bg-slate-50 text-xs uppercase font-semibold text-slate-500">
-              <tr>
-                <th className="px-6 py-4">Membre</th>
-                <th className="px-6 py-4">Rôle</th>
-                <th className="px-6 py-4">Statut</th>
-                <th className="px-6 py-4">Tâches</th>
-                <th className="px-6 py-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {users.map((user) => {
-                const activeTasks = tasks.filter(t => t.assigneeId === user.id && t.status !== TaskStatus.DONE).length;
-                const isCurrentUser = user.id === currentUser.id;
-                const isOnline = onlineUserIds.has(user.id);
-
-                return (
-                  <tr key={user.id} className="hover:bg-slate-50/80 transition-colors group">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center space-x-3">
-                        <div className="relative">
-                            <img src={user.avatar} alt={user.name} className="w-10 h-10 rounded-full border border-slate-200" />
-                            {isOnline && <span className="absolute bottom-0 right-0 w-3 h-3 bg-success border-2 border-white rounded-full"></span>}
-                        </div>
-                        <div>
-                          <p className="font-bold text-slate-900">{user.name}</p>
-                          <div className="flex items-center text-xs text-slate-400">
-                            {user.email}
-                          </div>
-                        </div>
+      <div className="grid grid-cols-1 gap-4">
+          {users.map(user => (
+              <div key={user.id} onClick={() => setEditingUser(user)} className="bg-white p-5 rounded-[2.5rem] border border-slate-100 shadow-sm active:scale-[0.98] transition-all flex items-center justify-between">
+                  <div className="flex items-center space-x-4">
+                      <div className="relative">
+                        <img src={user.avatar} className="w-12 h-12 rounded-2xl border-2 border-slate-50" alt="" />
+                        {onlineUserIds.has(user.id) && <span className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 border-4 border-white rounded-full"></span>}
                       </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        user.role === UserRole.ADMIN ? 'bg-purple-100 text-purple-800' : 
-                        user.role === UserRole.PROJECT_MANAGER ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-600'
-                      }`}>
-                        {user.role === UserRole.ADMIN && <Shield size={12} className="mr-1" />}
-                        {user.role}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      {user.status === 'active' ? (
-                        <div>
-                            {isOnline ? (
-                                <span className="text-success flex items-center text-xs font-bold"><CheckCircle size={14} className="mr-1"/> En ligne</span>
-                            ) : (
-                                <span className="text-slate-400 text-xs flex items-center">
-                                    <span className="w-2 h-2 rounded-full border border-slate-300 mr-2"></span>
-                                    {formatLastSeen(user.lastSeen)}
-                                </span>
-                            )}
-                        </div>
-                      ) : (
-                        <button onClick={() => onApproveUser(user.id)} className="bg-orange-100 text-orange-700 px-2 py-1 rounded text-xs font-bold hover:bg-orange-200 transition-colors">
-                          En attente (Valider)
-                        </button>
-                      )}
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`font-mono font-medium ${activeTasks > 3 ? 'text-urgent' : 'text-slate-600'}`}>
-                        {activeTasks} tâches
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end space-x-2 opacity-100">
-                        <button 
-                           onClick={() => setEditingUser(user)}
-                           className="p-2 text-slate-400 hover:text-primary hover:bg-blue-50 rounded-lg transition-colors"
-                           title="Modifier Permissions"
-                        >
-                            <Edit2 size={16} />
-                        </button>
-                        
-                        {/* Admin peut supprimer tout le monde sauf lui-même (y compris d'autres admins) */}
-                        {!isCurrentUser && (
-                            <button 
-                                onClick={() => handleDeleteUser(user)}
-                                className="p-2 text-slate-400 hover:text-urgent hover:bg-red-50 rounded-lg transition-colors"
-                                title="Supprimer"
-                            >
-                                <Trash2 size={16} />
-                            </button>
-                        )}
+                      <div>
+                          <h3 className="font-bold text-slate-900 leading-none mb-1">{user.name}</h3>
+                          <p className="text-[10px] font-black uppercase text-slate-400">{user.role}</p>
                       </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                  </div>
+                  <ChevronRight size={18} className="text-slate-200" />
+              </div>
+          ))}
       </div>
 
-      {/* Add User Modal */}
+      <button onClick={() => { setErrors({}); setShowAddModal(true); }} className="fixed bottom-24 right-6 w-14 h-14 bg-primary text-white rounded-full shadow-2xl flex items-center justify-center z-[55] border-4 border-white active-scale transition-transform"><UserPlus size={26} /></button>
+
+      {/* MODALE AJOUT PLEIN ÉCRAN */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-              <h3 className="text-lg font-bold text-slate-900">Ajouter un membre</h3>
-              <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
-            </div>
-            <form onSubmit={handleAddSubmit} className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Nom complet</label>
-                <input type="text" required className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary outline-none" 
-                  value={newUser.name} onChange={e => setNewUser({...newUser, name: e.target.value})} />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
-                <input type="email" required className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary outline-none" 
-                  value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Rôle</label>
-                <select className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary outline-none"
-                  value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value as UserRole})}>
-                  {Object.values(UserRole).map(role => <option key={role} value={role}>{role}</option>)}
-                </select>
-              </div>
-              <button type="submit" className="w-full py-2.5 bg-primary text-white rounded-lg font-medium hover:bg-blue-700 transition-colors shadow-sm">Ajouter</button>
-            </form>
+          <div className="fixed inset-0 bg-white z-[100] animate-in slide-in-from-bottom duration-300 flex flex-col safe-top">
+              <header className="p-4 border-b flex items-center justify-between bg-white sticky top-0 z-20">
+                  <button onClick={() => setShowAddModal(false)} className="p-2 text-slate-400"><X size={24}/></button>
+                  <h3 className="font-bold text-slate-900">Nouveau Membre</h3>
+                  <button onClick={handleAddSubmit} className="bg-primary text-white px-5 py-2 rounded-full font-bold text-sm flex items-center space-x-1 active:scale-95 transition-transform">
+                      <Check size={16} />
+                      <span>Ajouter</span>
+                  </button>
+              </header>
+              <form className="p-6 space-y-6 flex-1 overflow-y-auto">
+                  <div className="space-y-4">
+                      <div>
+                          <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">Nom Complet *</label>
+                          <input type="text" className={`${inputClasses} ${errors.name ? 'border-urgent bg-red-50' : ''}`} value={newUser.name} onChange={e => setNewUser({...newUser, name: e.target.value})} placeholder="Ex: Jean Martin" />
+                          {errors.name && <p className="text-urgent text-[10px] font-bold mt-1 px-1">{errors.name}</p>}
+                      </div>
+                      <div>
+                          <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">Email *</label>
+                          <input type="email" className={`${inputClasses} ${errors.email ? 'border-urgent bg-red-50' : ''}`} value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} placeholder="jean@ivision.com" />
+                          {errors.email && <p className="text-urgent text-[10px] font-bold mt-1 px-1">{errors.email}</p>}
+                      </div>
+                  </div>
+              </form>
           </div>
-        </div>
       )}
 
-      {/* Edit User Modal - Permissions & Role */}
+      {/* MODALE ÉDITION DROITS */}
       {editingUser && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center shrink-0">
-              <div className="flex items-center space-x-3">
-                  <img src={editingUser.avatar} className="w-10 h-10 rounded-full border border-slate-200" />
-                  <div>
-                      <h3 className="text-lg font-bold text-slate-900">Modifier {editingUser.name}</h3>
-                      <p className="text-xs text-slate-500">{editingUser.email}</p>
+          <div className="fixed inset-0 bg-white z-[100] animate-in slide-in-from-bottom duration-300 flex flex-col safe-top">
+              <header className="p-4 border-b flex items-center justify-between sticky top-0 bg-white z-20">
+                  <button onClick={() => setEditingUser(null)} className="p-2 text-slate-400"><X size={24}/></button>
+                  <h3 className="font-bold">Permissions</h3>
+                  <button onClick={handleSaveEdit} className="bg-primary text-white px-5 py-2 rounded-full font-bold text-sm flex items-center space-x-1 active:scale-95 transition-transform">
+                      <Check size={16} />
+                      <span>Sauver</span>
+                  </button>
+              </header>
+              <div className="p-6 space-y-8 flex-1 overflow-y-auto pb-24">
+                  <div className="flex items-center space-x-4 bg-slate-50 p-5 rounded-[2.5rem]">
+                      <img src={editingUser.avatar} className="w-16 h-16 rounded-3xl" alt="" />
+                      <div>
+                          <h4 className="font-black text-slate-900 text-lg">{editingUser.name}</h4>
+                          <p className="text-xs font-bold text-slate-400">{editingUser.email}</p>
+                      </div>
                   </div>
+                  <div className="space-y-4">
+                      <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest block px-2">Accès Directs</label>
+                      <div className="grid grid-cols-1 gap-3">
+                          {PERMISSIONS_LIST.map(perm => {
+                              const isEnabled = (editingUser.permissions as any)?.[perm.key] || false;
+                              return (
+                                  <button key={perm.key} onClick={() => {
+                                      const newPerms = { ...(editingUser.permissions || {}), [perm.key]: !isEnabled };
+                                      setEditingUser({...editingUser, permissions: newPerms});
+                                  }} className={`flex items-center justify-between p-5 rounded-3xl transition-all border-2 ${isEnabled ? 'bg-primary/5 border-primary/20' : 'bg-slate-50 border-transparent'}`}>
+                                      <span className={`font-bold ${isEnabled ? 'text-primary' : 'text-slate-500'}`}>{perm.label}</span>
+                                      <div className={`w-12 h-7 rounded-full p-1 transition-colors ${isEnabled ? 'bg-primary' : 'bg-slate-200'}`}>
+                                          <div className={`w-5 h-5 bg-white rounded-full shadow-sm transition-transform ${isEnabled ? 'translate-x-5' : 'translate-x-0'}`}></div>
+                                      </div>
+                                  </button>
+                              );
+                          })}
+                      </div>
+                  </div>
+                  {editingUser.id !== currentUser.id && (
+                      <button onClick={() => { if(confirm("Supprimer l'accès ?")) { onRemoveUser(editingUser.id); setEditingUser(null); } }} className="w-full p-5 text-urgent font-bold bg-red-50 rounded-[2rem] flex items-center justify-center space-x-2 active:bg-red-100 transition-colors">
+                          <Trash2 size={20} />
+                          <span>Révoquer l'accès</span>
+                      </button>
+                  )}
               </div>
-              <button onClick={() => setEditingUser(null)} className="text-slate-400 hover:text-slate-600"><X size={24}/></button>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                {/* Role Selection */}
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                    <label className="block text-sm font-bold text-slate-700 mb-3 flex items-center">
-                        <Shield size={16} className="mr-2 text-primary" />
-                        Rôle Principal
-                    </label>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {Object.values(UserRole).map(role => (
-                            <button
-                                key={role}
-                                onClick={() => setEditingUser({ ...editingUser, role: role })}
-                                className={`p-3 rounded-lg border text-left transition-all ${
-                                    editingUser.role === role 
-                                    ? 'bg-blue-50 border-primary text-primary shadow-sm ring-1 ring-primary' 
-                                    : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
-                                }`}
-                            >
-                                <span className="block font-bold text-sm">{role}</span>
-                            </button>
-                        ))}
-                    </div>
-                </div>
-
-                {/* Permissions Grid */}
-                <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-3 flex items-center">
-                        <Key size={16} className="mr-2 text-primary" />
-                        Permissions Spéciales
-                    </label>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {PERMISSIONS_LIST.map((perm) => {
-                            const isEnabled = editingUser.permissions?.[perm.key] || false;
-                            return (
-                                <div key={perm.key} className="flex items-center justify-between p-3 bg-white border border-slate-200 rounded-lg shadow-sm">
-                                    <div className="flex items-start space-x-3">
-                                        <div className={`mt-0.5 ${isEnabled ? 'text-primary' : 'text-slate-400'}`}>
-                                            {perm.icon}
-                                        </div>
-                                        <div className="flex-1">
-                                            <p className="text-sm font-bold text-slate-800">{perm.label}</p>
-                                            <p className="text-[10px] text-slate-500 leading-tight mt-0.5">{perm.description}</p>
-                                        </div>
-                                    </div>
-                                    <button 
-                                        onClick={() => handlePermissionToggle(perm.key)}
-                                        className={`relative w-10 h-6 transition-colors rounded-full flex-shrink-0 focus:outline-none ${isEnabled ? 'bg-primary' : 'bg-slate-200'}`}
-                                    >
-                                         <span className={`block w-4 h-4 bg-white rounded-full shadow-sm transform transition-transform duration-200 ${isEnabled ? 'translate-x-5' : 'translate-x-1'}`} />
-                                    </button>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-            </div>
-
-            <div className="p-6 border-t border-slate-100 bg-white shrink-0 flex justify-end space-x-3">
-                <button onClick={() => setEditingUser(null)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg font-medium transition-colors">Annuler</button>
-                <button onClick={handleSaveEdit} className="px-6 py-2 bg-primary text-white rounded-lg font-medium hover:bg-blue-700 shadow-md transition-colors flex items-center">
-                    <Save size={18} className="mr-2" /> Enregistrer
-                </button>
-            </div>
           </div>
-        </div>
       )}
     </div>
   );

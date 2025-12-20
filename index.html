@@ -2,116 +2,79 @@
 <html lang="fr">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#ffffff">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#1D4ED8">
     
-    <!-- Cache Busting Meta Tags -->
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-    <meta http-equiv="Pragma" content="no-cache" />
-    <meta http-equiv="Expires" content="0" />
-
-    <title>iVISION AGENCY - Plateforme de Gestion</title>
+    <title>iVISION AGENCY - Workspace</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
     <script>
       tailwind.config = {
         theme: {
           extend: {
-            fontFamily: {
-              sans: ['Inter', 'sans-serif'],
-            },
+            fontFamily: { sans: ['Inter', 'sans-serif'] },
             colors: {
-              primary: '#1D4ED8', // i (Blue)
-              secondary: '#000000', // VISION AGENCY (Black)
+              primary: '#1D4ED8',
+              secondary: '#000000',
               urgent: '#EF4444',
               success: '#10B981',
-              darkbg: '#0f172a', // Slate 900
-              cardbg: '#ffffff', // White for Light Mode
-            }
+              slate: { 50: '#F8FAFC', 100: '#F1F5F9', 200: '#E2E8F0', 400: '#94A3B8', 500: '#64748B', 800: '#1E293B', 900: '#0F172A' }
+            },
+            borderRadius: { '3xl': '24px', '4xl': '32px', '5xl': '40px' }
           }
         }
       }
     </script>
     <style>
-      /* 1. FORCE LIGHT BACKGROUND */
-      html, body {
-        background-color: #f8fafc !important; /* Slate-50 */
-        color: #0f172a;
-        height: 100%;
-        margin: 0;
-      }
-      
       :root {
-        color-scheme: light; 
+        --safe-top: env(safe-area-inset-top);
+        --safe-bottom: env(safe-area-inset-bottom);
       }
-
-      /* 2. FIX AUTOFILL WHITE BACKGROUND */
-      /* Match the input background which is usually white or very light gray */
-      input:-webkit-autofill,
-      input:-webkit-autofill:hover, 
-      input:-webkit-autofill:focus, 
-      input:-webkit-autofill:active {
-          -webkit-box-shadow: 0 0 0 1000px white inset !important;
-          -webkit-text-fill-color: #0f172a !important;
-          caret-color: #0f172a !important;
-          transition: background-color 5000s ease-in-out 0s;
+      body { 
+        -webkit-tap-highlight-color: transparent; 
+        overscroll-behavior-y: contain; 
+        background-color: #F8FAFC;
+        font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+        user-select: none;
+        height: 100dvh;
+        overflow: hidden;
       }
-
-      /* Minimalist Scrollbar */
-      ::-webkit-scrollbar {
-        width: 6px;
-        height: 6px;
-      }
-      ::-webkit-scrollbar-track {
-        background: #f1f5f9; 
-      }
-      ::-webkit-scrollbar-thumb {
-        background: #cbd5e1;
-        border-radius: 3px;
-      }
-      ::-webkit-scrollbar-thumb:hover {
-        background: #94a3b8;
-      }
+      #root { height: 100%; }
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .safe-top { padding-top: var(--safe-top); }
+      .safe-bottom { padding-bottom: var(--safe-bottom); }
+      .active-scale:active { transform: scale(0.95); transition: transform 0.1s ease; }
       
-      /* Loading Screen Animation */
-      .loading-pulse {
-        animation: pulse-opacity 2s infinite ease-in-out;
+      /* Smooth Page Transitions */
+      .page-transition {
+        animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
       }
-      @keyframes pulse-opacity {
-        0% { opacity: 0.5; }
-        50% { opacity: 1; }
-        100% { opacity: 0.5; }
+      @keyframes slideUp {
+        from { opacity: 0; transform: translateY(12px); }
+        to { opacity: 1; transform: translateY(0); }
       }
     </style>
-  <script type="importmap">
+    <script type="importmap">
 {
   "imports": {
-    "react/": "https://aistudiocdn.com/react@^19.2.0/",
-    "react": "https://aistudiocdn.com/react@^19.2.0",
-    "recharts": "https://aistudiocdn.com/recharts@^3.4.1",
-    "react-dom": "https://aistudiocdn.com/react-dom@^19.2.0",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
-    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.554.0",
-    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2",
-    "react-router-dom": "https://esm.sh/react-router-dom@6?external=react,react-dom"
+    "react": "https://esm.sh/react@19.0.0",
+    "react-dom": "https://esm.sh/react-dom@19.0.0",
+    "react-dom/client": "https://esm.sh/react-dom@19.0.0/client",
+    "lucide-react": "https://esm.sh/lucide-react@0.473.0?external=react,react-dom",
+    "recharts": "https://esm.sh/recharts@2.15.0?external=react,react-dom",
+    "@google/genai": "https://esm.sh/@google/genai@1.3.0",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.47.10",
+    "react-router-dom": "https://esm.sh/react-router-dom@6.28.0?external=react,react-dom",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/"
   }
 }
 </script>
-</head>
+  </head>
   <body>
-    <div id="root">
-      <!-- PRE-REACT LOADING SCREEN (LIGHT MODE) -->
-      <div style="height: 100vh; width: 100vw; background-color: #ffffff; display: flex; justify-content: center; align-items: center; flex-direction: column; font-family: 'Inter', sans-serif;">
-        <div style="font-size: 2.5rem; font-weight: 800; letter-spacing: -0.05em; color: #0f172a;">
-          <span style="color: #1D4ED8;">i</span>VISION
-        </div>
-        <div class="loading-pulse" style="margin-top: 1rem; font-size: 0.875rem; color: #64748b; font-weight: 500;">
-          Chargement de l'espace de travail...
-        </div>
-      </div>
-    </div>
-    <!-- CRITICAL: Entry point for the React App -->
+    <div id="root"></div>
     <script type="module" src="./index.tsx"></script>
   </body>
 </html>

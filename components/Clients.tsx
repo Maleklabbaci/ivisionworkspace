@@ -1,8 +1,7 @@
 
-
 import React, { useState, useMemo } from 'react';
 import { Client, Task, FileLink, TaskStatus, User, UserRole } from '../types';
-import { Users, Plus, Search, MapPin, Mail, Phone, Building2, Trash2, Edit2, X, CheckCircle, FileText, ArrowUpDown, Calendar, AlertCircle, ArrowUp, ArrowDown, Lock } from 'lucide-react';
+import { Users, Plus, Search, MapPin, Mail, Phone, Building2, Trash2, Edit2, X, CheckCircle, FileText, ArrowUpDown, Calendar, AlertCircle, ArrowUp, ArrowDown, Lock, Briefcase } from 'lucide-react';
 
 interface ClientsProps {
   clients: Client[];
@@ -18,504 +17,197 @@ const Clients: React.FC<ClientsProps> = ({ clients, tasks, fileLinks, onAddClien
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
-  const [selectedClient, setSelectedClient] = useState<Client | null>(null); // For Details View
-  const [activeTab, setActiveTab] = useState<'details' | 'tasks' | 'files'>('details');
-
-  // Task Sorting State inside Client Details
-  const [taskSortBy, setTaskSortBy] = useState<'date' | 'status' | 'title' | 'priority'>('date');
-  const [taskSortOrder, setTaskSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
 
   const [formData, setFormData] = useState<Partial<Client>>({
-    name: '',
-    company: '',
-    email: '',
-    phone: '',
-    address: '',
-    description: ''
+    name: '', company: '', email: '', phone: '', address: '', description: ''
   });
 
-  // ACCESS GUARD
-  const canAccess = !currentUser || (
+  const canAccess = currentUser && (
     currentUser.role === UserRole.ADMIN || 
     currentUser.role === UserRole.PROJECT_MANAGER || 
     currentUser.role === UserRole.ANALYST ||
-    currentUser.permissions?.canManageClients
+    currentUser.permissions?.canManageClients === true
   );
+
+  const filteredClients = useMemo(() => {
+    return clients.filter(client => 
+      client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      client.company?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [clients, searchTerm]);
+
+  // Récupération des tâches du client sélectionné
+  const clientTasks = useMemo(() => {
+    if (!selectedClient) return [];
+    return tasks.filter(t => t.clientId === selectedClient.id);
+  }, [tasks, selectedClient]);
 
   if (!canAccess) {
     return (
-        <div className="h-full flex flex-col items-center justify-center text-center p-8">
-            <div className="bg-red-50 p-6 rounded-full mb-4">
+        <div className="h-full flex flex-col items-center justify-center text-center p-8 animate-in fade-in duration-500 pt-20">
+            <div className="bg-red-50 p-10 rounded-full mb-6 flex items-center justify-center">
                 <Lock size={48} className="text-urgent" />
             </div>
-            <h2 className="text-2xl font-bold text-slate-900 mb-2">Accès Restreint</h2>
-            <p className="text-slate-500 max-w-md">
-                Vous n'avez pas la permission d'accéder à la gestion des clients. Contactez un administrateur pour obtenir l'accès.
+            <h2 className="text-3xl font-black text-slate-900 mb-2 tracking-tighter uppercase">Accès Refusé</h2>
+            <p className="text-slate-400 max-w-xs font-bold leading-relaxed text-sm">
+              Votre compte n'a pas les privilèges requis pour accéder au CRM client.
             </p>
         </div>
     );
   }
 
-  const filteredClients = useMemo(() => {
-    return clients.filter(client => 
-      client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.company?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.email?.toLowerCase().includes(searchTerm.toLowerCase())
-    ).sort((a, b) => a.name.localeCompare(b.name));
-  }, [clients, searchTerm]);
-
-  // Derived Data for Selected Client
-  const clientTasks = useMemo(() => {
-      if (!selectedClient) return [];
-      let relatedTasks = tasks.filter(t => t.clientId === selectedClient.id);
-      
-      // Sort tasks
-      return relatedTasks.sort((a, b) => {
-          let comparison = 0;
-          if (taskSortBy === 'date') {
-              comparison = new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-          } else if (taskSortBy === 'status') {
-              comparison = a.status.localeCompare(b.status);
-          } else if (taskSortBy === 'title') {
-              comparison = a.title.localeCompare(b.title);
-          } else if (taskSortBy === 'priority') {
-              const pWeight = { high: 3, medium: 2, low: 1, undefined: 0 };
-              const wA = pWeight[a.priority || 'medium'] || 0;
-              const wB = pWeight[b.priority || 'medium'] || 0;
-              comparison = wA - wB;
-          }
-          return taskSortOrder === 'asc' ? comparison : -comparison;
-      });
-  }, [selectedClient, tasks, taskSortBy, taskSortOrder]);
-
-  const clientFiles = useMemo(() => {
-      if (!selectedClient) return [];
-      return fileLinks.filter(f => f.clientId === selectedClient.id);
-  }, [selectedClient, fileLinks]);
-
-  const handleOpenModal = (client?: Client) => {
-    if (client) {
-      setEditingClient(client);
-      setFormData(client);
-    } else {
-      setEditingClient(null);
-      setFormData({ name: '', company: '', email: '', phone: '', address: '', description: '' });
-    }
-    setShowModal(true);
-  };
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name) return;
-
-    if (editingClient && onUpdateClient) {
-      onUpdateClient({ ...editingClient, ...formData } as Client);
-    } else if (onAddClient) {
-      onAddClient(formData as Client);
-    }
+    if (editingClient && onUpdateClient) onUpdateClient({ ...editingClient, ...formData } as Client);
+    else if (onAddClient) onAddClient(formData as Client);
     setShowModal(false);
   };
 
-  const handleDelete = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (window.confirm("Êtes-vous sûr de vouloir supprimer ce client ? Cette action est irréversible et pourrait affecter les tâches associées.")) {
-        if (onDeleteClient) onDeleteClient(id);
-        if (selectedClient?.id === id) setSelectedClient(null);
-    }
-  };
-
-  const openClientDetails = (client: Client) => {
-      setSelectedClient(client);
-      setActiveTab('details'); // Reset to details tab on open
-  };
-
-  const toggleTaskSort = (criteria: 'date' | 'status' | 'title' | 'priority') => {
-      if (taskSortBy === criteria) {
-          setTaskSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
-      } else {
-          setTaskSortBy(criteria);
-          setTaskSortOrder('asc'); // Default to asc for new criteria
-      }
-  };
-
-  const getStatusColor = (status: TaskStatus) => {
-      switch(status) {
-          case TaskStatus.DONE: return 'bg-green-100 text-green-700 border-green-200';
-          case TaskStatus.IN_PROGRESS: return 'bg-blue-100 text-blue-700 border-blue-200';
-          case TaskStatus.BLOCKED: return 'bg-red-100 text-red-700 border-red-200';
-          default: return 'bg-slate-100 text-slate-600 border-slate-200';
-      }
-  };
+  const inputClasses = "w-full p-5 bg-slate-50 border border-slate-100 rounded-3xl font-bold text-slate-900 placeholder-slate-300 focus:bg-white focus:border-primary/20 focus:ring-4 focus:ring-primary/5 transition-all outline-none";
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto h-[calc(100vh-100px)] flex flex-col relative">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shrink-0">
+    <div className="space-y-6 max-w-7xl mx-auto pb-24 page-transition">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900">Clients</h2>
-          <p className="text-slate-500 text-sm">Gérez votre portefeuille client et contacts.</p>
+          <h2 className="text-3xl font-black text-slate-900 tracking-tight">Clients</h2>
+          <p className="text-slate-400 font-bold text-sm">Gestion du portefeuille iVISION</p>
         </div>
-        <div className="flex items-center space-x-3 w-full md:w-auto">
-          <div className="relative flex-1 md:flex-none">
-            <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
-            <input 
-              type="text" 
-              placeholder="Rechercher un client..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 pr-4 py-2 bg-gray-200 text-black border border-gray-300 rounded-lg text-sm focus:outline-none focus:bg-white focus:ring-2 focus:ring-primary w-full md:w-64 transition-all placeholder-gray-500 font-medium" 
-            />
+        <div className="w-full md:w-auto flex items-center space-x-3">
+          <div className="relative flex-1">
+            <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" />
+            <input type="text" placeholder="Rechercher..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-11 pr-4 py-4 bg-white border border-slate-100 rounded-3xl shadow-sm text-sm font-bold focus:ring-4 focus:ring-primary/10 transition-all outline-none text-slate-900" />
           </div>
-          {onAddClient && (
-            <button 
-              onClick={() => handleOpenModal()}
-              className="bg-primary text-white p-2 px-4 rounded-lg hover:bg-blue-700 transition-colors shadow-md flex items-center text-sm font-medium whitespace-nowrap"
-            >
-              <Plus size={18} className="mr-2" />
-              Nouveau Client
-            </button>
-          )}
+          <button onClick={() => { setEditingClient(null); setFormData({}); setShowModal(true); }} className="bg-primary text-white p-3 px-6 rounded-[1.2rem] shadow-xl shadow-primary/20 active-scale transition-all flex items-center font-black text-[10px] tracking-widest">
+            <Plus size={18} className="mr-2" strokeWidth={3} /> NOUVEAU
+          </button>
         </div>
       </div>
 
-      {/* Grid Content */}
-      <div className="flex-1 overflow-y-auto min-h-0 bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-          {filteredClients.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full text-slate-400">
-                  <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
-                      <Users size={32} className="opacity-50" />
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {filteredClients.map(client => (
+              <div key={client.id} onClick={() => setSelectedClient(client)} className="bg-white p-7 rounded-[2.5rem] border border-slate-100 shadow-sm active-scale transition-all group hover:shadow-lg cursor-pointer">
+                  <div className="flex justify-between items-start mb-6">
+                      <div className="w-16 h-16 bg-slate-50 rounded-[1.5rem] flex items-center justify-center text-primary font-black text-2xl border border-slate-100 group-hover:bg-primary group-hover:text-white transition-all duration-300">
+                          {client.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={(e) => { e.stopPropagation(); setEditingClient(client); setFormData(client); setShowModal(true); }} className="p-2.5 text-slate-300 hover:text-primary transition-colors bg-slate-50 rounded-xl"><Edit2 size={16}/></button>
+                        <button onClick={(e) => { e.stopPropagation(); if(confirm('Supprimer ce client ?')) onDeleteClient?.(client.id); }} className="p-2.5 text-slate-300 hover:text-urgent transition-colors bg-red-50/50 rounded-xl"><Trash2 size={16}/></button>
+                      </div>
                   </div>
-                  <p>Aucun client trouvé.</p>
+                  <h3 className="text-2xl font-black text-slate-900 leading-tight mb-1 truncate">{client.name}</h3>
+                  <p className="text-[10px] font-black uppercase text-slate-300 tracking-[0.2em]">{client.company || 'Compte Indépendant'}</p>
+                  
+                  {/* Petit indicateur de tâches sur la carte */}
+                  <div className="mt-4 flex items-center text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    <Briefcase size={12} className="mr-1 text-primary/50" />
+                    {tasks.filter(t => t.clientId === client.id).length} Missions
+                  </div>
               </div>
-          ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {filteredClients.map(client => (
-                      <div 
-                          key={client.id} 
-                          onClick={() => openClientDetails(client)}
-                          className="group bg-white rounded-xl border border-slate-200 p-5 hover:shadow-md hover:border-primary/30 transition-all cursor-pointer relative"
-                      >
-                          <div className="flex justify-between items-start mb-4">
-                              <div className="flex items-center space-x-3">
-                                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-sm">
-                                      {client.name.charAt(0).toUpperCase()}
-                                  </div>
-                                  <div>
-                                      <h3 className="font-bold text-slate-900 group-hover:text-primary transition-colors">{client.name}</h3>
-                                      {client.company && (
-                                          <p className="text-xs text-slate-500 flex items-center">
-                                              <Building2 size={10} className="mr-1" />
-                                              {client.company}
-                                          </p>
-                                      )}
-                                  </div>
-                              </div>
-                              <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  {onUpdateClient && (
-                                      <button 
-                                          onClick={(e) => { e.stopPropagation(); handleOpenModal(client); }}
-                                          className="p-1.5 text-slate-400 hover:text-primary hover:bg-blue-50 rounded-lg transition-colors"
-                                      >
-                                          <Edit2 size={14} />
-                                      </button>
-                                  )}
-                                  {onDeleteClient && (
-                                      <button 
-                                          onClick={(e) => handleDelete(client.id, e)}
-                                          className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                                      >
-                                          <Trash2 size={14} />
-                                      </button>
-                                  )}
-                              </div>
-                          </div>
-                          
-                          <div className="space-y-2 text-sm text-slate-600">
-                              {client.email && (
-                                  <div className="flex items-center">
-                                      <Mail size={14} className="mr-2 text-slate-400" />
-                                      <span className="truncate">{client.email}</span>
-                                  </div>
-                              )}
-                              {client.phone && (
-                                  <div className="flex items-center">
-                                      <Phone size={14} className="mr-2 text-slate-400" />
-                                      <span>{client.phone}</span>
-                                  </div>
-                              )}
-                              {client.address && (
-                                  <div className="flex items-center">
-                                      <MapPin size={14} className="mr-2 text-slate-400" />
-                                      <span className="truncate">{client.address}</span>
-                                  </div>
-                              )}
-                          </div>
+          ))}
+      </div>
 
-                          <div className="mt-4 pt-4 border-t border-slate-50 flex justify-between items-center text-xs font-medium text-slate-500">
-                                <span>Voir détails</span>
-                                <div className="flex items-center space-x-3">
-                                     <span className="flex items-center" title="Tâches en cours"><CheckCircle size={12} className="mr-1 text-slate-400"/> {tasks.filter(t => t.clientId === client.id && t.status !== TaskStatus.DONE).length}</span>
-                                     <span className="flex items-center" title="Fichiers"><FileText size={12} className="mr-1 text-slate-400"/> {fileLinks.filter(f => f.clientId === client.id).length}</span>
-                                </div>
+      {/* FORM MODAL */}
+      {showModal && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[100] flex items-end md:items-center justify-center p-4 animate-in fade-in duration-300">
+              <div className="bg-white rounded-t-[40px] md:rounded-[40px] shadow-2xl w-full max-w-md overflow-hidden animate-in slide-in-from-bottom duration-500 pb-[calc(20px+env(safe-area-inset-bottom))]">
+                  <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0">
+                      <h3 className="text-2xl font-black text-slate-900 tracking-tighter uppercase">{editingClient ? 'Editer Client' : 'Nouveau Client'}</h3>
+                      <button onClick={() => setShowModal(false)} className="p-3 bg-slate-50 rounded-2xl text-slate-400"><X size={20}/></button>
+                  </div>
+                  <form onSubmit={handleSubmit} className="p-8 space-y-6 max-h-[70vh] overflow-y-auto no-scrollbar">
+                      <div className="space-y-5">
+                          <div>
+                              <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest px-2">Nom Complet *</label>
+                              <input required type="text" className={inputClasses} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="Ex: Rayane Merad" />
+                          </div>
+                          <div>
+                              <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest px-2">Email</label>
+                              <input type="email" className={inputClasses} value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} placeholder="email@exemple.com" />
+                          </div>
+                          <div>
+                              <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest px-2">Téléphone</label>
+                              <input type="tel" className={inputClasses} value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} placeholder="05XX XX XX XX" />
                           </div>
                       </div>
-                  ))}
+                      <div className="flex space-x-3 pt-6">
+                          <button type="button" onClick={() => setShowModal(false)} className="flex-1 py-5 text-slate-400 font-black uppercase text-[10px] tracking-widest hover:bg-slate-50 rounded-3xl transition-all">ANNULER</button>
+                          <button type="submit" className="flex-1 py-5 bg-primary text-white font-black uppercase text-[10px] tracking-widest rounded-3xl shadow-xl shadow-primary/20 active-scale">ENREGISTRER</button>
+                      </div>
+                  </form>
               </div>
-          )}
-      </div>
-
-      {/* Add/Edit Modal */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center shrink-0">
-              <h3 className="text-lg font-bold text-slate-900">{editingClient ? 'Modifier Client' : 'Nouveau Client'}</h3>
-              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
-            </div>
-            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Nom complet *</label>
-                <input required type="text" className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary outline-none" 
-                  value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Entreprise</label>
-                <input type="text" className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary outline-none" 
-                  value={formData.company} onChange={e => setFormData({...formData, company: e.target.value})} />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
-                <input type="email" className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary outline-none" 
-                  value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Téléphone</label>
-                <input type="tel" className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary outline-none" 
-                  value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Adresse</label>
-                <input type="text" className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary outline-none" 
-                  value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} />
-              </div>
-              <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Description / Notes</label>
-                  <textarea 
-                      className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary outline-none resize-none h-24" 
-                      placeholder="Informations supplémentaires, contexte, etc."
-                      value={formData.description || ''} 
-                      onChange={e => setFormData({...formData, description: e.target.value})} 
-                  />
-              </div>
-              
-              <div className="pt-4 flex justify-end space-x-3">
-                  <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg font-medium transition-colors">Annuler</button>
-                  <button type="submit" className="px-6 py-2 bg-primary text-white rounded-lg font-medium hover:bg-blue-700 transition-colors shadow-sm">{editingClient ? 'Enregistrer' : 'Créer'}</button>
-              </div>
-            </form>
           </div>
-        </div>
       )}
 
-      {/* Client Details Modal */}
+      {/* DETAIL DRAWER */}
       {selectedClient && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl h-[85vh] overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200">
-                {/* Modal Header */}
-                <div className="p-6 border-b border-slate-100 flex justify-between items-start shrink-0 bg-slate-50">
-                    <div className="flex items-start space-x-4">
-                        <div className="w-16 h-16 rounded-full bg-white border-2 border-white shadow-md flex items-center justify-center text-2xl font-bold text-primary">
-                            {selectedClient.name.charAt(0).toUpperCase()}
+          <div className="fixed inset-0 bg-white z-[100] animate-in slide-in-from-bottom duration-500 flex flex-col pb-[env(safe-area-inset-bottom)]">
+              <header className="px-6 py-5 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-20 safe-top">
+                  <button onClick={() => setSelectedClient(null)} className="p-3 bg-slate-50 rounded-2xl text-slate-400 active-scale"><X size={20}/></button>
+                  <h3 className="font-black text-slate-900 tracking-tight truncate max-w-[200px] uppercase text-sm">{selectedClient.name}</h3>
+                  <div className="w-12 h-12 bg-primary rounded-2xl flex items-center justify-center text-white font-black text-xl shadow-lg shadow-primary/20 ring-4 ring-primary/5">{selectedClient.name.charAt(0)}</div>
+              </header>
+              <div className="flex-1 overflow-y-auto p-8 space-y-12 pb-32 no-scrollbar">
+                   <div className="grid grid-cols-1 gap-8">
+                        {/* Coordonnées */}
+                        <div className="space-y-6">
+                             <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] px-2">Coordonnées</h4>
+                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="flex items-center space-x-4 p-5 bg-slate-50 rounded-3xl border border-slate-100">
+                                    <div className="w-10 h-10 bg-white rounded-2xl flex items-center justify-center text-primary shadow-sm"><Mail size={18}/></div> 
+                                    <div className="overflow-hidden">
+                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Email</p>
+                                        <p className="font-bold text-slate-700 truncate">{selectedClient.email || 'Non renseigné'}</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center space-x-4 p-5 bg-slate-50 rounded-3xl border border-slate-100">
+                                    <div className="w-10 h-10 bg-white rounded-2xl flex items-center justify-center text-primary shadow-sm"><Phone size={18}/></div>
+                                    <div className="overflow-hidden">
+                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Téléphone</p>
+                                        <p className="font-bold text-slate-700 truncate">{selectedClient.phone || 'Non renseigné'}</p>
+                                    </div>
+                                </div>
+                             </div>
                         </div>
-                        <div>
-                            <h2 className="text-2xl font-bold text-slate-900">{selectedClient.name}</h2>
-                            {selectedClient.company && (
-                                <p className="text-slate-500 font-medium flex items-center">
-                                    <Building2 size={14} className="mr-1" />
-                                    {selectedClient.company}
-                                </p>
+
+                        {/* Missions associées */}
+                        <div className="space-y-6">
+                            <div className="flex items-center justify-between px-2">
+                                <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em]">Missions Actives</h4>
+                                <span className="bg-primary/10 text-primary text-[10px] font-black px-3 py-1 rounded-full">{clientTasks.length}</span>
+                            </div>
+                            
+                            {clientTasks.length === 0 ? (
+                                <div className="bg-slate-50 p-12 rounded-[2.5rem] border border-slate-100 text-center border-dashed">
+                                    <Briefcase size={32} className="mx-auto text-slate-200 mb-4 opacity-50" strokeWidth={1.5} />
+                                    <p className="text-[10px] text-slate-300 font-black uppercase tracking-widest">Aucune mission pour le moment</p>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 gap-4">
+                                    {clientTasks.map(task => (
+                                        <div key={task.id} className="bg-slate-50 p-5 rounded-3xl border border-slate-100 flex items-center justify-between group transition-all hover:bg-white hover:shadow-md">
+                                            <div className="flex items-center space-x-4 overflow-hidden">
+                                                <div className={`w-1.5 h-10 rounded-full flex-shrink-0 ${task.priority === 'high' ? 'bg-urgent' : 'bg-primary'}`}></div>
+                                                <div className="overflow-hidden">
+                                                    <h4 className="font-bold text-slate-900 text-sm truncate">{task.title}</h4>
+                                                    <p className="text-[10px] text-slate-400 font-black uppercase mt-0.5 tracking-widest">
+                                                        {task.status} • {task.dueDate}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="w-10 h-10 rounded-2xl bg-white flex items-center justify-center text-slate-200 shadow-sm">
+                                                <CheckCircle size={20} className={task.status === TaskStatus.DONE ? 'text-success' : ''} />
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
                             )}
-                            <div className="flex items-center space-x-4 mt-2 text-sm text-slate-600">
-                                {selectedClient.email && <span className="flex items-center"><Mail size={14} className="mr-1.5 text-slate-400"/> {selectedClient.email}</span>}
-                                {selectedClient.phone && <span className="flex items-center"><Phone size={14} className="mr-1.5 text-slate-400"/> {selectedClient.phone}</span>}
-                            </div>
                         </div>
-                    </div>
-                    <button onClick={() => setSelectedClient(null)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-full transition-colors"><X size={24}/></button>
-                </div>
-
-                {/* Tabs & Content */}
-                <div className="flex flex-col flex-1 min-h-0">
-                    <div className="flex border-b border-slate-200 px-6 bg-white shrink-0">
-                        <button 
-                            onClick={() => setActiveTab('details')}
-                            className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'details' ? 'border-primary text-primary' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-                        >
-                            Vue d'ensemble
-                        </button>
-                        <button 
-                            onClick={() => setActiveTab('tasks')}
-                            className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors flex items-center space-x-2 ${activeTab === 'tasks' ? 'border-primary text-primary' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-                        >
-                            <span>Tâches</span>
-                            <span className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full text-[10px]">{clientTasks.length}</span>
-                        </button>
-                        <button 
-                            onClick={() => setActiveTab('files')}
-                            className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors flex items-center space-x-2 ${activeTab === 'files' ? 'border-primary text-primary' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-                        >
-                            <span>Fichiers</span>
-                            <span className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full text-[10px]">{clientFiles.length}</span>
-                        </button>
-                    </div>
-
-                    <div className="flex-1 overflow-y-auto p-6 bg-slate-50/30">
-                        {/* Tab: Details */}
-                        {activeTab === 'details' && (
-                            <div className="space-y-6">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-                                        <h4 className="font-bold text-slate-800 mb-4 flex items-center uppercase text-xs tracking-wider">
-                                            <MapPin size={14} className="mr-2 text-primary" /> Coordonnées
-                                        </h4>
-                                        <div className="space-y-3 text-sm">
-                                            <div className="flex justify-between border-b border-slate-50 pb-2">
-                                                <span className="text-slate-500">Email</span>
-                                                <span className="text-slate-900 font-medium">{selectedClient.email || 'N/A'}</span>
-                                            </div>
-                                            <div className="flex justify-between border-b border-slate-50 pb-2">
-                                                <span className="text-slate-500">Téléphone</span>
-                                                <span className="text-slate-900 font-medium">{selectedClient.phone || 'N/A'}</span>
-                                            </div>
-                                            <div className="flex justify-between border-b border-slate-50 pb-2">
-                                                <span className="text-slate-500">Adresse</span>
-                                                <span className="text-slate-900 font-medium text-right max-w-[60%]">{selectedClient.address || 'N/A'}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-                                        <h4 className="font-bold text-slate-800 mb-4 flex items-center uppercase text-xs tracking-wider">
-                                            <AlertCircle size={14} className="mr-2 text-primary" /> À propos
-                                        </h4>
-                                        <div className="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">
-                                            {selectedClient.description || <span className="text-slate-400 italic">Aucune description disponible.</span>}
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                {/* Quick Stats Row */}
-                                <div className="grid grid-cols-3 gap-4">
-                                    <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl text-center">
-                                        <h5 className="text-blue-600 font-bold text-2xl">{clientTasks.filter(t => t.status === TaskStatus.DONE).length}</h5>
-                                        <p className="text-blue-800 text-xs font-medium uppercase mt-1">Projets Terminés</p>
-                                    </div>
-                                    <div className="bg-orange-50 border border-orange-100 p-4 rounded-xl text-center">
-                                        <h5 className="text-orange-600 font-bold text-2xl">{clientTasks.filter(t => t.status === TaskStatus.IN_PROGRESS).length}</h5>
-                                        <p className="text-orange-800 text-xs font-medium uppercase mt-1">En cours</p>
-                                    </div>
-                                    <div className="bg-slate-100 border border-slate-200 p-4 rounded-xl text-center">
-                                        <h5 className="text-slate-600 font-bold text-2xl">{clientFiles.length}</h5>
-                                        <p className="text-slate-500 text-xs font-medium uppercase mt-1">Documents</p>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Tab: Tasks (Table View) */}
-                        {activeTab === 'tasks' && (
-                            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-                                {clientTasks.length === 0 ? (
-                                     <div className="p-12 text-center text-slate-400">Aucune tâche associée à ce client.</div>
-                                ) : (
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full text-left text-sm text-slate-600">
-                                            <thead className="bg-slate-50 text-xs uppercase font-semibold text-slate-500 border-b border-slate-200">
-                                                <tr>
-                                                    <th className="px-6 py-3 cursor-pointer hover:text-slate-700 transition-colors" onClick={() => toggleTaskSort('title')}>
-                                                        Tâche <ArrowUpDown size={10} className="inline ml-1" />
-                                                    </th>
-                                                    <th className="px-6 py-3 cursor-pointer hover:text-slate-700 transition-colors" onClick={() => toggleTaskSort('status')}>
-                                                        Statut <ArrowUpDown size={10} className="inline ml-1" />
-                                                    </th>
-                                                    <th className="px-6 py-3 cursor-pointer hover:text-slate-700 transition-colors" onClick={() => toggleTaskSort('priority')}>
-                                                        Priorité <ArrowUpDown size={10} className="inline ml-1" />
-                                                    </th>
-                                                    <th className="px-6 py-3 cursor-pointer hover:text-slate-700 transition-colors" onClick={() => toggleTaskSort('date')}>
-                                                        Échéance <ArrowUpDown size={10} className="inline ml-1" />
-                                                    </th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-slate-100">
-                                                {clientTasks.map(task => (
-                                                    <tr key={task.id} className="hover:bg-slate-50 transition-colors group">
-                                                        <td className="px-6 py-3">
-                                                            <div className="font-medium text-slate-800">{task.title}</div>
-                                                        </td>
-                                                        <td className="px-6 py-3">
-                                                            <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase border ${getStatusColor(task.status)}`}>
-                                                                {task.status}
-                                                            </span>
-                                                        </td>
-                                                        <td className="px-6 py-3">
-                                                             {task.priority === 'high' && (
-                                                                <span className="flex items-center text-xs font-bold text-red-700 bg-red-50 px-2 py-0.5 rounded border border-red-100 w-fit">
-                                                                    <AlertCircle size={10} className="mr-1"/>Haute
-                                                                </span>
-                                                            )}
-                                                            {task.priority === 'medium' && (
-                                                                <span className="flex items-center text-xs font-bold text-orange-700 bg-orange-50 px-2 py-0.5 rounded border border-orange-100 w-fit">
-                                                                    <ArrowUp size={10} className="mr-1"/>Moy.
-                                                                </span>
-                                                            )}
-                                                            {task.priority === 'low' && (
-                                                                <span className="flex items-center text-xs font-bold text-slate-500 bg-slate-50 px-2 py-0.5 rounded border border-slate-100 w-fit">
-                                                                    <ArrowDown size={10} className="mr-1"/>Basse
-                                                                </span>
-                                                            )}
-                                                        </td>
-                                                        <td className="px-6 py-3 text-slate-500 flex items-center">
-                                                            <Calendar size={12} className="mr-1.5" />
-                                                            {task.dueDate}
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                        {/* Tab: Files */}
-                        {activeTab === 'files' && (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                {clientFiles.length === 0 ? (
-                                    <div className="col-span-full p-8 text-center text-slate-400 bg-white rounded-xl border border-slate-200 border-dashed">
-                                        Aucun fichier associé.
-                                    </div>
-                                ) : (
-                                    clientFiles.map(file => (
-                                        <div key={file.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all flex items-start space-x-3">
-                                            <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
-                                                <FileText size={20} />
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <h5 className="text-sm font-bold text-slate-800 truncate" title={file.name}>{file.name}</h5>
-                                                <p className="text-xs text-slate-400 mt-1">Ajouté le {file.createdAt}</p>
-                                                <a href={file.url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary font-medium hover:underline mt-2 inline-block">
-                                                    Ouvrir le fichier
-                                                </a>
-                                            </div>
-                                        </div>
-                                    ))
-                                )}
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </div>
-        </div>
+                   </div>
+              </div>
+          </div>
       )}
     </div>
   );
