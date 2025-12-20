@@ -87,9 +87,9 @@ const App: React.FC = () => {
       }
       if (tasksRes.data) {
         setTasks(tasksRes.data.map((t: any) => ({
-          id: t.id, title: t.title, description: t.description, assigneeId: t.assignee_id,
-          dueDate: t.due_date, status: t.status as TaskStatus, type: t.type, priority: t.priority,
-          price: t.price, clientId: t.client_id, comments: [], subtasks: [], attachments: []
+          id: t.id, title: t.title, description: t.description, assignee_id: t.assignee_id,
+          due_date: t.due_date, status: t.status as TaskStatus, type: t.type, priority: t.priority,
+          price: t.price, client_id: t.client_id, comments: [], subtasks: [], attachments: []
         })));
       }
     } catch (e) {
@@ -228,7 +228,8 @@ const App: React.FC = () => {
         <Suspense fallback={<div className="h-full flex items-center justify-center py-20"><Loader2 className="animate-spin text-primary" size={40} /></div>}>
           <Routes>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route path="/dashboard" element={<Dashboard currentUser={currentUser} tasks={tasks} messages={messages} notifications={notifications} onNavigate={() => {}} onDeleteTask={() => {}} unreadMessageCount={0} />} />
+            {/* Fix: Remove unused props to match DashboardProps interface */}
+            <Route path="/dashboard" element={<Dashboard currentUser={currentUser} tasks={tasks} notifications={notifications} onNavigate={() => {}} />} />
             <Route path="/tasks" element={<Tasks tasks={tasks} users={users} clients={clients} currentUser={currentUser} onUpdateStatus={handleUpdateTaskStatus} onAddTask={handleAddTask} onUpdateTask={() => {}} onDeleteTask={() => {}} />} />
             <Route path="/chat" element={<Chat currentUser={currentUser} users={users} channels={channels} currentChannelId={currentChannelId} messages={messages} onlineUserIds={new Set()} onChannelChange={setCurrentChannelId} onSendMessage={() => {}} onAddChannel={() => {}} onDeleteChannel={() => {}} />} />
             <Route path="/files" element={<Files tasks={tasks} messages={messages} fileLinks={fileLinks} clients={clients} currentUser={currentUser} />} />

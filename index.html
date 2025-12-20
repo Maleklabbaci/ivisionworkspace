@@ -5,24 +5,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#1D4ED8">
+    <meta name="theme-color" content="#ffffff">
+    <meta name="format-detection" content="telephone=no">
     
-    <title>iVISION AGENCY - Workspace</title>
+    <title>iVISION - Mobile Workspace</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script>
       tailwind.config = {
         theme: {
           extend: {
-            fontFamily: { sans: ['Inter', 'sans-serif'] },
+            fontFamily: { sans: ['"Plus Jakarta Sans"', 'sans-serif'] },
             colors: {
-              primary: '#1D4ED8',
+              primary: '#0066FF',
               secondary: '#000000',
-              urgent: '#EF4444',
-              success: '#10B981',
-              slate: { 50: '#F8FAFC', 100: '#F1F5F9', 200: '#E2E8F0', 400: '#94A3B8', 500: '#64748B', 800: '#1E293B', 900: '#0F172A' }
+              urgent: '#FF3B30',
+              success: '#34C759',
+              warning: '#FF9500',
+              slate: { 50: '#F2F2F7', 100: '#E5E5EA', 200: '#D1D1D6', 400: '#8E8E93', 500: '#636366', 800: '#2C2C2E', 900: '#1C1C1E' }
             },
-            borderRadius: { '3xl': '24px', '4xl': '32px', '5xl': '40px' }
+            borderRadius: { '3xl': '24px', '4xl': '32px', '5xl': '44px' }
           }
         }
       }
@@ -32,28 +34,46 @@
         --safe-top: env(safe-area-inset-top);
         --safe-bottom: env(safe-area-inset-bottom);
       }
+      * { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
       body { 
         -webkit-tap-highlight-color: transparent; 
-        overscroll-behavior-y: contain; 
-        background-color: #F8FAFC;
-        font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+        overscroll-behavior: none; 
+        background-color: #ffffff;
         user-select: none;
         height: 100dvh;
         overflow: hidden;
+        position: fixed;
+        width: 100%;
       }
       #root { height: 100%; }
       .no-scrollbar::-webkit-scrollbar { display: none; }
-      .safe-top { padding-top: var(--safe-top); }
-      .safe-bottom { padding-bottom: var(--safe-bottom); }
-      .active-scale:active { transform: scale(0.95); transition: transform 0.1s ease; }
+      .safe-pt { padding-top: var(--safe-top); }
+      .safe-pb { padding-bottom: var(--safe-bottom); }
+      .active-scale:active { transform: scale(0.96); transition: transform 0.1s cubic-bezier(0, 0, 0.2, 1); }
       
-      /* Smooth Page Transitions */
+      /* Smooth transitions */
       .page-transition {
-        animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        animation: slideIn 0.35s cubic-bezier(0.32, 0.72, 0, 1);
       }
-      @keyframes slideUp {
-        from { opacity: 0; transform: translateY(12px); }
+      @keyframes slideIn {
+        from { opacity: 0; transform: translateY(10px); }
         to { opacity: 1; transform: translateY(0); }
+      }
+
+      /* Board Scroller fix */
+      .board-container {
+        display: flex;
+        overflow-x: auto;
+        scroll-snap-type: x mandatory;
+        -webkit-overflow-scrolling: touch;
+      }
+      .board-column {
+        scroll-snap-align: center;
+        flex: 0 0 85%;
+        margin-right: 16px;
+      }
+      @media (min-width: 768px) {
+        .board-column { flex: 0 0 320px; }
       }
     </style>
     <script type="importmap">

@@ -1,35 +1,26 @@
 import React, { useState } from 'react';
-import { TrendingUp, CheckCircle, Bell, Sparkles, Calendar, MessageCircle, DollarSign } from 'lucide-react';
+import { TrendingUp, CheckCircle, Bell, Sparkles, Calendar, DollarSign, ArrowRight } from 'lucide-react';
 import { generateMarketingInsight } from '../services/geminiService';
-import { Task, User, ViewState, TaskStatus, UserRole, Message, ToastNotification, Channel } from '../types';
+import { Task, User, ViewState, TaskStatus, UserRole, ToastNotification } from '../types';
 
 interface DashboardProps {
   currentUser: User;
   tasks: Task[];
-  messages: Message[];
   notifications: ToastNotification[];
-  channels?: Channel[];
   onNavigate: (view: ViewState) => void;
-  onDeleteTask: (taskId: string) => void;
-  unreadMessageCount: number;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks, messages, notifications, onNavigate, onDeleteTask, unreadMessageCount }) => {
+const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks, notifications, onNavigate }) => {
   const [aiInsight, setAiInsight] = useState<string>("");
   const [loadingAi, setLoadingAi] = useState(false);
 
-  const myTasksToday = tasks.filter(t => t.assigneeId === currentUser.id && t.status !== TaskStatus.DONE);
-  const urgentTasks = tasks.filter(t => t.status !== TaskStatus.DONE && new Date(t.dueDate) <= new Date());
-  
-  const totalTaskValue = tasks.reduce((acc, curr) => acc + (curr.price || 0), 0);
-  const relevantTasks = currentUser.role === UserRole.ADMIN ? tasks : tasks.filter(t => t.assigneeId === currentUser.id);
-  const completedTasks = relevantTasks.filter(t => t.status === TaskStatus.DONE).length;
-  const completionRate = relevantTasks.length > 0 ? Math.round((completedTasks / relevantTasks.length) * 100) : 0;
+  const myTasks = tasks.filter(t => t.assigneeId === currentUser.id && t.status !== TaskStatus.DONE);
+  const completionRate = tasks.length > 0 ? Math.round((tasks.filter(t => t.status === TaskStatus.DONE).length / tasks.length) * 100) : 0;
 
   const handleGetInsights = async () => {
     if (loadingAi) return;
     setLoadingAi(true);
-    const context = `KPIs: Value ${totalTaskValue} DA, Rate ${completionRate}%, Urgent ${urgentTasks.length}`;
+    const context = `Productivity: ${completionRate}%. Tasks: ${tasks.length}.`;
     const insight = await generateMarketingInsight(context);
     setAiInsight(insight);
     setLoadingAi(false);
@@ -38,103 +29,64 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks, messages, not
   const showFinancials = currentUser.role === UserRole.ADMIN || currentUser.permissions?.canViewFinancials;
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto page-transition px-1 pb-10">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+    <div className="space-y-8 page-transition pb-24">
+      <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-black text-slate-900 tracking-tight">Salut, {currentUser.name.split(' ')[0]} 👋</h1>
-          <p className="text-slate-500 font-semibold text-sm">Prêt pour propulser iVISION ?</p>
+          <h1 className="text-3xl font-black tracking-tighter text-slate-900">Hello, {currentUser.name.split(' ')[0]}</h1>
+          <p className="text-slate-400 font-bold text-xs uppercase tracking-widest mt-1">iVISION WORKSPACE</p>
         </div>
-        <div className="bg-white/70 backdrop-blur-md px-4 py-2 rounded-2xl border border-slate-100 shadow-sm flex items-center space-x-2">
-          <Calendar size={16} className="text-primary" />
-          <span className="text-sm font-bold text-slate-700">{new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}</span>
+        <div className="p-3 bg-slate-50 rounded-full active-scale"><Bell size={22} className="text-slate-400" /></div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="bg-slate-900 p-6 rounded-[2.5rem] shadow-2xl shadow-slate-900/20 text-white relative overflow-hidden group active-scale" onClick={handleGetInsights}>
+          <div className="relative z-10">
+            <Sparkles size={18} className="text-primary mb-2" />
+            <p className="text-[11px] font-black uppercase opacity-40">IA INSIGHTS</p>
+            <p className="text-xs font-bold leading-tight mt-1 line-clamp-2">{loadingAi ? "Analyzing..." : (aiInsight || "Tap to analyze flow")}</p>
+          </div>
+          <div className="absolute -bottom-4 -right-4 w-24 h-24 bg-primary/10 rounded-full blur-2xl"></div>
+        </div>
+        <div className="bg-slate-50 p-6 rounded-[2.5rem] border border-slate-100">
+           <TrendingUp size={18} className="text-primary mb-2" />
+           <p className="text-[11px] font-black uppercase text-slate-400">Rate</p>
+           <p className="text-2xl font-black text-slate-900">{completionRate}%</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm relative overflow-hidden">
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-3 bg-primary/10 text-primary rounded-2xl"><TrendingUp size={24} /></div>
-            <span className="text-[10px] font-black uppercase text-slate-300 tracking-widest">Productivité</span>
-          </div>
-          <h3 className="text-4xl font-black text-slate-900">{completionRate}%</h3>
-          <p className="text-xs text-slate-500 mt-2 font-bold uppercase tracking-tight">Objectifs atteints</p>
+      <section>
+        <div className="flex items-center justify-between mb-4 px-2">
+            <h3 className="font-black text-slate-900">My Missions</h3>
+            <button className="text-[11px] font-black uppercase text-primary flex items-center">See All <ArrowRight size={14} className="ml-1" /></button>
         </div>
-
-        {showFinancials && (
-          <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-success/10 text-success rounded-2xl"><DollarSign size={24} /></div>
-              <span className="text-[10px] font-black uppercase text-slate-300 tracking-widest">Finance</span>
-            </div>
-            <h3 className="text-4xl font-black text-slate-900">{(tasks.filter(t => t.status === TaskStatus.DONE).reduce((a,c)=>a+(c.price||0),0)).toLocaleString()} <span className="text-sm font-bold text-slate-400">DA</span></h3>
-            <p className="text-xs text-slate-500 mt-2 font-bold uppercase tracking-tight">Volume facturable</p>
-          </div>
-        )}
-
-        <div className="bg-slate-900 p-6 rounded-[2.5rem] shadow-2xl shadow-slate-900/30 text-white relative overflow-hidden group cursor-pointer active-scale" onClick={handleGetInsights}>
-          <div className="relative z-10 h-full flex flex-col justify-between">
-            <div className="flex items-center space-x-2 mb-4">
-              <Sparkles size={20} className="text-primary animate-pulse" />
-              <span className="text-[10px] font-black uppercase tracking-widest opacity-40">IA STRATÉGIQUE</span>
-            </div>
-            {loadingAi ? (
-              <div className="flex items-center space-x-1.5 py-4">
-                 <div className="w-2 h-2 bg-white rounded-full animate-bounce"></div>
-                 <div className="w-2 h-2 bg-white rounded-full animate-bounce [animation-delay:0.2s]"></div>
-                 <div className="w-2 h-2 bg-white rounded-full animate-bounce [animation-delay:0.4s]"></div>
+        <div className="space-y-3">
+          {myTasks.length === 0 ? (
+            <div className="p-10 text-center bg-slate-50 rounded-[2.5rem] text-slate-300 font-bold text-xs uppercase tracking-widest">No active tasks</div>
+          ) : (
+            myTasks.slice(0, 3).map(task => (
+              <div key={task.id} className="bg-white p-5 rounded-[2rem] border border-slate-50 shadow-sm flex items-center justify-between active-scale">
+                <div className="flex items-center space-x-4">
+                  <div className={`w-2 h-2 rounded-full ${task.priority === 'high' ? 'bg-urgent' : 'bg-primary'}`}></div>
+                  <h4 className="font-bold text-slate-800 text-sm">{task.title}</h4>
+                </div>
+                <CheckCircle size={20} className="text-slate-100" />
               </div>
-            ) : (
-              <p className="text-sm font-bold leading-relaxed line-clamp-3">{aiInsight || "Analyser vos données pour obtenir des recommandations stratégiques."}</p>
-            )}
-          </div>
-          <Sparkles className="absolute -bottom-6 -right-6 text-white/5 group-hover:scale-110 transition-transform duration-700" size={140} />
+            ))
+          )}
         </div>
-      </div>
+      </section>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
-          <div className="p-6 border-b border-slate-50 flex items-center justify-between">
-            <h3 className="font-black text-slate-900 flex items-center"><CheckCircle size={20} className="mr-2 text-primary" /> Missions Actives</h3>
-          </div>
-          <div className="p-3">
-            {myTasksToday.length === 0 ? (
-              <div className="p-12 text-center text-slate-300 font-bold uppercase tracking-widest text-xs">Calme plat... 🏝️</div>
-            ) : (
-              myTasksToday.slice(0, 5).map(task => (
-                <div key={task.id} className="p-4 hover:bg-slate-50 rounded-3xl transition-all flex items-center justify-between group active-scale cursor-pointer">
-                  <div className="flex items-center space-x-4">
-                    <div className={`w-1.5 h-10 rounded-full ${task.priority === 'high' ? 'bg-urgent' : 'bg-primary'}`}></div>
-                    <div>
-                      <h4 className="font-bold text-slate-900 text-sm">{task.title}</h4>
-                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-tighter mt-0.5">{task.type} • {task.dueDate}</p>
-                    </div>
-                  </div>
-                  <CheckCircle size={20} className="text-slate-100 group-hover:text-success" />
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-
-        <div className="bg-white p-7 rounded-[2.5rem] border border-slate-100 shadow-sm">
-          <h3 className="font-black text-slate-900 mb-6 flex items-center"><Bell size={20} className="mr-2 text-orange-500" /> Notifications</h3>
-          <div className="space-y-4">
-            {notifications.length === 0 ? (
-              <p className="text-xs text-slate-400 font-bold text-center py-6 uppercase tracking-widest">Tout est à jour</p>
-            ) : (
-              notifications.slice(0, 3).map(n => (
-                <div key={n.id} className="flex space-x-3 items-start p-4 bg-slate-50 rounded-[1.5rem]">
-                  <div className={`w-2 h-2 mt-1.5 rounded-full flex-shrink-0 ${n.type === 'urgent' ? 'bg-urgent' : 'bg-primary'}`}></div>
-                  <div>
-                    <p className="text-xs font-black text-slate-900 leading-none mb-1">{n.title}</p>
-                    <p className="text-[10px] text-slate-500 font-bold leading-relaxed">{n.message}</p>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      </div>
+      {showFinancials && (
+        <section className="bg-primary p-7 rounded-[2.5rem] text-white relative overflow-hidden shadow-2xl shadow-primary/30">
+           <div className="relative z-10 flex justify-between items-center">
+              <div>
+                <p className="text-[11px] font-black uppercase opacity-50 tracking-widest">Revenue Forecast</p>
+                <h3 className="text-3xl font-black">{(tasks.reduce((a,c)=>a+(c.price||0),0)).toLocaleString()} DA</h3>
+              </div>
+              <DollarSign size={40} className="opacity-10" />
+           </div>
+        </section>
+      )}
     </div>
   );
 };
