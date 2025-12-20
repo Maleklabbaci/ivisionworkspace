@@ -57,14 +57,19 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks, notifications
       <section>
         <div className="flex items-center justify-between mb-4 px-2">
             <h3 className="font-black text-slate-900">My Missions</h3>
-            <button className="text-[11px] font-black uppercase text-primary flex items-center">See All <ArrowRight size={14} className="ml-1" /></button>
+            <button 
+              onClick={() => onNavigate('tasks')}
+              className="text-[11px] font-black uppercase text-primary flex items-center active-scale transition-all"
+            >
+              See All <ArrowRight size={14} className="ml-1" />
+            </button>
         </div>
         <div className="space-y-3">
           {myTasks.length === 0 ? (
             <div className="p-10 text-center bg-slate-50 rounded-[2.5rem] text-slate-300 font-bold text-xs uppercase tracking-widest">No active tasks</div>
           ) : (
             myTasks.slice(0, 3).map(task => (
-              <div key={task.id} className="bg-white p-5 rounded-[2rem] border border-slate-50 shadow-sm flex items-center justify-between active-scale">
+              <div key={task.id} onClick={() => onNavigate('tasks')} className="bg-white p-5 rounded-[2rem] border border-slate-50 shadow-sm flex items-center justify-between active-scale cursor-pointer transition-all">
                 <div className="flex items-center space-x-4">
                   <div className={`w-2 h-2 rounded-full ${task.priority === 'high' ? 'bg-urgent' : 'bg-primary'}`}></div>
                   <h4 className="font-bold text-slate-800 text-sm">{task.title}</h4>
@@ -77,7 +82,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks, notifications
       </section>
 
       {showFinancials && (
-        <section className="bg-primary p-7 rounded-[2.5rem] text-white relative overflow-hidden shadow-2xl shadow-primary/30">
+        <section className="bg-primary p-7 rounded-[2.5rem] text-white relative overflow-hidden shadow-2xl shadow-primary/30 active-scale cursor-pointer" onClick={() => onNavigate('reports')}>
            <div className="relative z-10 flex justify-between items-center">
               <div>
                 <p className="text-[11px] font-black uppercase opacity-50 tracking-widest">Revenue Forecast</p>

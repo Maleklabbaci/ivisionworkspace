@@ -1,6 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { User, UserRole } from '../types';
-import { Camera, Save, Lock, Mail, Phone, User as UserIcon, Shield, Loader2, History, Trash2, Clock } from 'lucide-react';
+import { Camera, Save, Lock, Mail, Phone, User as UserIcon, Loader2, History, Trash2, Clock, CheckCircle2 } from 'lucide-react';
 
 interface ProfileLog {
   id: string;
@@ -20,40 +20,53 @@ const Settings: React.FC<SettingsProps> = ({ currentUser, onUpdateProfile }) => 
     name: currentUser.name,
     email: currentUser.email,
     phoneNumber: currentUser.phoneNumber || '',
-    currentPassword: '',
     newPassword: '',
     confirmPassword: ''
   });
   const [avatarPreview, setAvatarPreview] = useState(currentUser.avatar);
   const [isSaving, setIsSaving] = useState(false);
+  const [showSavedFeedback, setShowSavedFeedback] = useState(false);
   const [logs, setLogs] = useState<ProfileLog[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Chargement des logs depuis le localStorage au montage
-  useEffect(() => {
-    const savedLogs = localStorage.getItem(`ivision_logs_${currentUser.id}`);
-    if (savedLogs) {
-      setLogs(JSON.parse(savedLogs));
-    }
-  }, [currentUser.id]);
+  // Clé de stockage unique par utilisateur
+  const LOGS_STORAGE_KEY = useMemo(() => `ivision_logs_v2_${currentUser.id}`, [currentUser.id]);
 
-  const addLog = (field: string, oldValue: string, newValue: string) => {
-    const newLog: ProfileLog = {
+  // Charger les logs au démarrage
+  useEffect(() => {
+    const savedLogs = localStorage.getItem(LOGS_STORAGE_KEY);
+    if (savedLogs) {
+      try {
+        setLogs(JSON.parse(savedLogs));
+      } catch (e) {
+        console.error("Erreur lecture logs", e);
+        setLogs([]);
+      }
+    }
+  }, [LOGS_STORAGE_KEY]);
+
+  const addLogsBatch = useCallback((newEntries: Omit<ProfileLog, 'id' | 'timestamp'>[]) => {
+    if (newEntries.length === 0) return;
+
+    const timestamp = new Date().toLocaleString('fr-FR', {
+      day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
+    });
+
+    const entriesWithMeta = newEntries.map(entry => ({
+      ...entry,
       id: crypto.randomUUID(),
-      field,
-      oldValue,
-      newValue,
-      timestamp: new Date().toLocaleString('fr-FR', {
-        day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
-      })
-    };
-    const updatedLogs = [newLog, ...logs].slice(0, 10); // Garder les 10 derniers
-    setLogs(updatedLogs);
-    localStorage.setItem(`ivision_logs_${currentUser.id}`, JSON.stringify(updatedLogs));
-  };
+      timestamp
+    }));
+
+    setLogs(prev => {
+      const updated = [...entriesWithMeta, ...prev].slice(0, 15); // Garder les 15 derniers
+      localStorage.setItem(LOGS_STORAGE_KEY, JSON.stringify(updated));
+      return updated;
+    });
+  }, [LOGS_STORAGE_KEY]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -63,7 +76,6 @@ const Settings: React.FC<SettingsProps> = ({ currentUser, onUpdateProfile }) => 
         if (event.target?.result) {
           const newAvatar = event.target.result as string;
           setAvatarPreview(newAvatar);
-          addLog("Photo de profil", "Ancienne image", "Nouvelle image");
         }
       };
       reader.readAsDataURL(e.target.files[0]);
@@ -73,136 +85,164 @@ const Settings: React.FC<SettingsProps> = ({ currentUser, onUpdateProfile }) => 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (formData.newPassword && formData.newPassword !== formData.confirmPassword) {
-      alert("Les nouveaux mots de passe ne correspondent pas.");
+      alert("Les mots de passe ne correspondent pas.");
       return;
     }
 
     setIsSaving(true);
+    const pendingLogs: Omit<ProfileLog, 'id' | 'timestamp'>[] = [];
 
-    // Détection des changements pour le log
-    if (formData.name !== currentUser.name) addLog("Nom", currentUser.name, formData.name);
-    if (formData.email !== currentUser.email) addLog("Email", currentUser.email, formData.email);
-    if (formData.phoneNumber !== (currentUser.phoneNumber || '')) addLog("Téléphone", currentUser.phoneNumber || 'Vide', formData.phoneNumber);
-    if (formData.newPassword) addLog("Sécurité", "Ancien mot de passe", "Nouveau mot de passe");
+    // Détection précise des changements
+    if (formData.name !== currentUser.name) {
+      pendingLogs.push({ field: "Nom", oldValue: currentUser.name, newValue: formData.name });
+    }
+    if (formData.email !== currentUser.email) {
+      pendingLogs.push({ field: "Email", oldValue: currentUser.email, newValue: formData.email });
+    }
+    if (formData.phoneNumber !== (currentUser.phoneNumber || '')) {
+      pendingLogs.push({ field: "Mobile", oldValue: currentUser.phoneNumber || 'Non défini', newValue: formData.phoneNumber });
+    }
+    if (avatarPreview !== currentUser.avatar) {
+      pendingLogs.push({ field: "Photo", oldValue: "Ancienne image", newValue: "Nouvelle image" });
+    }
+    if (formData.newPassword) {
+      pendingLogs.push({ field: "Sécurité", oldValue: "********", newValue: "Mis à jour" });
+    }
 
-    await onUpdateProfile({
-      name: formData.name, 
-      email: formData.email, 
-      phoneNumber: formData.phoneNumber,
-      avatar: avatarPreview, 
-      password: formData.newPassword ? formData.newPassword : undefined
-    });
+    try {
+      await onUpdateProfile({
+        name: formData.name, 
+        email: formData.email, 
+        phoneNumber: formData.phoneNumber,
+        avatar: avatarPreview, 
+        password: formData.newPassword || undefined
+      });
 
-    setIsSaving(false);
-    setFormData(prev => ({ ...prev, newPassword: '', confirmPassword: '' }));
+      addLogsBatch(pendingLogs);
+      setShowSavedFeedback(true);
+      setTimeout(() => setShowSavedFeedback(false), 3000);
+      setFormData(prev => ({ ...prev, newPassword: '', confirmPassword: '' }));
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const clearLogs = () => {
-    setLogs([]);
-    localStorage.removeItem(`ivision_logs_${currentUser.id}`);
+    if (confirm("Effacer tout l'historique ?")) {
+      setLogs([]);
+      localStorage.removeItem(LOGS_STORAGE_KEY);
+    }
   };
 
-  const inputClasses = "w-full p-4 bg-slate-100/50 border border-slate-200 rounded-2xl font-bold text-slate-900 placeholder-slate-400 focus:bg-white focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all outline-none";
+  const inputClasses = "w-full p-5 bg-slate-50 border border-slate-100 rounded-3xl font-bold text-slate-900 placeholder-slate-300 focus:bg-white focus:border-primary/20 focus:ring-4 focus:ring-primary/5 transition-all outline-none";
 
   return (
-    <div className="max-w-4xl mx-auto pb-32 page-transition px-1">
-      <div className="mb-10">
-        <h2 className="text-3xl font-black text-slate-900 tracking-tight">Paramètres</h2>
-        <p className="text-slate-500 font-semibold">Gérez votre identité iVISION</p>
+    <div className="max-w-xl mx-auto pb-32 page-transition px-1 overflow-hidden">
+      <div className="mb-8 px-2">
+        <h2 className="text-3xl font-black text-slate-900 tracking-tighter">Paramètres</h2>
+        <p className="text-slate-400 font-bold text-[10px] uppercase tracking-widest mt-1">Édition du profil Workspace</p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-8">
-        <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col md:flex-row items-center space-y-6 md:space-y-0 md:space-x-8">
-            <div className="relative group cursor-pointer active-scale" onClick={() => fileInputRef.current?.click()}>
-              <img src={avatarPreview} alt="Profile" className="w-28 h-28 rounded-[2rem] object-cover border-4 border-white shadow-xl group-hover:scale-105 transition-transform" />
-              <div className="absolute inset-0 flex items-center justify-center bg-black/20 rounded-[2rem] opacity-0 group-hover:opacity-100 transition-opacity">
-                <Camera size={24} className="text-white" />
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Profile Card */}
+        <div className="bg-white p-6 rounded-5xl border border-slate-50 shadow-sm flex items-center space-x-6">
+            <div className="relative active-scale" onClick={() => fileInputRef.current?.click()}>
+              <img src={avatarPreview} alt="Profile" className="w-20 h-20 rounded-3xl object-cover border-4 border-white shadow-lg" />
+              <div className="absolute -bottom-1 -right-1 bg-primary text-white p-1.5 rounded-xl shadow-lg border-2 border-white">
+                <Camera size={14} strokeWidth={3} />
               </div>
             </div>
             <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
-            <div className="flex-1 text-center md:text-left">
-              <h3 className="text-xl font-black text-slate-900 leading-none mb-1">{formData.name}</h3>
-              <p className="text-[10px] font-black uppercase text-primary tracking-widest">{currentUser.role}</p>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-lg font-black text-slate-900 leading-none mb-1 truncate">{formData.name}</h3>
+              <p className="text-[10px] font-black uppercase text-primary tracking-widest bg-primary/5 inline-block px-2 py-0.5 rounded-lg">{currentUser.role}</p>
             </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-6">
-            <h3 className="font-black text-slate-900 flex items-center"><UserIcon size={18} className="mr-2 text-primary" /> Identité</h3>
+        {/* Info Form */}
+        <div className="bg-white p-6 rounded-5xl border border-slate-50 shadow-sm space-y-5">
+            <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center mb-2">
+              <UserIcon size={14} className="mr-2 text-primary" /> Informations
+            </h3>
             <div className="space-y-4">
-              <div>
-                <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest">Nom complet</label>
-                <input type="text" name="name" value={formData.name} onChange={handleChange} className={inputClasses} />
-              </div>
-              <div>
-                <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest">Email professionnel</label>
-                <input type="email" name="email" value={formData.email} onChange={handleChange} className={inputClasses} />
-              </div>
-              <div>
-                <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest">Numéro de téléphone</label>
-                <input type="tel" name="phoneNumber" value={formData.phoneNumber} onChange={handleChange} className={inputClasses} placeholder="+213..." />
-              </div>
+              <input type="text" name="name" value={formData.name} onChange={handleChange} className={inputClasses} placeholder="Nom Complet" />
+              <input type="email" name="email" value={formData.email} onChange={handleChange} className={inputClasses} placeholder="Email" />
+              <input type="tel" name="phoneNumber" value={formData.phoneNumber} onChange={handleChange} className={inputClasses} placeholder="Numéro Mobile" />
             </div>
-          </div>
+        </div>
 
-          <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-6">
-            <h3 className="font-black text-slate-900 flex items-center"><Lock size={18} className="mr-2 text-primary" /> Sécurité</h3>
+        {/* Password Section */}
+        <div className="bg-white p-6 rounded-5xl border border-slate-50 shadow-sm space-y-5">
+            <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center mb-2">
+              <Lock size={14} className="mr-2 text-primary" /> Sécurité
+            </h3>
             <div className="space-y-4">
-              <div>
-                <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest">Nouveau mot de passe</label>
-                <input type="password" name="newPassword" value={formData.newPassword} onChange={handleChange} className={inputClasses} placeholder="••••••••" />
-              </div>
-              <div>
-                <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest">Confirmer le mot de passe</label>
-                <input type="password" name="confirmPassword" value={formData.confirmPassword} onChange={handleChange} className={inputClasses} placeholder="••••••••" />
-              </div>
-              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                <p className="text-[10px] font-bold text-slate-500 leading-relaxed uppercase">Conseil : Utilisez au moins 8 caractères avec des chiffres et des symboles pour une sécurité optimale.</p>
-              </div>
+              <input type="password" name="newPassword" value={formData.newPassword} onChange={handleChange} className={inputClasses} placeholder="Nouveau mot de passe" />
+              <input type="password" name="confirmPassword" value={formData.confirmPassword} onChange={handleChange} className={inputClasses} placeholder="Confirmer mot de passe" />
             </div>
-          </div>
         </div>
 
-        <div className="flex justify-center md:justify-end">
-          <button type="submit" disabled={isSaving} className="w-full md:w-auto px-10 py-5 bg-primary text-white font-black rounded-3xl shadow-2xl shadow-primary/40 active-scale disabled:opacity-50 flex items-center justify-center space-x-3 transition-all">
-            {isSaving ? <Loader2 className="animate-spin" /> : <Save size={20} />}
-            <span>{isSaving ? "SAUVEGARDE..." : "METTRE À JOUR LE PROFIL"}</span>
-          </button>
-        </div>
+        <button 
+          type="submit" 
+          disabled={isSaving} 
+          className={`w-full py-5 rounded-4xl font-black text-xs tracking-widest shadow-2xl flex items-center justify-center space-x-3 transition-all active-scale border-4 border-white ${showSavedFeedback ? 'bg-success text-white shadow-success/30' : 'bg-primary text-white shadow-primary/30'}`}
+        >
+          {isSaving ? (
+            <Loader2 className="animate-spin" size={20} />
+          ) : showSavedFeedback ? (
+            <>
+              <CheckCircle2 size={20} />
+              <span>PROFIL MIS À JOUR</span>
+            </>
+          ) : (
+            <>
+              <Save size={20} />
+              <span>SAUVEGARDER LES MODIFICATIONS</span>
+            </>
+          )}
+        </button>
       </form>
 
-      {/* Journal d'activité du profil */}
-      <div className="mt-12 bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-8">
+      {/* Lazy Log Section - Optimized */}
+      <div className="mt-12 space-y-4 px-2">
         <div className="flex items-center justify-between">
-          <h3 className="font-black text-slate-900 flex items-center"><History size={20} className="mr-2 text-primary" /> Journal d'activité</h3>
+          <div className="flex items-center space-x-2">
+            <div className="w-8 h-8 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400">
+                <History size={16} />
+            </div>
+            <h3 className="font-black text-slate-900 text-sm tracking-tight uppercase">Activité du profil</h3>
+          </div>
           {logs.length > 0 && (
-            <button onClick={clearLogs} className="text-[10px] font-black uppercase text-slate-400 hover:text-urgent transition-colors flex items-center">
-              <Trash2 size={12} className="mr-1" /> Effacer
+            <button onClick={clearLogs} className="p-2 text-slate-300 hover:text-urgent active-scale transition-colors">
+              <Trash2 size={18} />
             </button>
           )}
         </div>
 
         {logs.length === 0 ? (
-          <div className="text-center py-10">
-            <Clock size={40} className="mx-auto text-slate-100 mb-3" />
-            <p className="text-sm text-slate-400 font-bold uppercase tracking-widest">Aucune modification récente</p>
+          <div className="p-12 text-center bg-slate-50 rounded-5xl border border-slate-100 border-dashed">
+            <Clock size={32} className="mx-auto text-slate-200 mb-3 opacity-50" />
+            <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Aucun log récent</p>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-3">
             {logs.map((log) => (
-              <div key={log.id} className="flex items-start space-x-4 p-5 bg-slate-50 rounded-3xl border border-transparent hover:border-slate-100 transition-all group">
-                <div className="w-10 h-10 bg-white rounded-2xl flex items-center justify-center text-primary shadow-sm flex-shrink-0">
-                  <Clock size={18} />
+              <div key={log.id} className="bg-white p-5 rounded-4xl border border-slate-50 shadow-sm flex items-start space-x-4 animate-in fade-in slide-in-from-top-2">
+                <div className="w-10 h-10 bg-slate-50 rounded-2xl flex items-center justify-center text-primary/40 flex-shrink-0">
+                  <Clock size={16} strokeWidth={3} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex justify-between items-start mb-1">
-                    <span className="text-xs font-black text-slate-900 uppercase tracking-tight">{log.field} mis à jour</span>
-                    <span className="text-[9px] font-black text-slate-400 uppercase">{log.timestamp}</span>
+                  <div className="flex justify-between items-baseline mb-1">
+                    <span className="text-[10px] font-black text-slate-900 uppercase tracking-widest">{log.field}</span>
+                    <span className="text-[9px] font-black text-slate-300 uppercase">{log.timestamp}</span>
                   </div>
-                  <p className="text-xs text-slate-500 font-medium truncate">
-                    <span className="text-slate-400 line-through mr-2">{log.oldValue}</span>
-                    <span className="text-primary font-bold">{log.newValue}</span>
-                  </p>
+                  <div className="flex items-center space-x-2 text-xs font-bold truncate">
+                    <span className="text-slate-300 line-through truncate max-w-[80px]">{log.oldValue}</span>
+                    <div className="w-3 h-[1px] bg-slate-200"></div>
+                    <span className="text-primary truncate">{log.newValue}</span>
+                  </div>
                 </div>
               </div>
             ))}
