@@ -1,6 +1,5 @@
 
 import React, { useState, useMemo, useCallback, memo } from 'react';
-// Added Trash2 to imports
 import { Plus, LayoutGrid, List, CheckCircle, X, ChevronRight, AlertCircle, Clock, CheckSquare, Loader2, Edit2, PlayCircle, PauseCircle, AlertTriangle, User as UserIcon, Calendar as CalendarIcon, Tag, Trash2 } from 'lucide-react';
 import { Task, TaskStatus, User, Client } from '../types';
 
@@ -22,26 +21,32 @@ const TaskCard = memo(({ task, onClick, clientName, assignee }: TaskCardProps) =
     }
   };
 
+  // On utilise onPointerDown pour un feedback visuel immédiat sans bloquer le clic
   return (
     <div 
-      onClick={onClick}
-      className={`bg-white p-4 rounded-[2rem] border shadow-sm active-scale transition-all flex items-center justify-between group cursor-pointer mb-3 ${isLate ? 'border-urgent border-2' : 'border-slate-50 hover:border-primary/20'}`}
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onClick();
+      }}
+      className={`bg-white p-4 rounded-[1.8rem] border shadow-sm transition-all flex items-center justify-between group cursor-pointer mb-2.5 active:opacity-70 will-change-transform ${
+        isLate ? 'border-urgent bg-red-50/30' : 'border-slate-100 hover:border-primary/20'
+      }`}
     >
-      <div className="flex items-center space-x-4 overflow-hidden flex-1">
-        <div className={`w-1.5 h-10 rounded-full flex-shrink-0 ${
+      <div className="flex items-center space-x-3 overflow-hidden flex-1 pointer-events-none">
+        <div className={`w-1 h-8 rounded-full flex-shrink-0 ${
           task.status === TaskStatus.DONE ? 'bg-success' : 
           task.status === TaskStatus.BLOCKED || isLate ? 'bg-urgent' :
           task.status === TaskStatus.IN_PROGRESS ? 'bg-primary' : 'bg-slate-200'
         }`}></div>
         <div className="truncate">
-          <h4 className={`font-black text-slate-900 truncate text-sm tracking-tight ${task.status === TaskStatus.DONE ? 'opacity-40 line-through' : ''}`}>
+          <h4 className={`font-black text-slate-900 truncate text-[13px] tracking-tight ${task.status === TaskStatus.DONE ? 'opacity-30 line-through' : ''}`}>
             {task.title}
           </h4>
           <div className="flex items-center space-x-2 mt-0.5">
-            <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest truncate max-w-[120px]">
+            <p className="text-[8px] text-slate-400 font-black uppercase tracking-widest truncate max-w-[100px]">
               {clientName}
             </p>
-            <div className="w-1 h-1 rounded-full bg-slate-100" />
             <div className="flex items-center">
               <PriorityIcon />
             </div>
@@ -49,15 +54,15 @@ const TaskCard = memo(({ task, onClick, clientName, assignee }: TaskCardProps) =
         </div>
       </div>
       
-      <div className="flex items-center space-x-3 ml-2">
+      <div className="flex items-center space-x-2 ml-2 pointer-events-none">
         {assignee && (
           <img 
             src={assignee.avatar} 
-            className="w-7 h-7 rounded-xl object-cover border-2 border-slate-50 shadow-sm" 
+            className="w-6 h-6 rounded-lg object-cover border border-slate-100" 
             alt={assignee.name}
           />
         )}
-        <ChevronRight size={14} className="text-slate-200 group-hover:text-primary transition-colors" />
+        <ChevronRight size={14} className="text-slate-200" />
       </div>
     </div>
   );
@@ -105,116 +110,101 @@ const Tasks: React.FC<TasksProps> = ({
   const currentTask = useMemo(() => tasks.find(t => t.id === selectedTaskId), [tasks, selectedTaskId]);
 
   return (
-    <div className="flex flex-col space-y-6">
+    <div className="flex flex-col space-y-6 overflow-hidden">
       <div className="flex items-center justify-between px-1">
         <div>
-            <h2 className="text-3xl font-black text-slate-900 uppercase tracking-tighter">Workflow</h2>
-            <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">{tasks.length} missions actives</p>
+            <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Workflow</h2>
+            <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest">{tasks.length} missions</p>
         </div>
-        <div className="flex bg-slate-50 p-1 rounded-2xl">
-          <button onClick={() => setViewMode('list')} className={`p-2.5 px-5 rounded-xl transition-all ${viewMode === 'list' ? 'bg-white shadow-sm text-primary font-black' : 'text-slate-300 font-bold'}`}><List size={18} /></button>
-          <button onClick={() => setViewMode('board')} className={`p-2.5 px-5 rounded-xl transition-all ${viewMode === 'board' ? 'bg-white shadow-sm text-primary font-black' : 'text-slate-300 font-bold'}`}><LayoutGrid size={18} /></button>
+        <div className="flex bg-slate-50 p-1 rounded-xl">
+          <button onClick={() => setViewMode('list')} className={`p-2 px-4 rounded-lg transition-all ${viewMode === 'list' ? 'bg-white shadow-sm text-primary font-black' : 'text-slate-300'}`}><List size={16} /></button>
+          <button onClick={() => setViewMode('board')} className={`p-2 px-4 rounded-lg transition-all ${viewMode === 'board' ? 'bg-white shadow-sm text-primary font-black' : 'text-slate-300'}`}><LayoutGrid size={16} /></button>
         </div>
       </div>
 
-      <div className="space-y-1">
+      <div className="space-y-1 pb-20 overflow-y-auto no-scrollbar touch-pan-y">
         {tasks.map(task => (
           <TaskCard 
             key={task.id} 
             task={task} 
             onClick={() => setSelectedTaskId(task.id)} 
-            clientName={clientMap.get(task.clientId || '')?.name || 'Projet Interne'} 
+            clientName={clientMap.get(task.clientId || '')?.name || 'Interne'} 
             assignee={userMap.get(task.assigneeId)}
           />
         ))}
         {tasks.length === 0 && (
-          <div className="py-24 text-center">
-            <div className="w-16 h-16 bg-slate-50 rounded-[2rem] flex items-center justify-center mx-auto mb-4">
-              <CheckSquare size={32} className="text-slate-200" />
-            </div>
-            <p className="text-[10px] text-slate-300 font-black uppercase tracking-widest">Aucune mission pour le moment</p>
+          <div className="py-20 text-center">
+            <CheckSquare size={32} className="text-slate-100 mx-auto mb-3" />
+            <p className="text-[9px] text-slate-300 font-black uppercase tracking-widest">Aucune mission</p>
           </div>
         )}
       </div>
 
-      {/* Bouton d'ajout flottant */}
+      {/* FAB ADD - Positionné plus haut pour éviter la barre nav */}
       <button 
         onClick={() => { setFormData({ title: '', description: '', assigneeId: currentUser.id, dueDate: new Date().toISOString().split('T')[0], status: TaskStatus.TODO, priority: 'medium' }); setEditingTask(null); setShowFormModal(true); }}
-        className="fixed bottom-[calc(100px+env(safe-area-inset-bottom))] right-6 w-16 h-16 bg-primary text-white rounded-[2rem] shadow-[0_15px_45px_rgba(0,102,255,0.4)] flex items-center justify-center z-40 active-scale border-4 border-white"
+        className="fixed bottom-24 right-6 w-14 h-14 bg-primary text-white rounded-2xl shadow-xl flex items-center justify-center z-40 active:scale-90 transition-transform"
       >
-        <Plus size={32} strokeWidth={3} />
+        <Plus size={28} strokeWidth={3} />
       </button>
 
-      {/* POP-UP DÉTAILS DE MISSION */}
+      {/* POP-UP DETAILS - Utilisation de z-index supérieur */}
       {selectedTaskId && currentTask && (
-        <div className="fixed inset-0 z-[110] flex flex-col justify-end">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={() => setSelectedTaskId(null)}></div>
-          <div className="relative bg-white rounded-t-[3rem] p-8 pb-[calc(40px+env(safe-area-inset-bottom))] animate-in slide-in-from-bottom duration-400 max-h-[95vh] overflow-y-auto no-scrollbar">
-            <div className="w-12 h-1.5 bg-slate-100 rounded-full mx-auto mb-10"></div>
+        <div className="fixed inset-0 z-[1000] flex flex-col justify-end">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setSelectedTaskId(null)}></div>
+          <div className="relative bg-white rounded-t-[2.5rem] p-6 pb-[calc(20px+env(safe-area-inset-bottom))] modal-drawer max-h-[90vh] overflow-y-auto">
+            <div className="w-10 h-1 bg-slate-100 rounded-full mx-auto mb-6"></div>
             
-            <div className="flex justify-between items-start mb-8">
-              <div className="space-y-1">
-                <p className="text-[10px] font-black text-primary uppercase tracking-widest">{clientMap.get(currentTask.clientId || '')?.name || 'Projet Interne'}</p>
-                <h3 className="text-2xl font-black text-slate-900 tracking-tighter leading-none">{currentTask.title}</h3>
+            <div className="flex justify-between items-start mb-6">
+              <div className="flex-1 min-w-0 pr-4">
+                <p className="text-[8px] font-black text-primary uppercase tracking-widest mb-1">{clientMap.get(currentTask.clientId || '')?.name || 'Interne'}</p>
+                <h3 className="text-xl font-black text-slate-900 tracking-tighter leading-tight break-words">{currentTask.title}</h3>
               </div>
-              <button onClick={() => setSelectedTaskId(null)} className="p-3 bg-slate-50 rounded-2xl text-slate-400 active-scale"><X size={24}/></button>
+              <button onClick={() => setSelectedTaskId(null)} className="p-2 bg-slate-50 rounded-xl text-slate-400"><X size={20}/></button>
             </div>
             
-            <div className="space-y-8">
-              {/* Statuts */}
-              <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 gap-2">
                 {[
                   { id: TaskStatus.TODO, label: 'À faire', color: 'bg-slate-100 text-slate-500', icon: Clock },
-                  { id: TaskStatus.IN_PROGRESS, label: 'En cours', color: 'bg-primary text-white shadow-lg shadow-primary/20', icon: PlayCircle },
-                  { id: TaskStatus.BLOCKED, label: 'Bloqué', color: 'bg-urgent text-white shadow-lg shadow-urgent/20', icon: PauseCircle },
-                  { id: TaskStatus.DONE, label: 'Terminé', color: 'bg-success text-white shadow-lg shadow-success/20', icon: CheckCircle },
+                  { id: TaskStatus.IN_PROGRESS, label: 'En cours', color: 'bg-primary text-white shadow-lg', icon: PlayCircle },
+                  { id: TaskStatus.BLOCKED, label: 'Bloqué', color: 'bg-urgent text-white shadow-lg', icon: PauseCircle },
+                  { id: TaskStatus.DONE, label: 'Terminé', color: 'bg-success text-white shadow-lg', icon: CheckCircle },
                 ].map((s) => (
                   <button 
                     key={s.id} 
                     onClick={() => onUpdateStatus(currentTask.id, s.id)}
-                    className={`flex items-center space-x-3 p-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${currentTask.status === s.id ? s.color : 'bg-slate-50 text-slate-400 border border-transparent'}`}
+                    className={`flex items-center space-x-2 p-3 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all ${currentTask.status === s.id ? s.color : 'bg-slate-50 text-slate-400'}`}
                   >
-                    <s.icon size={16} />
+                    <s.icon size={14} />
                     <span>{s.label}</span>
                   </button>
                 ))}
               </div>
 
-              {/* Infos Clés */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="p-5 bg-slate-50 rounded-3xl space-y-2">
-                  <div className="flex items-center space-x-2 text-slate-400">
-                    <UserIcon size={14} />
-                    <span className="text-[9px] font-black uppercase tracking-widest">Assigné</span>
-                  </div>
-                  <div className="flex items-center space-x-3">
-                    <img src={userMap.get(currentTask.assigneeId)?.avatar} className="w-8 h-8 rounded-xl object-cover" alt="" />
-                    <span className="font-bold text-slate-800 text-xs">{userMap.get(currentTask.assigneeId)?.name}</span>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-4 bg-slate-50 rounded-2xl space-y-1">
+                  <span className="text-[8px] font-black uppercase text-slate-400 tracking-widest">Assigné</span>
+                  <div className="flex items-center space-x-2">
+                    <img src={userMap.get(currentTask.assigneeId)?.avatar} className="w-6 h-6 rounded-lg object-cover" alt="" />
+                    <span className="font-bold text-slate-800 text-[10px] truncate">{userMap.get(currentTask.assigneeId)?.name}</span>
                   </div>
                 </div>
-                <div className="p-5 bg-slate-50 rounded-3xl space-y-2">
-                  <div className="flex items-center space-x-2 text-slate-400">
-                    <CalendarIcon size={14} />
-                    <span className="text-[9px] font-black uppercase tracking-widest">Échéance</span>
-                  </div>
-                  <p className="font-bold text-slate-800 text-xs uppercase">{currentTask.dueDate}</p>
+                <div className="p-4 bg-slate-50 rounded-2xl space-y-1">
+                  <span className="text-[8px] font-black uppercase text-slate-400 tracking-widest">Date</span>
+                  <p className="font-bold text-slate-800 text-[10px] uppercase">{currentTask.dueDate}</p>
                 </div>
               </div>
 
-              {/* Description */}
-              <div className="p-6 bg-slate-50 rounded-[2rem]">
-                <div className="flex items-center space-x-2 mb-3 text-slate-400">
-                  <Tag size={14} />
-                  <span className="text-[9px] font-black uppercase tracking-widest">Détails</span>
-                </div>
-                <p className="text-slate-600 font-bold text-sm leading-relaxed">{currentTask.description || 'Aucune description spécifiée.'}</p>
+              <div className="p-5 bg-slate-50 rounded-2xl">
+                <span className="text-[8px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Notes Stratégiques</span>
+                <p className="text-slate-600 font-bold text-xs leading-relaxed">{currentTask.description || 'Aucune note.'}</p>
               </div>
 
-              {/* Actions */}
-              <div className="flex space-x-3">
-                <button onClick={() => { setEditingTask(currentTask); setFormData(currentTask); setShowFormModal(true); setSelectedTaskId(null); }} className="flex-1 py-5 bg-slate-900 text-white font-black rounded-3xl text-[10px] uppercase tracking-widest shadow-xl active-scale">Modifier la mission</button>
-                <button onClick={() => { if(confirm('Supprimer définitivement ?')) { onDeleteTask(currentTask.id); setSelectedTaskId(null); } }} className="w-16 h-16 bg-red-50 text-urgent flex items-center justify-center rounded-3xl active-scale">
-                  <Trash2 size={24} />
+              <div className="flex space-x-2 pt-2">
+                <button onClick={() => { setEditingTask(currentTask); setFormData(currentTask); setShowFormModal(true); setSelectedTaskId(null); }} className="flex-1 py-4 bg-slate-900 text-white font-black rounded-2xl text-[9px] uppercase tracking-widest active:scale-95">ÉDITER</button>
+                <button onClick={() => { if(confirm('Supprimer ?')) { onDeleteTask(currentTask.id); setSelectedTaskId(null); } }} className="w-12 h-12 bg-red-50 text-urgent flex items-center justify-center rounded-2xl active:scale-95">
+                  <Trash2 size={20} />
                 </button>
               </div>
             </div>
@@ -224,49 +214,54 @@ const Tasks: React.FC<TasksProps> = ({
 
       {/* MODAL FORMULAIRE MISSION */}
       {showFormModal && (
-        <div className="fixed inset-0 z-[120] bg-white animate-in slide-in-from-bottom duration-400 flex flex-col">
-          <header className="px-6 py-5 flex items-center justify-between border-b border-slate-50 safe-pt">
-            <button onClick={() => setShowFormModal(false)} className="p-3 bg-slate-50 rounded-2xl text-slate-400 active-scale transition-colors"><X size={24}/></button>
-            <h3 className="font-black text-slate-900 tracking-tighter uppercase text-sm">{editingTask ? 'Modifier' : 'Initialiser'} Mission</h3>
-            <button onClick={handleSubmit} className="bg-primary text-white px-6 py-3 rounded-2xl font-black text-[10px] tracking-widest uppercase shadow-lg shadow-primary/20 active-scale">VALIDER</button>
+        <div className="fixed inset-0 z-[2000] bg-white animate-in slide-in-from-bottom duration-300 flex flex-col">
+          <header className="px-5 py-4 flex items-center justify-between border-b border-slate-50 safe-pt">
+            <button onClick={() => setShowFormModal(false)} className="p-2 bg-slate-50 rounded-xl text-slate-400"><X size={20}/></button>
+            <h3 className="font-black text-slate-900 uppercase text-xs">Mission</h3>
+            <button onClick={handleSubmit} className="bg-primary text-white px-5 py-2.5 rounded-xl font-black text-[10px] uppercase shadow-lg active:scale-95">Enregistrer</button>
           </header>
           
-          <div className="p-8 space-y-8 flex-1 overflow-y-auto no-scrollbar pb-32">
+          <div className="p-6 space-y-6 flex-1 overflow-y-auto no-scrollbar">
               <div className="space-y-1">
-                <label className="text-[9px] font-black uppercase text-slate-300 tracking-[0.2em] px-1">Titre de la mission</label>
-                <input type="text" className="w-full text-3xl font-black outline-none placeholder-slate-100 text-slate-900" placeholder="Ex: Audit SEO..." value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
+                <label className="text-[8px] font-black uppercase text-slate-300 tracking-widest px-1">Titre</label>
+                <input type="text" className="w-full text-xl font-black outline-none placeholder-slate-100 text-slate-900" placeholder="Nom de la tâche..." value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
               </div>
 
               <div className="space-y-1">
-                <label className="text-[9px] font-black uppercase text-slate-300 tracking-[0.2em] px-1">Description stratégique</label>
-                <textarea className="w-full h-40 text-sm font-bold outline-none placeholder-slate-200 resize-none text-slate-600 bg-slate-50 p-6 rounded-3xl focus:bg-white border border-transparent focus:border-primary/10 transition-all" placeholder="Détaillez les objectifs ici..." value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
+                <label className="text-[8px] font-black uppercase text-slate-300 tracking-widest px-1">Description</label>
+                <textarea className="w-full h-32 text-xs font-bold outline-none placeholder-slate-200 resize-none text-slate-600 bg-slate-50 p-4 rounded-2xl" placeholder="Détails..." value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="p-5 bg-slate-50 rounded-3xl space-y-2">
-                    <p className="text-[9px] font-black uppercase text-slate-300 tracking-[0.2em]">Responsable</p>
-                    <select className="w-full bg-transparent font-black text-xs outline-none text-slate-900" value={formData.assigneeId} onChange={e => setFormData({...formData, assigneeId: e.target.value})}>
-                      {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                    </select>
+              <div className="grid grid-cols-1 gap-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="p-4 bg-slate-50 rounded-2xl space-y-1">
+                      <p className="text-[8px] font-black uppercase text-slate-300">Responsable</p>
+                      <select className="w-full bg-transparent font-black text-[10px] outline-none text-slate-900" value={formData.assigneeId} onChange={e => setFormData({...formData, assigneeId: e.target.value})}>
+                        {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                      </select>
+                    </div>
+                    <div className="p-4 bg-slate-50 rounded-2xl space-y-1">
+                      <p className="text-[8px] font-black uppercase text-slate-300">Client</p>
+                      <select className="w-full bg-transparent font-black text-[10px] outline-none text-slate-900" value={formData.clientId} onChange={e => setFormData({...formData, clientId: e.target.value})}>
+                        <option value="">Interne</option>
+                        {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                    </div>
                   </div>
-                  <div className="p-5 bg-slate-50 rounded-3xl space-y-2">
-                    <p className="text-[9px] font-black uppercase text-slate-300 tracking-[0.2em]">Client associé</p>
-                    <select className="w-full bg-transparent font-black text-xs outline-none text-slate-900" value={formData.clientId} onChange={e => setFormData({...formData, clientId: e.target.value})}>
-                      <option value="">Projet Interne</option>
-                      {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                    </select>
-                  </div>
-                  <div className="p-5 bg-slate-50 rounded-3xl space-y-2">
-                    <p className="text-[9px] font-black uppercase text-slate-300 tracking-[0.2em]">Échéance</p>
-                    <input type="date" className="w-full bg-transparent font-black text-xs outline-none text-slate-900" value={formData.dueDate} onChange={e => setFormData({...formData, dueDate: e.target.value})} />
-                  </div>
-                  <div className="p-5 bg-slate-50 rounded-3xl space-y-2">
-                    <p className="text-[9px] font-black uppercase text-slate-300 tracking-[0.2em]">Niveau d'urgence</p>
-                    <select className="w-full bg-transparent font-black text-xs outline-none text-slate-900" value={formData.priority} onChange={e => setFormData({...formData, priority: e.target.value as any})}>
-                      <option value="low">Basse priorité</option>
-                      <option value="medium">Moyenne</option>
-                      <option value="high">Haute urgence</option>
-                    </select>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="p-4 bg-slate-50 rounded-2xl space-y-1">
+                      <p className="text-[8px] font-black uppercase text-slate-300">Échéance</p>
+                      <input type="date" className="w-full bg-transparent font-black text-[10px] outline-none text-slate-900" value={formData.dueDate} onChange={e => setFormData({...formData, dueDate: e.target.value})} />
+                    </div>
+                    <div className="p-4 bg-slate-50 rounded-2xl space-y-1">
+                      <p className="text-[8px] font-black uppercase text-slate-300">Urgence</p>
+                      <select className="w-full bg-transparent font-black text-[10px] outline-none text-slate-900" value={formData.priority} onChange={e => setFormData({...formData, priority: e.target.value as any})}>
+                        <option value="low">Basse</option>
+                        <option value="medium">Moyenne</option>
+                        <option value="high">Haute</option>
+                      </select>
+                    </div>
                   </div>
               </div>
           </div>
