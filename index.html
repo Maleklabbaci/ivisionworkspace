@@ -5,7 +5,6 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#ffffff">
     
     <title>iVISION - Workspace</title>
@@ -33,47 +32,42 @@
       }
       * { 
         -webkit-font-smoothing: antialiased; 
-        box-sizing: border-box; 
-        -webkit-tap-highlight-color: transparent;
+        box-sizing: border-box;
       }
       
       html, body {
-        height: 100dvh;
+        height: 100%;
+        width: 100%;
         margin: 0;
         padding: 0;
-        overflow: hidden; /* Prevent double scrollbars on the body */
         background-color: #ffffff;
+        /* On laisse le scroll naturel au body pour éviter les blocages */
+        overflow-y: auto;
+        overflow-x: hidden;
       }
 
       #root {
-        height: 100dvh;
-        width: 100%;
-      }
-
-      body { 
-        font-family: 'Plus Jakarta Sans', sans-serif;
-        overscroll-behavior-y: none; /* Prevent pull-to-refresh if desired, but here it helps stability */
-      }
-
-      /* Transitions fluides et légères */
-      .page-enter {
-        animation: fadeIn 0.25s ease-out forwards;
-      }
-
-      @keyframes fadeIn {
-        from { opacity: 0; transform: scale(0.99); }
-        to { opacity: 1; transform: scale(1); }
+        min-height: 100%;
+        display: flex;
+        flex-direction: column;
       }
 
       .active-scale:active { transform: scale(0.96); transition: transform 0.1s; }
       
       .no-scrollbar::-webkit-scrollbar { display: none; }
-      
-      /* Mobile optimization for safe areas */
-      @media (max-width: 1023px) {
-        .safe-pt { padding-top: var(--safe-top); }
-        .safe-pb { padding-bottom: var(--safe-bottom); }
+
+      /* Animation de pop-up (tiroir du bas) */
+      .modal-drawer {
+        animation: drawerUp 0.3s cubic-bezier(0.32, 0.72, 0, 1) forwards;
       }
+      @keyframes drawerUp {
+        from { transform: translateY(100%); }
+        to { transform: translateY(0); }
+      }
+
+      /* Safe area helpers */
+      .safe-pt { padding-top: var(--safe-top); }
+      .safe-pb { padding-bottom: var(--safe-bottom); }
     </style>
   <script type="importmap">
 {
