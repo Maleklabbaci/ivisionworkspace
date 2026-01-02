@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useCallback, memo } from 'react';
+import React, { useState, useMemo, useCallback, memo, useRef } from 'react';
 import { Plus, LayoutGrid, List, CheckCircle, X, Trash2, Tag, ChevronRight, AlertCircle, Clock, CheckSquare, Loader2, Edit2, PlayCircle, PauseCircle, Users, Calendar, Flag } from 'lucide-react';
 import { Task, TaskStatus, User, Client } from '../types';
 
@@ -63,6 +63,9 @@ const Tasks: React.FC<TasksProps> = ({
   const [showFormModal, setShowFormModal] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
+  const touchStartX = useRef<number>(0);
+  const touchEndX = useRef<number>(0);
+
   const clientMap = useMemo(() => new Map(clients.map(c => [c.id, c])), [clients]);
 
   const [formData, setFormData] = useState<Partial<Task>>({
@@ -98,6 +101,30 @@ const Tasks: React.FC<TasksProps> = ({
 
   const currentTask = useMemo(() => tasks.find(t => t.id === selectedTaskId), [tasks, selectedTaskId]);
 
+  // SWIPE DANS LE MODAL DE MISSION
+  const handleModalSwipeStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.targetTouches[0].clientX;
+  };
+
+  const handleModalSwipeEnd = (e: React.TouchEvent) => {
+    touchEndX.current = e.changedTouches[0].clientX;
+    const swipeDistance = touchStartX.current - touchEndX.current;
+    const threshold = 60;
+
+    if (Math.abs(swipeDistance) > threshold && selectedTaskId) {
+      const currentIndex = tasks.findIndex(t => t.id === selectedTaskId);
+      if (currentIndex === -1) return;
+
+      if (swipeDistance > 0 && currentIndex < tasks.length - 1) {
+        // Swipe Left -> Mission Suivante
+        setSelectedTaskId(tasks[currentIndex + 1].id);
+      } else if (swipeDistance < 0 && currentIndex > 0) {
+        // Swipe Right -> Mission Précédente
+        setSelectedTaskId(tasks[currentIndex - 1].id);
+      }
+    }
+  };
+
   return (
     <div className="h-full flex flex-col space-y-5 page-transition max-w-full overflow-hidden">
       <div className="flex items-center justify-between px-2">
@@ -131,7 +158,7 @@ const Tasks: React.FC<TasksProps> = ({
           ) : (
             <div className="board-container -mx-4 px-4 pb-32 h-full flex items-start overflow-x-auto">
               {columns.map(col => (
-                <div key={col.status} className="board-column flex-shrink-0 w-[80vw] md:w-[280px] snap-center h-full flex flex-col">
+                <div key={col.status} className="board-column flex-shrink-0 w-[80vw] md:w-[280px] snap-center h-full flex flex-col no-swipe-nav">
                   <div className="mb-4 flex items-center justify-between px-4 bg-slate-50/50 py-2.5 rounded-2xl border border-slate-100/50">
                     <div className="flex items-center space-x-3">
                       <div className={`w-2.5 h-2.5 rounded-full ${col.color} shadow-sm ring-4 ring-white`}></div>
@@ -164,7 +191,11 @@ const Tasks: React.FC<TasksProps> = ({
       </button>
 
       {selectedTaskId && currentTask && (
-        <div className="fixed inset-0 z-[110] flex flex-col justify-end">
+        <div 
+          className="fixed inset-0 z-[110] flex flex-col justify-end"
+          onTouchStart={handleModalSwipeStart}
+          onTouchEnd={handleModalSwipeEnd}
+        >
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setSelectedTaskId(null)}></div>
           <div className="relative bg-white rounded-t-5xl md:rounded-5xl md:mb-10 md:mx-auto md:max-w-xl p-8 animate-in slide-in-from-bottom duration-400 safe-pb shadow-[0_-15px_60px_rgba(0,0,0,0.2)]">
             <div className="w-12 h-1.5 bg-slate-100 rounded-full mx-auto mb-8"></div>
@@ -177,7 +208,7 @@ const Tasks: React.FC<TasksProps> = ({
             </header>
             
             <div className="space-y-6">
-              <div>
+              <div className="animate-in fade-in zoom-in-95 duration-300" key={currentTask.id}>
                 <h4 className="text-2xl font-black text-slate-900 leading-tight tracking-tighter">{currentTask.title}</h4>
                 <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mt-2">{clientMap.get(currentTask.clientId || '')?.name || 'Projet Interne'} • ÉCHÉANCE : {currentTask.dueDate}</p>
               </div>
@@ -201,7 +232,7 @@ const Tasks: React.FC<TasksProps> = ({
                     return (
                       <button 
                         key={status.id}
-                        onClick={() => { onUpdateStatus(currentTask.id, status.id); setSelectedTaskId(null); }}
+                        onClick={() => { onUpdateStatus(currentTask.id, status.id); }}
                         className={`flex items-center justify-center space-x-2 p-4 rounded-[1.5rem] font-black text-[9px] uppercase tracking-widest transition-all active-scale border-4 ${isActive ? `${colorClass} border-white shadow-lg` : 'bg-slate-50 text-slate-400 border-transparent hover:bg-slate-100'}`}
                       >
                         <status.icon size={16} strokeWidth={3} />
@@ -221,6 +252,13 @@ const Tasks: React.FC<TasksProps> = ({
                    Révoquer la mission
                  </button>
               </div>
+            </div>
+            
+            {/* INDICATION DE SWIPE POUR LE MODAL */}
+            <div className="mt-8 flex justify-center items-center space-x-2 opacity-20">
+               <div className="w-1.5 h-1.5 rounded-full bg-slate-400"></div>
+               <div className="w-6 h-1 rounded-full bg-slate-900"></div>
+               <div className="w-1.5 h-1.5 rounded-full bg-slate-400"></div>
             </div>
           </div>
         </div>

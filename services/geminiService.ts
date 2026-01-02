@@ -3,22 +3,22 @@ import { GoogleGenAI, Type } from "@google/genai";
 
 export const generateMarketingInsight = async (context: string): Promise<string> => {
   try {
-    // Initialize inside function to avoid top-level crash if env is missing at boot
+    // Note: The system automatically injects the key into process.env.API_KEY
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    // Use gemini-3-flash-preview for basic text tasks like KPI analysis
+    // Use gemini-3-flash-preview for speed and efficiency on brief recommendations
     const model = 'gemini-3-flash-preview';
     
-    // Prompt optimisé pour être direct et sans formatage Markdown complexe
     const prompt = `
-      Rôle : Expert Marketing Digital Senior.
-      Tâche : Analyse les KPIs suivants et donne exactement 3 recommandations stratégiques courtes et actionnables.
-      Contraintes :
-      1. Réponds uniquement par 3 phrases simples.
-      2. Une recommandation par ligne.
-      3. Pas de gras (**), pas de titres, pas d'introduction ("Voici les recommandations...").
-      4. Ton direct et professionnel.
+      Rôle : Expert Marketing Digital Senior & Analyste d'Agence.
+      Tâche : Analyse les KPIs de l'agence et propose exactement 3 actions stratégiques.
+      
+      Contraintes de formatage :
+      - 3 lignes maximum.
+      - Pas de Markdown (** ou #).
+      - Pas de salutations.
+      - Utilise des verbes d'action.
 
-      Contexte : ${context}
+      Données actuelles : ${context}
     `;
 
     const response = await ai.models.generateContent({
@@ -26,28 +26,25 @@ export const generateMarketingInsight = async (context: string): Promise<string>
       contents: prompt,
     });
 
-    // Directly access response.text property
-    return response.text?.trim() || "Impossible de générer des insights pour le moment.";
+    return response.text?.trim() || "Aucune recommandation disponible.";
   } catch (error) {
-    console.error("Erreur Gemini:", error);
-    return "Le service d'IA est temporairement indisponible.";
+    console.error("Erreur Gemini Insight:", error);
+    return "Analyse indisponible pour le moment.";
   }
 };
 
 export const brainstormTaskIdeas = async (topic: string): Promise<string[]> => {
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    // Use gemini-3-flash-preview for general brainstorming tasks
     const model = 'gemini-3-flash-preview';
     
-    const prompt = `Génère 5 idées de tâches concrètes et professionnelles pour une campagne marketing sur le sujet : "${topic}".`;
+    const prompt = `Génère 5 idées de tâches marketing concrètes pour le sujet suivant : "${topic}". Format JSON uniquement.`;
 
     const response = await ai.models.generateContent({
       model: model,
       contents: prompt,
       config: {
         responseMimeType: "application/json",
-        // Force la structure de réponse à être un tableau de chaînes de caractères
         responseSchema: {
           type: Type.ARRAY,
           items: {
@@ -57,14 +54,12 @@ export const brainstormTaskIdeas = async (topic: string): Promise<string[]> => {
       }
     });
 
-    // response.text is a property, not a method
     const text = response.text;
     if (!text) return [];
     
-    // Le parsing est maintenant beaucoup plus sûr grâce au Schema
     return JSON.parse(text) as string[];
   } catch (error) {
     console.error("Erreur Gemini Brainstorm:", error);
-    return ["Analyse de la concurrence", "Définition des personas", "Rédaction du calendrier éditorial", "Création des visuels", "Configuration des campagnes Ads"]; // Fallback data
+    return ["Audit SEO", "Rédaction Newsletter", "Planification Ads"];
   }
 };

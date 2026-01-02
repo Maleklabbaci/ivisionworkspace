@@ -17,20 +17,6 @@ interface ChatProps {
   onReadChannel?: (channelId: string) => void;
 }
 
-const formatLastSeen = (lastSeen?: string) => {
-    if (!lastSeen) return "Hors ligne";
-    const date = new Date(lastSeen);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMins / 60);
-    const diffDays = Math.floor(diffHours / 24);
-    if (diffMins < 1) return "En ligne";
-    if (diffMins < 60) return `Il y a ${diffMins} min`;
-    if (diffHours < 24) return `Il y a ${diffHours} h`;
-    return `Il y a ${diffDays} j`;
-};
-
 const ChatMessage = React.memo(({ msg, isMe, sender, isSequence, isNew, showSeparator }: {
     msg: Message, isMe: boolean, sender?: User, isSequence: boolean, isNew: boolean, showSeparator: boolean
 }) => {
@@ -105,27 +91,23 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
   const activeChannel = channels.find(c => c.id === currentChannelId);
   const canManageChannels = currentUser.role === UserRole.ADMIN || currentUser.permissions?.canManageChannels;
 
-  const unreadMentionsMap = useMemo(() => {
-    const map = new Set<string>();
-    const myMentionTag = `@${currentUser.name.replace(/\s+/g, '')}`;
-    const storageKey = `ivision_last_read_${currentUser.id}`;
-    const storage = JSON.parse(localStorage.getItem(storageKey) || '{}');
-    channels.forEach(channel => {
-        const lastRead = storage[channel.id] || '1970-01-01T00:00:00.000Z';
-        if (messages.some(m => m.channelId === channel.id && m.userId !== currentUser.id && new Date(m.fullTimestamp) > new Date(lastRead) && m.content.includes(myMentionTag))) {
-            map.add(channel.id);
-        }
-    });
-    return map;
-  }, [messages, channels, currentUser]);
-
+  // SCROLL AUTOMATIQUE ROBUSTE
   useEffect(() => {
       const storageKey = `ivision_last_read_${currentUser.id}`;
       const storage = JSON.parse(localStorage.getItem(storageKey) || '{}');
       setLastReadTime(storage[currentChannelId] || '1970-01-01T00:00:00.000Z');
-      setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+      
+      const scrollToBottom = () => {
+          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      };
+
+      // Un petit délai assure que le DOM est prêt après le rendu des messages
+      const timeoutId = setTimeout(scrollToBottom, 100);
+      
       if (onReadChannel) onReadChannel(currentChannelId);
-  }, [currentChannelId, currentUser.id, onReadChannel]);
+      
+      return () => clearTimeout(timeoutId);
+  }, [currentChannelId, activeMessages.length]);
 
   const handleSend = () => {
     if (!newMessage.trim() && pendingAttachments.length === 0) return;
@@ -133,32 +115,27 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
     setNewMessage('');
     setPendingAttachments([]);
     setShowMentions(false);
+    if (inputRef.current) {
+        inputRef.current.style.height = 'auto';
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        handleSend();
+    }
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
       const val = e.target.value;
       setNewMessage(val);
-      const cursor = e.target.selectionStart;
-      const textBeforeCursor = val.substring(0, cursor);
-      const words = textBeforeCursor.split(/\s+/);
-      const lastWord = words[words.length - 1];
-      if (lastWord.startsWith('@')) {
-          setMentionQuery(lastWord.slice(1));
-          setShowMentions(true);
-      } else {
-          setShowMentions(false);
-      }
+      e.target.style.height = 'auto';
+      e.target.style.height = e.target.scrollHeight + 'px';
   };
 
-  const insertMention = (user: User) => {
-      const mentionTag = `@${user.name.replace(/\s+/g, '')} `;
-      const cursor = inputRef.current?.selectionStart || newMessage.length;
-      const textBeforeCursor = newMessage.substring(0, cursor);
-      const textAfterCursor = newMessage.substring(cursor);
-      const lastAtIndex = textBeforeCursor.lastIndexOf('@');
-      setNewMessage(textBeforeCursor.substring(0, lastAtIndex) + mentionTag + textAfterCursor);
-      setShowMentions(false);
-      inputRef.current?.focus();
+  const removePendingAttachment = (idx: number) => {
+    setPendingAttachments(prev => prev.filter((_, i) => i !== idx));
   };
 
   const handleAddSubmit = (e: React.FormEvent) => {
@@ -178,55 +155,36 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
   const isMessageNew = (msg: Message) => msg.userId !== currentUser.id && new Date(msg.fullTimestamp) > new Date(lastReadTime);
   const firstNewMessageIndex = useMemo(() => activeMessages.findIndex(m => isMessageNew(m)), [activeMessages, lastReadTime, currentUser.id]);
 
-  // Refactored ChannelList to ensure stable typing and avoid JSX inference issues
-  const ChannelList = () => {
-    const typedChannels = (channels || []) as Channel[];
-    const projectChannels = typedChannels.filter(c => c.type === 'project');
-    const globalChannels = typedChannels.filter(c => c.type === 'global');
-
-    return (
-      <div className="space-y-6">
-          <div>
-              <h3 className="text-[10px] font-black text-slate-400 uppercase mb-4 px-2 tracking-widest flex justify-between items-center">PROJETS</h3>
-              <div className="space-y-1">
-                  {projectChannels.map((channel: Channel) => {
-                      const isActive = currentChannelId === channel.id;
-                      const isUnread = (channel.unread || 0) > 0;
-                      return (
-                          <button key={channel.id} onClick={() => { onChannelChange(channel.id); setShowMobileSidebar(false); }} className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm transition-all group ${isActive ? 'bg-primary text-white shadow-lg shadow-primary/20' : isUnread ? 'bg-slate-100 text-slate-900 font-black' : 'text-slate-500 hover:bg-slate-50'}`}>
-                              <div className="flex items-center truncate">
-                                  <Lock size={14} className="mr-3 opacity-50" />
-                                  <span className="truncate">{channel.name}</span>
-                              </div>
-                              {isUnread && <div className="w-2 h-2 bg-primary rounded-full"></div>}
-                          </button>
-                      );
-                  })}
-              </div>
-          </div>
-          <div>
-              <h3 className="text-[10px] font-black text-slate-400 uppercase mb-4 px-2 tracking-widest">GLOBAL</h3>
-              <div className="space-y-1">
-                  {globalChannels.map((channel: Channel) => (
-                      <button key={channel.id} onClick={() => { onChannelChange(channel.id); setShowMobileSidebar(false); }} className={`w-full flex items-center px-4 py-3 rounded-2xl text-sm transition-all ${currentChannelId === channel.id ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-slate-500 hover:bg-slate-50'}`}>
-                          <Hash size={14} className="mr-3 opacity-50" />
-                          <span className="truncate">{channel.name}</span>
-                      </button>
-                  ))}
-              </div>
-          </div>
-      </div>
-    );
-  };
-
   return (
     <div className="flex flex-col md:flex-row h-[calc(100vh-160px)] bg-white rounded-5xl shadow-2xl border border-slate-100 overflow-hidden relative page-transition">
-      <div className="w-72 bg-slate-50 border-r border-slate-100 hidden md:flex flex-col">
-        <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+      
+      {showMobileSidebar && (
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[80] md:hidden" onClick={() => setShowMobileSidebar(false)}></div>
+      )}
+
+      <div className={`w-72 bg-slate-50 border-r border-slate-100 flex flex-col absolute md:relative inset-y-0 left-0 z-[90] transition-transform duration-300 md:translate-x-0 ${showMobileSidebar ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white md:bg-transparent">
             <h2 className="font-black text-slate-900 text-lg tracking-tighter">Chat</h2>
             {canManageChannels && <button onClick={() => setShowAddChannelModal(true)} className="p-2 bg-white rounded-xl shadow-sm text-primary active-scale"><Plus size={20}/></button>}
         </div>
-        <div className="flex-1 overflow-y-auto p-4"><ChannelList /></div>
+        <div className="flex-1 overflow-y-auto p-4 space-y-6">
+            <div>
+                <h3 className="text-[10px] font-black text-slate-400 uppercase mb-4 px-2 tracking-widest flex justify-between items-center">PROJETS</h3>
+                <div className="space-y-1">
+                    {channels.filter(c => c.type === 'project').map(channel => {
+                        const isActive = currentChannelId === channel.id;
+                        return (
+                            <button key={channel.id} onClick={() => { onChannelChange(channel.id); setShowMobileSidebar(false); }} className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm transition-all group ${isActive ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-slate-500 hover:bg-slate-50'}`}>
+                                <div className="flex items-center truncate">
+                                    <Lock size={14} className="mr-3 opacity-50" />
+                                    <span className="truncate font-bold tracking-tight">{channel.name}</span>
+                                </div>
+                            </button>
+                        );
+                    })}
+                </div>
+            </div>
+        </div>
       </div>
 
       <div className="flex-1 flex flex-col min-w-0 bg-white">
@@ -237,8 +195,8 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
                     {activeChannel?.type === 'project' ? <Lock size={18}/> : <Hash size={18}/>}
                 </div>
                 <div>
-                    <h2 className="font-black text-slate-900 text-sm tracking-tight truncate max-w-[140px]">{activeChannel?.name}</h2>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">{onlineUserIds.size} Actifs</p>
+                    <h2 className="font-black text-slate-900 text-sm tracking-tight truncate max-w-[140px] uppercase">{activeChannel?.name || 'Sélectionner...'}</h2>
+                    <p className="text-[10px] font-bold text-slate-300 uppercase tracking-tighter">Flux iVISION actif</p>
                 </div>
             </div>
         </div>
@@ -255,50 +213,67 @@ const Chat: React.FC<ChatProps> = ({ currentUser, users, channels, currentChanne
                     showSeparator={idx === firstNewMessageIndex}
                 />
             ))}
-            <div ref={messagesEndRef} />
+            <div ref={messagesEndRef} className="h-2" />
         </div>
 
-        {/* Improved Text Area & Buttons */}
-        <div className="p-4 border-t border-slate-50">
-            <div className="bg-slate-50 rounded-3xl border border-slate-200 p-2 flex items-end focus-within:ring-4 focus-within:ring-primary/10 focus-within:border-primary/30 transition-all duration-300">
+        <div className="p-4 border-t border-slate-50 space-y-3">
+            {pendingAttachments.length > 0 && (
+                <div className="flex flex-wrap gap-2 animate-in slide-in-from-bottom-2 duration-300">
+                    {pendingAttachments.map((name, idx) => (
+                        <div key={idx} className="flex items-center bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100 text-[10px] font-bold text-slate-600">
+                            <FileIcon size={12} className="mr-1.5 text-primary" />
+                            <span className="truncate max-w-[100px]">{name}</span>
+                            <button onClick={() => removePendingAttachment(idx)} className="ml-2 text-slate-300 hover:text-urgent"><X size={12}/></button>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            <div className="bg-slate-50 rounded-3xl border border-slate-200 p-2 flex items-end focus-within:ring-4 focus-within:ring-primary/5 focus-within:border-primary/20 transition-all duration-300">
                 <button onClick={() => fileInputRef.current?.click()} className="p-3 text-slate-400 hover:text-primary active-scale">
                     <Paperclip size={20} />
-                    {/* Fixed line 267/263: Property 'name' does not exist on type 'unknown' by adding explicit type hint to the map callback */}
                     <input type="file" ref={fileInputRef} className="hidden" multiple onChange={(e) => {
-                        if(e.target.files) setPendingAttachments(prev => [...prev, ...Array.from(e.target.files!).map((f: File) => f.name)]);
+                        if(e.target.files) {
+                            const filesArray = Array.from(e.target.files).map((f: File) => f.name);
+                            setPendingAttachments(prev => [...prev, ...filesArray]);
+                        }
                     }} />
                 </button>
                 <textarea 
                     ref={inputRef}
                     value={newMessage}
                     onChange={handleInputChange}
-                    placeholder="Écrivez ici..."
-                    className="flex-1 bg-transparent border-none focus:ring-0 text-sm font-semibold text-slate-900 placeholder-slate-400 py-3 px-2 resize-none max-h-32"
+                    onKeyDown={handleKeyDown}
+                    placeholder="Message..."
+                    className="flex-1 bg-transparent border-none focus:ring-0 text-sm font-semibold text-slate-900 placeholder-slate-400 py-3 px-2 resize-none max-h-32 min-h-[44px]"
                     rows={1}
                 />
-                <button onClick={handleSend} className="p-3 bg-primary text-white rounded-2xl shadow-lg shadow-primary/30 active-scale disabled:opacity-50">
+                <button 
+                  onClick={handleSend} 
+                  disabled={!newMessage.trim() && pendingAttachments.length === 0}
+                  className="p-3 bg-primary text-white rounded-2xl shadow-lg shadow-primary/20 active-scale disabled:opacity-30 transition-opacity"
+                >
                     <Send size={20} />
                 </button>
             </div>
         </div>
       </div>
 
-      {/* Add Channel Modal */}
       {showAddChannelModal && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-end md:items-center justify-center z-[100] p-4 animate-in fade-in duration-300">
-              <div className="bg-white rounded-t-5xl md:rounded-5xl shadow-2xl w-full max-w-md overflow-hidden animate-in slide-in-from-bottom duration-400">
+              <div className="bg-white rounded-t-[40px] md:rounded-[40px] shadow-2xl w-full max-w-sm overflow-hidden animate-in slide-in-from-bottom duration-400 pb-10">
                   <div className="p-8 border-b border-slate-50 flex justify-between items-center">
-                      <h3 className="text-2xl font-black text-slate-900 tracking-tighter">Nouveau Canal</h3>
-                      <button onClick={() => setShowAddChannelModal(false)} className="p-2 text-slate-400"><X size={24}/></button>
+                      <h3 className="text-xl font-black text-slate-900 tracking-tighter uppercase">Nouveau Canal</h3>
+                      <button onClick={() => setShowAddChannelModal(false)} className="p-2 text-slate-400 bg-slate-50 rounded-xl"><X size={20}/></button>
                   </div>
                   <form onSubmit={handleAddSubmit} className="p-8 space-y-6">
                       <div>
-                          <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest">Nom du canal</label>
-                          <input type="text" required value={newChannelName} onChange={e => setNewChannelName(e.target.value)} className="w-full p-5 bg-slate-50 border-2 border-transparent rounded-3xl font-bold focus:bg-white focus:border-primary/20 outline-none transition-all text-slate-900" placeholder="Ex: Marketing Ads" />
+                          <label className="text-[9px] font-black uppercase text-slate-400 mb-2 block tracking-widest">Identité du canal</label>
+                          <input type="text" required value={newChannelName} onChange={e => setNewChannelName(e.target.value)} className="w-full p-4 bg-slate-50 border-2 border-transparent rounded-2xl font-bold focus:bg-white focus:border-primary/20 outline-none transition-all text-slate-900 text-sm" placeholder="Ex: Ads-Project-X" />
                       </div>
                       <div className="flex space-x-3">
-                          <button type="button" onClick={() => setShowAddChannelModal(false)} className="flex-1 py-4 text-slate-500 font-bold hover:bg-slate-50 rounded-3xl transition-all">ANNULER</button>
-                          <button type="submit" className="flex-1 py-4 bg-primary text-white font-black rounded-3xl shadow-xl shadow-primary/30 active-scale">CRÉER</button>
+                          <button type="button" onClick={() => setShowAddChannelModal(false)} className="flex-1 py-4 text-slate-400 font-black text-[10px] uppercase tracking-widest">ANNULER</button>
+                          <button type="submit" className="flex-1 py-4 bg-primary text-white font-black rounded-2xl shadow-xl shadow-primary/20 active-scale uppercase text-[10px] tracking-widest">CRÉER</button>
                       </div>
                   </form>
               </div>

@@ -28,25 +28,18 @@ const AppContent: React.FC<{
   setTasks: React.Dispatch<React.SetStateAction<Task[]>>;
   clients: Client[];
   channels: Channel[];
+  setChannels: React.Dispatch<React.SetStateAction<Channel[]>>;
   messages: Message[];
+  setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   fileLinks: FileLink[];
   addNotification: (title: string, message: string, type?: 'info' | 'success' | 'urgent') => void;
   removeNotification: (id: string) => void;
   notifications: ToastNotification[];
-}> = ({ currentUser, setCurrentUser, users, setUsers, tasks, setTasks, clients, channels, messages, fileLinks, addNotification, removeNotification, notifications }) => {
+}> = ({ currentUser, setCurrentUser, users, setUsers, tasks, setTasks, clients, channels, setChannels, messages, setMessages, fileLinks, addNotification, removeNotification, notifications }) => {
   const navigate = useNavigate();
+  const [currentChannelId, setCurrentChannelId] = useState('general');
 
-  // Surveillance des retards de missions
-  useEffect(() => {
-    const today = new Date().toISOString().split('T')[0];
-    const overdue = tasks.filter(t => t.dueDate < today && t.status !== TaskStatus.DONE);
-    
-    if (overdue.length > 0) {
-      // Notification groupée pour les retards
-      addNotification("Retard Critique", `${overdue.length} mission(s) dépassée(s) !`, "urgent");
-    }
-  }, [tasks.length, addNotification]);
-
+  // --- Handlers Missions ---
   const handleAddTask = async (task: Task) => {
     const newTask = { ...task, id: generateUUID() };
     setTasks(prev => [newTask, ...prev]);
@@ -58,31 +51,71 @@ const AppContent: React.FC<{
     });
   };
 
-  const handleUpdateTask = async (task: Task) => {
-    setTasks(prev => prev.map(t => t.id === task.id ? task : t));
-    addNotification("Mise à jour", task.title, "success");
-    await supabase.from('tasks').update({
-      title: task.title, description: task.description, status: task.status,
-      priority: task.priority, assignee_id: task.assigneeId, client_id: task.clientId
-    }).eq('id', task.id);
-  };
-
   const handleUpdateTaskStatus = async (taskId: string, status: TaskStatus) => {
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status } : t));
     await supabase.from('tasks').update({ status }).eq('id', taskId);
   };
 
-  const handleDeleteTask = async (taskId: string) => {
-    setTasks(prev => prev.filter(t => t.id !== taskId));
-    addNotification("Supprimée", "La mission a été retirée.", "urgent");
-    await supabase.from('tasks').delete().eq('id', taskId);
+  // --- Handlers Chat ---
+  const handleSendMessage = async (content: string, channelId: string, attachments: string[] = []) => {
+    const now = new Date();
+    const newMessage: Message = {
+      id: generateUUID(),
+      userId: currentUser.id,
+      channelId: channelId,
+      content: content,
+      timestamp: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      fullTimestamp: now.toISOString(),
+      attachments: attachments
+    };
+
+    setMessages(prev => [...prev, newMessage]);
+    
+    await supabase.from('messages').insert({
+      id: newMessage.id,
+      user_id: newMessage.userId,
+      channel_id: newMessage.channelId,
+      content: newMessage.content,
+      created_at: newMessage.fullTimestamp,
+      attachments: newMessage.attachments
+    });
+  };
+
+  const handleAddChannel = async (channelData: { name: string, type: 'global' | 'project' }) => {
+    const newChannel: Channel = {
+      id: generateUUID(),
+      name: channelData.name,
+      type: channelData.type,
+      unread: 0
+    };
+    setChannels(prev => [...prev, newChannel]);
+    addNotification("Canal créé", `# ${newChannel.name}`, "success");
+    await supabase.from('channels').insert({
+      id: newChannel.id, name: newChannel.name, type: newChannel.type
+    });
+  };
+
+  // --- Handlers Équipe (Admin) ---
+  const handleAddUser = async (user: User) => {
+    setUsers(prev => [...prev, user]);
+    addNotification("Membre ajouté", user.name, "success");
+    await supabase.from('users').insert({
+        id: user.id, name: user.name, email: user.email, role: user.role,
+        avatar: user.avatar, status: 'pending', permissions: user.permissions
+    });
+  };
+
+  const handleRemoveUser = async (userId: string) => {
+    setUsers(prev => prev.filter(u => u.id !== userId));
+    addNotification("Accès révoqué", "Le membre a été supprimé.", "urgent");
+    await supabase.from('users').delete().eq('id', userId);
   };
 
   const handleUpdateMember = async (userId: string, data: Partial<User>) => {
     setUsers(prev => prev.map(u => u.id === userId ? { ...u, ...data } : u));
     await supabase.from('users').update({
       role: data.role, name: data.name, avatar: data.avatar,
-      phone_number: data.phoneNumber, permissions: data.permissions
+      permissions: data.permissions
     }).eq('id', userId);
     
     if (userId === currentUser.id) {
@@ -106,10 +139,32 @@ const AppContent: React.FC<{
         <Routes>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<Dashboard currentUser={currentUser} tasks={tasks} notifications={notifications} onNavigate={handleNavigate} />} />
-          <Route path="/tasks" element={<Tasks tasks={tasks} users={users} clients={clients} currentUser={currentUser} onUpdateStatus={handleUpdateTaskStatus} onAddTask={handleAddTask} onUpdateTask={handleUpdateTask} onDeleteTask={handleDeleteTask} />} />
-          <Route path="/chat" element={<Chat currentUser={currentUser} users={users} channels={channels} currentChannelId="general" messages={messages} onlineUserIds={new Set()} onChannelChange={() => {}} onSendMessage={() => {}} onAddChannel={() => {}} onDeleteChannel={() => {}} />} />
+          <Route path="/tasks" element={<Tasks tasks={tasks} users={users} clients={clients} currentUser={currentUser} onUpdateStatus={handleUpdateTaskStatus} onAddTask={handleAddTask} onUpdateTask={async(t) => {}} onDeleteTask={async(id) => {}} />} />
+          <Route path="/chat" element={<Chat 
+            currentUser={currentUser} 
+            users={users} 
+            channels={channels} 
+            currentChannelId={currentChannelId} 
+            messages={messages} 
+            onlineUserIds={new Set()} 
+            onChannelChange={setCurrentChannelId} 
+            onSendMessage={handleSendMessage} 
+            onAddChannel={handleAddChannel} 
+            onDeleteChannel={() => {}} 
+          />} />
           <Route path="/files" element={<Files tasks={tasks} messages={messages} fileLinks={fileLinks} clients={clients} currentUser={currentUser} />} />
-          <Route path="/team" element={<Team currentUser={currentUser} users={users} tasks={tasks} activities={[]} onlineUserIds={new Set()} onAddUser={() => {}} onRemoveUser={() => {}} onUpdateRole={() => {}} onApproveUser={() => {}} onUpdateMember={handleUpdateMember} />} />
+          <Route path="/team" element={<Team 
+            currentUser={currentUser} 
+            users={users} 
+            tasks={tasks} 
+            activities={[]} 
+            onlineUserIds={new Set()} 
+            onAddUser={handleAddUser} 
+            onRemoveUser={handleRemoveUser} 
+            onUpdateRole={() => {}} 
+            onApproveUser={() => {}} 
+            onUpdateMember={handleUpdateMember} 
+          />} />
           <Route path="/settings" element={<Settings currentUser={currentUser} onUpdateProfile={async (d) => handleUpdateMember(currentUser.id, d)} />} />
           <Route path="/reports" element={<Reports currentUser={currentUser} tasks={tasks} users={users} />} />
           <Route path="/clients" element={<Clients clients={clients} tasks={tasks} fileLinks={fileLinks} currentUser={currentUser} />} />
@@ -180,7 +235,8 @@ const App: React.FC = () => {
         setMessages(messagesRes.data.map((m: any) => ({
           id: m.id, userId: m.user_id, channelId: m.channel_id, content: m.content,
           timestamp: new Date(m.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-          fullTimestamp: m.created_at
+          fullTimestamp: m.created_at,
+          attachments: m.attachments || []
         })));
       }
       if (tasksRes.data) {
@@ -290,7 +346,9 @@ const App: React.FC = () => {
         currentUser={currentUser} setCurrentUser={setCurrentUser} 
         users={users} setUsers={setUsers} 
         tasks={tasks} setTasks={setTasks}
-        clients={clients} channels={channels} messages={messages} fileLinks={fileLinks}
+        clients={clients} channels={channels} setChannels={setChannels}
+        messages={messages} setMessages={setMessages}
+        fileLinks={fileLinks}
         addNotification={addNotification} removeNotification={removeNotification} notifications={notifications}
       />
     </HashRouter>
