@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { Client, Task, FileLink, TaskStatus, User, UserRole } from '../types';
-import { Users, Plus, Search, MapPin, Mail, Phone, Building2, Trash2, Edit2, X, CheckCircle, FileText, ArrowUpDown, Calendar, AlertCircle, ArrowUp, ArrowDown, Lock, Briefcase } from 'lucide-react';
+import { Users, Plus, Search, MapPin, Mail, Phone, Building2, Trash2, Edit2, X, CheckCircle, FileText, ArrowUpDown, Calendar, AlertCircle, ArrowUp, ArrowDown, Lock, Briefcase, ChevronRight } from 'lucide-react';
 
 interface ClientsProps {
   clients: Client[];
@@ -37,21 +37,15 @@ const Clients: React.FC<ClientsProps> = ({ clients, tasks, fileLinks, onAddClien
     );
   }, [clients, searchTerm]);
 
-  // Récupération des tâches du client sélectionné
-  const clientTasks = useMemo(() => {
-    if (!selectedClient) return [];
-    return tasks.filter(t => t.clientId === selectedClient.id);
-  }, [tasks, selectedClient]);
-
   if (!canAccess) {
     return (
         <div className="h-full flex flex-col items-center justify-center text-center p-8 animate-in fade-in duration-500 pt-20">
             <div className="bg-red-50 p-10 rounded-full mb-6 flex items-center justify-center">
                 <Lock size={48} className="text-urgent" />
             </div>
-            <h2 className="text-3xl font-black text-slate-900 mb-2 tracking-tighter uppercase">Accès Refusé</h2>
-            <p className="text-slate-400 max-w-xs font-bold leading-relaxed text-sm">
-              Votre compte n'a pas les privilèges requis pour accéder au CRM client.
+            <h2 className="text-2xl font-black text-slate-900 mb-2 tracking-tighter uppercase">Accès Refusé</h2>
+            <p className="text-slate-400 max-w-xs font-bold leading-relaxed text-[11px] uppercase tracking-widest">
+              Privilèges CRM requis.
             </p>
         </div>
     );
@@ -65,147 +59,159 @@ const Clients: React.FC<ClientsProps> = ({ clients, tasks, fileLinks, onAddClien
     setShowModal(false);
   };
 
-  const inputClasses = "w-full p-5 bg-slate-50 border border-slate-100 rounded-3xl font-bold text-slate-900 placeholder-slate-300 focus:bg-white focus:border-primary/20 focus:ring-4 focus:ring-primary/5 transition-all outline-none";
+  const inputClasses = "w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-slate-900 placeholder-slate-300 focus:bg-white focus:border-primary/20 outline-none transition-all text-sm";
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-24 page-transition">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h2 className="text-3xl font-black text-slate-900 tracking-tight">Clients</h2>
-          <p className="text-slate-400 font-bold text-sm">Gestion du portefeuille iVISION</p>
-        </div>
-        <div className="w-full md:w-auto flex items-center space-x-3">
-          <div className="relative flex-1">
-            <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" />
-            <input type="text" placeholder="Rechercher..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-11 pr-4 py-4 bg-white border border-slate-100 rounded-3xl shadow-sm text-sm font-bold focus:ring-4 focus:ring-primary/10 transition-all outline-none text-slate-900" />
+    <div className="space-y-6 max-w-2xl mx-auto pb-24 page-transition px-2 md:px-0">
+      <div className="flex flex-col space-y-5">
+        <div className="flex items-center justify-between px-1">
+          <div>
+            <h2 className="text-xl font-black text-slate-900 tracking-tight uppercase">Portefeuille</h2>
+            <p className="text-slate-300 font-black text-[8px] uppercase tracking-[0.3em] mt-0.5">CRM iVISION Actif</p>
           </div>
-          <button onClick={() => { setEditingClient(null); setFormData({}); setShowModal(true); }} className="bg-primary text-white p-3 px-6 rounded-[1.2rem] shadow-xl shadow-primary/20 active-scale transition-all flex items-center font-black text-[10px] tracking-widest">
-            <Plus size={18} className="mr-2" strokeWidth={3} /> NOUVEAU
+          <button onClick={() => { setEditingClient(null); setFormData({}); setShowModal(true); }} className="bg-primary text-white p-2.5 px-5 rounded-xl shadow-lg shadow-primary/20 active-scale transition-all flex items-center font-black text-[9px] tracking-widest uppercase">
+            <Plus size={16} className="mr-2" strokeWidth={3} /> Nouveau
           </button>
+        </div>
+        
+        <div className="relative group">
+          <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-primary transition-colors" />
+          <input type="text" placeholder="Rechercher un client..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-11 pr-4 py-3.5 bg-white border border-slate-100 rounded-2xl shadow-sm text-xs font-bold focus:ring-4 focus:ring-primary/5 transition-all outline-none text-slate-900" />
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filteredClients.map(client => (
-              <div key={client.id} onClick={() => setSelectedClient(client)} className="bg-white p-7 rounded-[2.5rem] border border-slate-100 shadow-sm active-scale transition-all group hover:shadow-lg cursor-pointer">
-                  <div className="flex justify-between items-start mb-6">
-                      <div className="w-16 h-16 bg-slate-50 rounded-[1.5rem] flex items-center justify-center text-primary font-black text-2xl border border-slate-100 group-hover:bg-primary group-hover:text-white transition-all duration-300">
-                          {client.name.charAt(0).toUpperCase()}
-                      </div>
-                      <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={(e) => { e.stopPropagation(); setEditingClient(client); setFormData(client); setShowModal(true); }} className="p-2.5 text-slate-300 hover:text-primary transition-colors bg-slate-50 rounded-xl"><Edit2 size={16}/></button>
-                        <button onClick={(e) => { e.stopPropagation(); if(confirm('Supprimer ce client ?')) onDeleteClient?.(client.id); }} className="p-2.5 text-slate-300 hover:text-urgent transition-colors bg-red-50/50 rounded-xl"><Trash2 size={16}/></button>
-                      </div>
-                  </div>
-                  <h3 className="text-2xl font-black text-slate-900 leading-tight mb-1 truncate">{client.name}</h3>
-                  <p className="text-[10px] font-black uppercase text-slate-300 tracking-[0.2em]">{client.company || 'Compte Indépendant'}</p>
-                  
-                  {/* Petit indicateur de tâches sur la carte */}
-                  <div className="mt-4 flex items-center text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                    <Briefcase size={12} className="mr-1 text-primary/50" />
-                    {tasks.filter(t => t.clientId === client.id).length} Missions
-                  </div>
-              </div>
-          ))}
+      {/* LISTE COMPACTE */}
+      <div className="flex flex-col space-y-2">
+          {filteredClients.map(client => {
+              const clientTaskCount = tasks.filter(t => t.clientId === client.id).length;
+              return (
+                <div 
+                  key={client.id} 
+                  onClick={() => setSelectedClient(client)} 
+                  className="bg-white p-3.5 rounded-[1.8rem] border border-slate-50 shadow-sm active-scale transition-all flex items-center justify-between group cursor-pointer hover:border-primary/10 hover:shadow-md"
+                >
+                    <div className="flex items-center space-x-4 overflow-hidden">
+                        <div className="w-11 h-11 bg-slate-50 rounded-xl flex items-center justify-center text-primary font-black text-lg border border-slate-50 group-hover:bg-primary group-hover:text-white transition-all duration-300 flex-shrink-0">
+                            {client.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="truncate">
+                            <h3 className="text-[13px] font-black text-slate-900 leading-tight truncate">{client.name}</h3>
+                            <div className="flex items-center space-x-2 mt-0.5">
+                                <span className="text-[8px] font-black text-slate-300 uppercase tracking-widest truncate max-w-[120px]">
+                                    {client.company || 'Indépendant'}
+                                </span>
+                                <span className="w-1 h-1 bg-slate-200 rounded-full"></span>
+                                <span className="text-[8px] font-black text-primary uppercase tracking-tighter">
+                                    {clientTaskCount} Mission{clientTaskCount > 1 ? 's' : ''}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="flex items-center space-x-1">
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); setEditingClient(client); setFormData(client); setShowModal(true); }} 
+                          className="p-2 text-slate-200 hover:text-primary transition-colors"
+                        >
+                            <Edit2 size={14}/>
+                        </button>
+                        <ChevronRight size={14} className="text-slate-100 group-hover:text-slate-300 transition-all mr-1" />
+                    </div>
+                </div>
+              );
+          })}
+
+          {filteredClients.length === 0 && (
+            <div className="py-20 text-center opacity-20">
+                <Users size={32} className="mx-auto mb-4" />
+                <p className="font-black text-[9px] uppercase tracking-widest">Aucun client trouvé</p>
+            </div>
+          )}
       </div>
 
       {/* FORM MODAL */}
       {showModal && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[100] flex items-end md:items-center justify-center p-4 animate-in fade-in duration-300">
-              <div className="bg-white rounded-t-[40px] md:rounded-[40px] shadow-2xl w-full max-w-md overflow-hidden animate-in slide-in-from-bottom duration-500 pb-[calc(20px+env(safe-area-inset-bottom))]">
-                  <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0">
-                      <h3 className="text-2xl font-black text-slate-900 tracking-tighter uppercase">{editingClient ? 'Editer Client' : 'Nouveau Client'}</h3>
-                      <button onClick={() => setShowModal(false)} className="p-3 bg-slate-50 rounded-2xl text-slate-400"><X size={20}/></button>
+              <div className="bg-white rounded-t-[36px] md:rounded-[36px] shadow-2xl w-full max-w-sm overflow-hidden animate-in slide-in-from-bottom duration-500 pb-[calc(20px+env(safe-area-inset-bottom))]">
+                  <div className="p-6 border-b border-slate-50 flex justify-between items-center bg-white">
+                      <h3 className="text-lg font-black text-slate-900 tracking-tighter uppercase">{editingClient ? 'Modifier' : 'Nouveau'} Client</h3>
+                      <button onClick={() => setShowModal(false)} className="p-2 bg-slate-50 rounded-xl text-slate-400"><X size={18}/></button>
                   </div>
-                  <form onSubmit={handleSubmit} className="p-8 space-y-6 max-h-[70vh] overflow-y-auto no-scrollbar">
-                      <div className="space-y-5">
+                  <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[60vh] overflow-y-auto no-scrollbar">
+                      <div className="space-y-4">
                           <div>
-                              <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest px-2">Nom Complet *</label>
-                              <input required type="text" className={inputClasses} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="Ex: Rayane Merad" />
+                              <label className="text-[9px] font-black uppercase text-slate-400 mb-1.5 block tracking-widest px-1">Nom Complet *</label>
+                              <input required type="text" className={inputClasses} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="Jean Dupont" />
                           </div>
                           <div>
-                              <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest px-2">Email</label>
-                              <input type="email" className={inputClasses} value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} placeholder="email@exemple.com" />
+                              <label className="text-[9px] font-black uppercase text-slate-400 mb-1.5 block tracking-widest px-1">Entreprise / Projet</label>
+                              <input type="text" className={inputClasses} value={formData.company} onChange={e => setFormData({...formData, company: e.target.value})} placeholder="Nom de la boîte" />
                           </div>
                           <div>
-                              <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest px-2">Téléphone</label>
-                              <input type="tel" className={inputClasses} value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} placeholder="05XX XX XX XX" />
+                              <label className="text-[9px] font-black uppercase text-slate-400 mb-1.5 block tracking-widest px-1">Email de contact</label>
+                              <input type="email" className={inputClasses} value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} placeholder="contact@email.com" />
                           </div>
                       </div>
-                      <div className="flex space-x-3 pt-6">
-                          <button type="button" onClick={() => setShowModal(false)} className="flex-1 py-5 text-slate-400 font-black uppercase text-[10px] tracking-widest hover:bg-slate-50 rounded-3xl transition-all">ANNULER</button>
-                          <button type="submit" className="flex-1 py-5 bg-primary text-white font-black uppercase text-[10px] tracking-widest rounded-3xl shadow-xl shadow-primary/20 active-scale">ENREGISTRER</button>
+                      <div className="flex space-x-2 pt-4">
+                          <button type="button" onClick={() => setShowModal(false)} className="flex-1 py-4 text-slate-400 font-black uppercase text-[9px] tracking-widest">ANNULER</button>
+                          <button type="submit" className="flex-1 py-4 bg-primary text-white font-black uppercase text-[9px] tracking-widest rounded-2xl shadow-xl shadow-primary/20 active-scale">VALIDER</button>
                       </div>
                   </form>
               </div>
           </div>
       )}
 
-      {/* DETAIL DRAWER */}
+      {/* DETAIL DRAWER - Toujours minimaliste */}
       {selectedClient && (
           <div className="fixed inset-0 bg-white z-[100] animate-in slide-in-from-bottom duration-500 flex flex-col pb-[env(safe-area-inset-bottom)]">
-              <header className="px-6 py-5 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-20 safe-top">
-                  <button onClick={() => setSelectedClient(null)} className="p-3 bg-slate-50 rounded-2xl text-slate-400 active-scale"><X size={20}/></button>
-                  <h3 className="font-black text-slate-900 tracking-tight truncate max-w-[200px] uppercase text-sm">{selectedClient.name}</h3>
-                  <div className="w-12 h-12 bg-primary rounded-2xl flex items-center justify-center text-white font-black text-xl shadow-lg shadow-primary/20 ring-4 ring-primary/5">{selectedClient.name.charAt(0)}</div>
+              <header className="px-5 py-4 border-b border-slate-50 flex items-center justify-between sticky top-0 bg-white z-20 safe-top">
+                  <button onClick={() => setSelectedClient(null)} className="p-2.5 bg-slate-50 rounded-xl text-slate-400 active-scale"><X size={18}/></button>
+                  <h3 className="font-black text-slate-900 tracking-tight truncate max-w-[180px] uppercase text-xs">{selectedClient.name}</h3>
+                  <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white font-black text-lg shadow-md">{selectedClient.name.charAt(0)}</div>
               </header>
-              <div className="flex-1 overflow-y-auto p-8 space-y-12 pb-32 no-scrollbar">
-                   <div className="grid grid-cols-1 gap-8">
-                        {/* Coordonnées */}
-                        <div className="space-y-6">
-                             <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] px-2">Coordonnées</h4>
-                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="flex items-center space-x-4 p-5 bg-slate-50 rounded-3xl border border-slate-100">
-                                    <div className="w-10 h-10 bg-white rounded-2xl flex items-center justify-center text-primary shadow-sm"><Mail size={18}/></div> 
-                                    <div className="overflow-hidden">
-                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Email</p>
-                                        <p className="font-bold text-slate-700 truncate">{selectedClient.email || 'Non renseigné'}</p>
-                                    </div>
-                                </div>
-                                <div className="flex items-center space-x-4 p-5 bg-slate-50 rounded-3xl border border-slate-100">
-                                    <div className="w-10 h-10 bg-white rounded-2xl flex items-center justify-center text-primary shadow-sm"><Phone size={18}/></div>
-                                    <div className="overflow-hidden">
-                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Téléphone</p>
-                                        <p className="font-bold text-slate-700 truncate">{selectedClient.phone || 'Non renseigné'}</p>
-                                    </div>
-                                </div>
-                             </div>
+              <div className="flex-1 overflow-y-auto p-6 space-y-8 pb-32 no-scrollbar">
+                   <div className="space-y-6">
+                        <div className="grid grid-cols-1 gap-3">
+                            <div className="flex items-center space-x-3 p-4 bg-slate-50 rounded-2xl">
+                                <Mail size={16} className="text-primary"/> 
+                                <span className="font-bold text-slate-700 text-xs truncate">{selectedClient.email || 'Pas d\'email'}</span>
+                            </div>
+                            <div className="flex items-center space-x-3 p-4 bg-slate-50 rounded-2xl">
+                                <Phone size={16} className="text-primary"/>
+                                <span className="font-bold text-slate-700 text-xs truncate">{selectedClient.phone || 'Pas de numéro'}</span>
+                            </div>
                         </div>
 
-                        {/* Missions associées */}
-                        <div className="space-y-6">
-                            <div className="flex items-center justify-between px-2">
-                                <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em]">Missions Actives</h4>
-                                <span className="bg-primary/10 text-primary text-[10px] font-black px-3 py-1 rounded-full">{clientTasks.length}</span>
-                            </div>
-                            
-                            {clientTasks.length === 0 ? (
-                                <div className="bg-slate-50 p-12 rounded-[2.5rem] border border-slate-100 text-center border-dashed">
-                                    <Briefcase size={32} className="mx-auto text-slate-200 mb-4 opacity-50" strokeWidth={1.5} />
-                                    <p className="text-[10px] text-slate-300 font-black uppercase tracking-widest">Aucune mission pour le moment</p>
+                        <div className="space-y-4">
+                            <h4 className="text-[9px] font-black uppercase text-slate-400 tracking-[0.2em] px-1">Missions du Client</h4>
+                            {tasks.filter(t => t.clientId === selectedClient.id).length === 0 ? (
+                                <div className="p-10 text-center bg-slate-50 rounded-3xl border border-dashed border-slate-100">
+                                    <p className="text-[8px] text-slate-300 font-black uppercase">Aucun flux actif</p>
                                 </div>
                             ) : (
-                                <div className="grid grid-cols-1 gap-4">
-                                    {clientTasks.map(task => (
-                                        <div key={task.id} className="bg-slate-50 p-5 rounded-3xl border border-slate-100 flex items-center justify-between group transition-all hover:bg-white hover:shadow-md">
-                                            <div className="flex items-center space-x-4 overflow-hidden">
-                                                <div className={`w-1.5 h-10 rounded-full flex-shrink-0 ${task.priority === 'high' ? 'bg-urgent' : 'bg-primary'}`}></div>
-                                                <div className="overflow-hidden">
-                                                    <h4 className="font-bold text-slate-900 text-sm truncate">{task.title}</h4>
-                                                    <p className="text-[10px] text-slate-400 font-black uppercase mt-0.5 tracking-widest">
-                                                        {task.status} • {task.dueDate}
-                                                    </p>
+                                <div className="space-y-2">
+                                    {tasks.filter(t => t.clientId === selectedClient.id).map(task => (
+                                        <div key={task.id} className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex items-center justify-between">
+                                            <div className="flex items-center space-x-3 overflow-hidden">
+                                                <div className="w-1 h-8 rounded-full bg-primary/40"></div>
+                                                <div className="truncate">
+                                                    <h4 className="font-bold text-slate-900 text-[12px] truncate">{task.title}</h4>
+                                                    <p className="text-[8px] text-slate-400 font-black uppercase tracking-tighter">{task.status}</p>
                                                 </div>
                                             </div>
-                                            <div className="w-10 h-10 rounded-2xl bg-white flex items-center justify-center text-slate-200 shadow-sm">
-                                                <CheckCircle size={20} className={task.status === TaskStatus.DONE ? 'text-success' : ''} />
-                                            </div>
+                                            <CheckCircle size={16} className={task.status === TaskStatus.DONE ? 'text-success' : 'text-slate-200'} />
                                         </div>
                                     ))}
                                 </div>
                             )}
                         </div>
                    </div>
+                   
+                   <button 
+                     onClick={() => { if(confirm('Révoquer ce client ?')) { onDeleteClient?.(selectedClient.id); setSelectedClient(null); } }} 
+                     className="w-full p-4 text-urgent font-black text-[9px] uppercase tracking-widest bg-red-50 rounded-2xl active-scale"
+                   >
+                       SUPPRIMER LE COMPTE CLIENT
+                   </button>
               </div>
           </div>
       )}

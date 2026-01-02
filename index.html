@@ -47,7 +47,7 @@
       * { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
       body { 
         -webkit-tap-highlight-color: transparent; 
-        background-color: #ffffff;
+        background-color: #F1F5F9; /* Un gris plus profond pour faire ressortir la fenêtre */
         user-select: none;
         height: 100dvh;
         margin: 0;
@@ -67,26 +67,47 @@
         to { opacity: 1; transform: translateY(0); }
       }
 
-      /* Desktop Board Overrides */
+      /* Desktop Windowing - Compact Design */
+      @media (min-width: 1024px) {
+        .app-window {
+            height: calc(100vh - 60px);
+            margin: 30px auto;
+            max-width: 1200px; /* Plus petit pour un look premium et concentré */
+            border-radius: 48px;
+            overflow: hidden;
+            box-shadow: 0 50px 100px -20px rgba(0,0,0,0.2);
+            border: 1px solid rgba(255,255,255,0.7);
+            background-color: #ffffff;
+        }
+      }
+
       @media (min-width: 768px) {
         .board-container {
             overflow-x: auto;
             display: flex;
-            gap: 24px;
+            gap: 16px;
             scroll-snap-type: none;
         }
         .board-column {
-            flex: 0 0 320px;
+            flex: 0 0 260px; /* Colonnes plus étroites */
             scroll-snap-align: none;
             margin-right: 0;
         }
+      }
+
+      /* Mobile Full Screen */
+      @media (max-width: 1023px) {
         body {
-            overflow: auto;
-            position: relative;
+            background-color: #ffffff;
+        }
+        .app-window {
+            height: 100%;
+            width: 100%;
+            border-radius: 0;
+            margin: 0;
         }
       }
 
-      /* Mobile Board Scroller fix */
       @media (max-width: 767px) {
         body {
             position: fixed;
@@ -100,8 +121,8 @@
         }
         .board-column {
             scroll-snap-align: center;
-            flex: 0 0 85%;
-            margin-right: 16px;
+            flex: 0 0 82%;
+            margin-right: 12px;
         }
       }
     </style>
