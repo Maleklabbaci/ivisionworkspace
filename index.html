@@ -20,6 +20,10 @@
               urgent: '#FF3B30',
               success: '#34C759',
               slate: { 50: '#F2F2F7', 100: '#E5E5EA', 200: '#D1D1D6', 400: '#8E8E93', 800: '#2C2C2E', 900: '#1C1C1E' }
+            },
+            borderRadius: {
+              '4xl': '2rem',
+              '5xl': '2.5rem',
             }
           }
         }
@@ -33,7 +37,7 @@
       * { 
         -webkit-font-smoothing: antialiased; 
         box-sizing: border-box;
-        -webkit-tap-highlight-color: transparent; /* Supprime le flash gris au clic sur mobile */
+        -webkit-tap-highlight-color: transparent;
       }
       
       html, body {
@@ -47,35 +51,76 @@
         -webkit-overflow-scrolling: touch;
       }
 
+      /* Scrollbar moderne pour PC */
+      @media (min-width: 1024px) {
+        ::-webkit-scrollbar {
+          width: 6px;
+          height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+          background: #E5E5EA;
+          border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+          background: #D1D1D6;
+        }
+      }
+
       #root {
         min-height: 100%;
         display: flex;
         flex-direction: column;
       }
 
-      /* Effet de clic ultra-rapide */
       .active-scale:active { 
-        transform: scale(0.97); 
-        opacity: 0.8;
+        transform: scale(0.98); 
+        opacity: 0.9;
       }
       
       .no-scrollbar::-webkit-scrollbar { display: none; }
 
-      /* Animation de pop-up accélérée (150ms au lieu de 300ms) */
-      .modal-drawer {
-        animation: drawerUp 0.15s cubic-bezier(0, 0, 0.2, 1) forwards;
-        will-change: transform;
+      /* Animation Mobile Drawer */
+      @media (max-width: 1023px) {
+        .modal-drawer {
+          animation: drawerUp 0.15s cubic-bezier(0, 0, 0.2, 1) forwards;
+          will-change: transform;
+        }
       }
+
+      /* Comportement Modal PC (Centré au lieu de Drawer) */
+      @media (min-width: 1024px) {
+        .modal-drawer {
+          animation: modalFadeIn 0.2s ease-out forwards;
+          margin: auto;
+          max-width: 500px;
+          border-radius: 2.5rem !important;
+          max-height: 85vh;
+        }
+      }
+
       @keyframes drawerUp {
         from { transform: translateY(100%); }
         to { transform: translateY(0); }
       }
 
-      /* Media query pour n'appliquer le hover que sur PC */
+      @keyframes modalFadeIn {
+        from { opacity: 0; transform: scale(0.95) translateY(10px); }
+        to { opacity: 1; transform: scale(1) translateY(0); }
+      }
+
       @media (hover: hover) {
         .hover-effect:hover {
           border-color: rgba(0, 102, 255, 0.2) !important;
           background-color: #f8fafc !important;
+          transform: translateY(-2px);
+        }
+        .sidebar-item:hover {
+          background-color: #ffffff;
+          color: #0066FF;
+          padding-left: 1.5rem;
         }
       }
 
@@ -90,8 +135,8 @@
     "react/": "https://esm.sh/react@^19.2.3/",
     "react": "https://esm.sh/react@^19.2.3",
     "recharts": "https://esm.sh/recharts@^3.6.0",
-    "@google/genai": "https://esm.sh/@google/genai@^1.34.0",
     "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
+    "@google/genai": "https://esm.sh/@google/genai@^1.34.0",
     "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.89.0"
   }
 }

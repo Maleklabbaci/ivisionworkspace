@@ -31,19 +31,18 @@ const Layout: React.FC<LayoutProps> = ({
   const handleNavigate = (path: string) => {
     navigate(`/${path}`);
     setIsMoreMenuOpen(false);
-    window.scrollTo(0, 0); // Reset scroll on navigation
+    window.scrollTo(0, 0);
   };
 
-  // MAIN NAVIGATION ITEMS (Visible directly)
   const navItems = [
     { id: 'dashboard', label: 'Home', icon: LayoutGrid, path: 'dashboard' },
     { id: 'tasks', label: 'Missions', icon: CheckSquare, path: 'tasks' },
-    { id: 'calendar', label: 'Planning', icon: CalendarIcon, path: 'calendar' }, // Calendrier ajouté ici
+    { id: 'calendar', label: 'Planning', icon: CalendarIcon, path: 'calendar' },
     { id: 'clients', label: 'CRM', icon: Briefcase, path: 'clients' },
   ];
 
   return (
-    <div className="min-h-screen w-full flex flex-col md:flex-row bg-white font-sans text-slate-900">
+    <div className="min-h-screen w-full flex flex-col lg:flex-row bg-white font-sans text-slate-900">
       <GlobalSearch 
         isOpen={isSearchOpen} 
         onClose={() => setIsSearchOpen(false)} 
@@ -54,41 +53,65 @@ const Layout: React.FC<LayoutProps> = ({
         fileLinks={fileLinks}
       />
       
-      {/* SIDEBAR DESKTOP */}
-      <aside className="hidden md:flex flex-col w-64 bg-slate-50 border-r border-slate-100 h-screen sticky top-0">
-        <div className="p-6 flex items-center space-x-3">
-            <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white font-black text-xs">iV</div>
-            <span className="font-black text-lg tracking-tighter">iVISION</span>
+      {/* SIDEBAR PC - Fixe et optimisée */}
+      <aside className="hidden lg:flex flex-col w-72 bg-slate-50 border-r border-slate-100 h-screen sticky top-0 overflow-y-auto no-scrollbar">
+        <div className="p-8 flex items-center space-x-4">
+            <div className="w-12 h-12 bg-primary rounded-2xl flex items-center justify-center text-white font-black text-sm shadow-xl shadow-primary/20">iV</div>
+            <div>
+              <span className="font-black text-xl tracking-tighter block leading-none">iVISION</span>
+              <span className="text-[9px] font-black text-primary uppercase tracking-[0.3em] mt-1 block">Workspace</span>
+            </div>
         </div>
-        <nav className="flex-1 px-4 space-y-1">
+        
+        <nav className="flex-1 px-6 space-y-2 mt-4">
             {navItems.map(item => (
                 <button 
                     key={item.id}
                     onClick={() => handleNavigate(item.path)}
-                    className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-bold text-sm transition-all ${currentPath === item.id ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-slate-400 hover:bg-white hover:text-slate-900'}`}
+                    className={`w-full flex items-center space-x-4 px-5 py-4 rounded-2xl font-bold text-sm transition-all sidebar-item ${currentPath === item.id ? 'bg-primary text-white shadow-2xl shadow-primary/30' : 'text-slate-400'}`}
                 >
-                    <item.icon size={18} />
+                    <item.icon size={20} />
                     <span>{item.label}</span>
                 </button>
             ))}
+            
+            <div className="pt-8 pb-4">
+              <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest px-5">Outils d'agence</span>
+            </div>
+
+            {[
+              { id: 'chat', label: 'Communication', icon: MessageSquare, path: 'chat' },
+              { id: 'team', label: 'Collaborateurs', icon: Users, path: 'team' },
+              { id: 'files', label: 'Documents', icon: FileText, path: 'files' },
+            ].map(item => (
+              <button 
+                  key={item.id}
+                  onClick={() => handleNavigate(item.path)}
+                  className={`w-full flex items-center space-x-4 px-5 py-4 rounded-2xl font-bold text-sm transition-all sidebar-item ${currentPath === item.id ? 'bg-primary text-white shadow-2xl shadow-primary/30' : 'text-slate-400'}`}
+              >
+                  <item.icon size={20} />
+                  <span>{item.label}</span>
+              </button>
+            ))}
         </nav>
-        <div className="p-4 mt-auto border-t border-slate-100">
-            <button onClick={() => handleNavigate('settings')} className="w-full flex items-center space-x-3 p-3 rounded-xl hover:bg-white transition-all">
-                <img src={currentUser.avatar} className="w-8 h-8 rounded-lg object-cover" alt="" />
+
+        <div className="p-6 border-t border-slate-100 bg-slate-50/50">
+            <button onClick={() => handleNavigate('settings')} className="w-full flex items-center space-x-4 p-4 rounded-2xl hover:bg-white transition-all group">
+                <img src={currentUser.avatar} className="w-10 h-10 rounded-xl object-cover shadow-sm group-hover:scale-110 transition-transform" alt="" />
                 <div className="flex-1 text-left truncate">
-                    <p className="font-bold text-slate-900 text-xs truncate">{currentUser.name}</p>
-                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">{currentUser.role}</p>
+                    <p className="font-black text-slate-900 text-xs truncate uppercase tracking-tight">{currentUser.name}</p>
+                    <p className="text-[10px] text-slate-400 font-bold">{currentUser.role}</p>
                 </div>
             </button>
-            <button onClick={onLogout} className="w-full mt-2 flex items-center justify-center space-x-2 p-3 text-red-500 font-bold bg-red-50 rounded-xl">
+            <button onClick={onLogout} className="w-full mt-4 flex items-center justify-center space-x-3 p-4 text-red-500 font-black bg-white rounded-2xl shadow-sm hover:bg-red-50 transition-colors text-[10px] uppercase tracking-widest">
                 <LogOut size={16} />
-                <span className="text-xs uppercase tracking-widest">Sortie</span>
+                <span>Déconnexion</span>
             </button>
         </div>
       </aside>
 
-      {/* MOBILE HEADER - Fixed but non-blocking */}
-      <header className="md:hidden sticky top-0 flex items-center justify-between px-5 py-3 safe-pt bg-white/95 backdrop-blur-md z-[50] border-b border-slate-50">
+      {/* MOBILE HEADER - Inchangé */}
+      <header className="lg:hidden sticky top-0 flex items-center justify-between px-5 py-3 safe-pt bg-white/95 backdrop-blur-md z-[50] border-b border-slate-50">
         <div className="flex items-center space-x-2">
           <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white font-black text-[10px]">iV</div>
           <span className="font-black text-base tracking-tighter">iVISION</span>
@@ -101,14 +124,14 @@ const Layout: React.FC<LayoutProps> = ({
         </div>
       </header>
 
-      {/* MAIN CONTENT - Direct scrolling */}
+      {/* MAIN CONTENT - Largeur étendue sur PC */}
       <main className="flex-1 w-full bg-white relative">
-        <div className="max-w-4xl mx-auto px-4 py-6 md:px-8 pb-32">
+        <div className="w-full max-w-screen-2xl mx-auto px-4 py-6 lg:px-12 lg:py-10 pb-32">
           {children}
         </div>
 
-        {/* MOBILE NAVIGATION - Bottom Fixed */}
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-100 flex justify-around items-center px-4 pt-2 pb-[calc(10px+env(safe-area-inset-bottom))] z-[50] shadow-[0_-10px_30px_rgba(0,0,0,0.05)] rounded-t-[32px]">
+        {/* MOBILE NAV - Inchangé */}
+        <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-100 flex justify-around items-center px-4 pt-2 pb-[calc(10px+env(safe-area-inset-bottom))] z-[50] shadow-[0_-10px_30px_rgba(0,0,0,0.05)] rounded-t-[32px]">
           {navItems.map(item => {
             const isActive = currentPath === item.id;
             return (
@@ -120,17 +143,15 @@ const Layout: React.FC<LayoutProps> = ({
           })}
           <button onClick={() => setIsMoreMenuOpen(true)} className="flex flex-col items-center justify-center flex-1 py-1 text-slate-300 active-scale relative">
             <Menu size={20} />
-            {unreadMessageCount > 0 && (
-                <span className="absolute top-1 right-4 w-2 h-2 bg-primary rounded-full border border-white"></span>
-            )}
+            {unreadMessageCount > 0 && <span className="absolute top-1 right-4 w-2 h-2 bg-primary rounded-full border border-white"></span>}
             <span className="text-[8px] font-black mt-1 uppercase tracking-tighter opacity-60">Plus</span>
           </button>
         </nav>
       </main>
 
-      {/* MORE MENU - Bottom Drawer style */}
+      {/* MORE MENU MOBILE - Inchangé */}
       {isMoreMenuOpen && (
-        <div className="fixed inset-0 z-[100] flex flex-col justify-end">
+        <div className="fixed inset-0 z-[100] flex flex-col justify-end lg:hidden">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setIsMoreMenuOpen(false)}></div>
           <div className="relative bg-white rounded-t-[40px] p-6 pb-[calc(32px+env(safe-area-inset-bottom))] modal-drawer">
             <div className="w-12 h-1.5 bg-slate-100 rounded-full mx-auto mb-8"></div>
@@ -138,18 +159,14 @@ const Layout: React.FC<LayoutProps> = ({
               {[
                 { id: 'team', label: 'Équipe', icon: Users, color: 'text-primary' },
                 { id: 'files', label: 'Docs', icon: FileText, color: 'text-success' },
-                { id: 'chat', label: 'Chat', icon: MessageSquare, color: 'text-orange-500', badge: unreadMessageCount > 0 }, // Chat déplacé ici
+                { id: 'chat', label: 'Chat', icon: MessageSquare, color: 'text-orange-500', badge: unreadMessageCount > 0 },
                 { id: 'settings', label: 'Profil', icon: Settings, color: 'text-slate-400' }
               ].map(item => (
                 <button key={item.id} onClick={() => handleNavigate(item.id)} className="flex flex-col items-center justify-center p-6 bg-slate-50 rounded-3xl border border-slate-100 active-scale relative">
                   <div className={`w-12 h-12 bg-white rounded-2xl flex items-center justify-center mb-3 shadow-sm ${item.color}`}>
                     <item.icon size={22} />
                   </div>
-                  {item.badge && (
-                      <span className="absolute top-4 right-8 bg-primary text-white text-[8px] font-black px-1.5 py-0.5 rounded-full border-2 border-white">
-                          {unreadMessageCount}
-                      </span>
-                  )}
+                  {item.badge && <span className="absolute top-4 right-8 bg-primary text-white text-[8px] font-black px-1.5 py-0.5 rounded-full border-2 border-white">{unreadMessageCount}</span>}
                   <span className="font-black text-slate-700 text-[10px] uppercase tracking-widest">{item.label}</span>
                 </button>
               ))}
