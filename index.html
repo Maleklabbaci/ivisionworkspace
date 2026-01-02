@@ -7,7 +7,6 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#ffffff">
-    <meta name="format-detection" content="telephone=no">
     
     <title>iVISION - Workspace</title>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -19,21 +18,9 @@
             fontFamily: { sans: ['"Plus Jakarta Sans"', 'sans-serif'] },
             colors: {
               primary: '#0066FF',
-              secondary: '#000000',
               urgent: '#FF3B30',
               success: '#34C759',
-              warning: '#FF9500',
-              slate: { 50: '#F2F2F7', 100: '#E5E5EA', 200: '#D1D1D6', 400: '#8E8E93', 500: '#636366', 800: '#2C2C2E', 900: '#1C1C1E' }
-            },
-            borderRadius: { '3xl': '20px', '4xl': '28px', '5xl': '36px' },
-            animation: {
-              'pulse-subtle': 'pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-            },
-            keyframes: {
-              'pulse-subtle': {
-                '0%, 100%': { opacity: 1, boxShadow: '0 0 0 0 rgba(255, 59, 48, 0)' },
-                '50%': { opacity: 0.9, boxShadow: '0 0 20px 0 rgba(255, 59, 48, 0.1)' },
-              }
+              slate: { 50: '#F2F2F7', 100: '#E5E5EA', 200: '#D1D1D6', 400: '#8E8E93', 800: '#2C2C2E', 900: '#1C1C1E' }
             }
           }
         }
@@ -46,92 +33,63 @@
       }
       * { 
         -webkit-font-smoothing: antialiased; 
-        -moz-osx-font-smoothing: grayscale; 
-        box-sizing: border-box;
+        box-sizing: border-box; 
+        -webkit-tap-highlight-color: transparent;
       }
+      
       html, body {
         height: 100dvh;
         margin: 0;
         padding: 0;
+        overflow: hidden; /* Prevent double scrollbars on the body */
         background-color: #ffffff;
-        overflow: hidden; /* Prevent body bounce, main will handle scroll */
       }
+
+      #root {
+        height: 100dvh;
+        width: 100%;
+      }
+
       body { 
-        -webkit-tap-highlight-color: transparent; 
         font-family: 'Plus Jakarta Sans', sans-serif;
+        overscroll-behavior-y: none; /* Prevent pull-to-refresh if desired, but here it helps stability */
       }
-      #root { height: 100dvh; }
+
+      /* Transitions fluides et légères */
+      .page-enter {
+        animation: fadeIn 0.25s ease-out forwards;
+      }
+
+      @keyframes fadeIn {
+        from { opacity: 0; transform: scale(0.99); }
+        to { opacity: 1; transform: scale(1); }
+      }
+
+      .active-scale:active { transform: scale(0.96); transition: transform 0.1s; }
+      
       .no-scrollbar::-webkit-scrollbar { display: none; }
-      .safe-pt { padding-top: var(--safe-top); }
-      .safe-pb { padding-bottom: var(--safe-bottom); }
       
-      .active-scale:active { transform: scale(0.96); transition: transform 0.1s ease; }
-      
-      /* Slide Animations - Smoother and faster */
-      .slide-from-right {
-        animation: slideFromRight 0.3s cubic-bezier(0.33, 1, 0.68, 1) forwards;
-      }
-      .slide-from-left {
-        animation: slideFromLeft 0.3s cubic-bezier(0.33, 1, 0.68, 1) forwards;
-      }
-      .fade-in-up {
-        animation: fadeInUp 0.3s ease-out forwards;
-      }
-
-      @keyframes slideFromRight {
-        from { transform: translateX(20px); opacity: 0; }
-        to { transform: translateX(0); opacity: 1; }
-      }
-      @keyframes slideFromLeft {
-        from { transform: translateX(-20px); opacity: 0; }
-        to { transform: translateX(0); opacity: 1; }
-      }
-      @keyframes fadeInUp {
-        from { transform: translateY(10px); opacity: 0; }
-        to { transform: translateY(0); opacity: 1; }
-      }
-
-      /* Desktop Windowing */
-      @media (min-width: 1024px) {
-        .app-window {
-            height: calc(100vh - 80px);
-            margin: 40px auto;
-            max-width: 1100px;
-            border-radius: 40px;
-            overflow: hidden;
-            box-shadow: 0 40px 100px -20px rgba(0,0,0,0.12);
-            border: 1px solid rgba(0,0,0,0.05);
-            background-color: #ffffff;
-        }
-      }
-
+      /* Mobile optimization for safe areas */
       @media (max-width: 1023px) {
-        .app-window { height: 100dvh; width: 100%; border-radius: 0; margin: 0; }
-      }
-
-      .scroll-container {
-        overflow-y: auto;
-        -webkit-overflow-scrolling: touch;
-        height: 100%;
+        .safe-pt { padding-top: var(--safe-top); }
+        .safe-pb { padding-bottom: var(--safe-bottom); }
       }
     </style>
-    <script type="importmap">
+  <script type="importmap">
 {
   "imports": {
-    "react": "https://esm.sh/react@19.0.0",
-    "react-dom": "https://esm.sh/react-dom@19.0.0",
-    "react-dom/client": "https://esm.sh/react-dom@19.0.0/client",
-    "lucide-react": "https://esm.sh/lucide-react@0.473.0?external=react,react-dom",
-    "recharts": "https://esm.sh/recharts@2.15.0?external=react,react-dom",
-    "@google/genai": "https://esm.sh/@google/genai@1.3.0",
-    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.47.10",
-    "react-router-dom": "https://esm.sh/react-router-dom@6.28.0?external=react,react-dom",
     "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "react/": "https://esm.sh/react@^19.2.3/"
+    "react-router-dom": "https://esm.sh/react-router-dom@^7.11.0",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react": "https://esm.sh/react@^19.2.3",
+    "recharts": "https://esm.sh/recharts@^3.6.0",
+    "@google/genai": "https://esm.sh/@google/genai@^1.34.0",
+    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.89.0"
   }
 }
 </script>
-  </head>
+</head>
   <body>
     <div id="root"></div>
     <script type="module" src="./index.tsx"></script>
