@@ -33,6 +33,7 @@
       * { 
         -webkit-font-smoothing: antialiased; 
         box-sizing: border-box;
+        -webkit-tap-highlight-color: transparent; /* Supprime le flash gris au clic sur mobile */
       }
       
       html, body {
@@ -41,9 +42,9 @@
         margin: 0;
         padding: 0;
         background-color: #ffffff;
-        /* On laisse le scroll naturel au body pour éviter les blocages */
         overflow-y: auto;
         overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
       }
 
       #root {
@@ -52,20 +53,32 @@
         flex-direction: column;
       }
 
-      .active-scale:active { transform: scale(0.96); transition: transform 0.1s; }
+      /* Effet de clic ultra-rapide */
+      .active-scale:active { 
+        transform: scale(0.97); 
+        opacity: 0.8;
+      }
       
       .no-scrollbar::-webkit-scrollbar { display: none; }
 
-      /* Animation de pop-up (tiroir du bas) */
+      /* Animation de pop-up accélérée (150ms au lieu de 300ms) */
       .modal-drawer {
-        animation: drawerUp 0.3s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+        animation: drawerUp 0.15s cubic-bezier(0, 0, 0.2, 1) forwards;
+        will-change: transform;
       }
       @keyframes drawerUp {
         from { transform: translateY(100%); }
         to { transform: translateY(0); }
       }
 
-      /* Safe area helpers */
+      /* Media query pour n'appliquer le hover que sur PC */
+      @media (hover: hover) {
+        .hover-effect:hover {
+          border-color: rgba(0, 102, 255, 0.2) !important;
+          background-color: #f8fafc !important;
+        }
+      }
+
       .safe-pt { padding-top: var(--safe-top); }
       .safe-pb { padding-bottom: var(--safe-bottom); }
     </style>

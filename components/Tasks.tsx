@@ -21,17 +21,12 @@ const TaskCard = memo(({ task, onClick, clientName, assignee }: TaskCardProps) =
     }
   };
 
-  // On utilise onPointerDown pour un feedback visuel immédiat sans bloquer le clic
   return (
     <div 
-      onClick={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        onClick();
-      }}
-      className={`bg-white p-4 rounded-[1.8rem] border shadow-sm transition-all flex items-center justify-between group cursor-pointer mb-2.5 active:opacity-70 will-change-transform ${
-        isLate ? 'border-urgent bg-red-50/30' : 'border-slate-100 hover:border-primary/20'
-      }`}
+      onClick={onClick}
+      className={`bg-white p-4 rounded-[1.5rem] border shadow-sm transition-opacity flex items-center justify-between group cursor-pointer mb-2 active:opacity-60 select-none touch-manipulation ${
+        isLate ? 'border-urgent bg-red-50/50' : 'border-slate-100'
+      } hover-effect`}
     >
       <div className="flex items-center space-x-3 overflow-hidden flex-1 pointer-events-none">
         <div className={`w-1 h-8 rounded-full flex-shrink-0 ${
@@ -110,7 +105,7 @@ const Tasks: React.FC<TasksProps> = ({
   const currentTask = useMemo(() => tasks.find(t => t.id === selectedTaskId), [tasks, selectedTaskId]);
 
   return (
-    <div className="flex flex-col space-y-6 overflow-hidden">
+    <div className="flex flex-col space-y-5 overflow-hidden">
       <div className="flex items-center justify-between px-1">
         <div>
             <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Workflow</h2>
@@ -122,7 +117,7 @@ const Tasks: React.FC<TasksProps> = ({
         </div>
       </div>
 
-      <div className="space-y-1 pb-20 overflow-y-auto no-scrollbar touch-pan-y">
+      <div className="space-y-0 pb-20 overflow-y-auto no-scrollbar touch-pan-y will-change-transform">
         {tasks.map(task => (
           <TaskCard 
             key={task.id} 
@@ -140,7 +135,6 @@ const Tasks: React.FC<TasksProps> = ({
         )}
       </div>
 
-      {/* FAB ADD - Positionné plus haut pour éviter la barre nav */}
       <button 
         onClick={() => { setFormData({ title: '', description: '', assigneeId: currentUser.id, dueDate: new Date().toISOString().split('T')[0], status: TaskStatus.TODO, priority: 'medium' }); setEditingTask(null); setShowFormModal(true); }}
         className="fixed bottom-24 right-6 w-14 h-14 bg-primary text-white rounded-2xl shadow-xl flex items-center justify-center z-40 active:scale-90 transition-transform"
@@ -148,11 +142,10 @@ const Tasks: React.FC<TasksProps> = ({
         <Plus size={28} strokeWidth={3} />
       </button>
 
-      {/* POP-UP DETAILS - Utilisation de z-index supérieur */}
       {selectedTaskId && currentTask && (
         <div className="fixed inset-0 z-[1000] flex flex-col justify-end">
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setSelectedTaskId(null)}></div>
-          <div className="relative bg-white rounded-t-[2.5rem] p-6 pb-[calc(20px+env(safe-area-inset-bottom))] modal-drawer max-h-[90vh] overflow-y-auto">
+          <div className="absolute inset-0 bg-slate-900/40" onClick={() => setSelectedTaskId(null)}></div>
+          <div className="relative bg-white rounded-t-[2.5rem] p-6 pb-[calc(20px+env(safe-area-inset-bottom))] modal-drawer max-h-[92vh] overflow-y-auto shadow-2xl">
             <div className="w-10 h-1 bg-slate-100 rounded-full mx-auto mb-6"></div>
             
             <div className="flex justify-between items-start mb-6">
@@ -160,7 +153,7 @@ const Tasks: React.FC<TasksProps> = ({
                 <p className="text-[8px] font-black text-primary uppercase tracking-widest mb-1">{clientMap.get(currentTask.clientId || '')?.name || 'Interne'}</p>
                 <h3 className="text-xl font-black text-slate-900 tracking-tighter leading-tight break-words">{currentTask.title}</h3>
               </div>
-              <button onClick={() => setSelectedTaskId(null)} className="p-2 bg-slate-50 rounded-xl text-slate-400"><X size={20}/></button>
+              <button onClick={() => setSelectedTaskId(null)} className="p-2 bg-slate-50 rounded-xl text-slate-400 active:bg-slate-100"><X size={20}/></button>
             </div>
             
             <div className="space-y-6">
@@ -197,13 +190,13 @@ const Tasks: React.FC<TasksProps> = ({
               </div>
 
               <div className="p-5 bg-slate-50 rounded-2xl">
-                <span className="text-[8px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Notes Stratégiques</span>
+                <span className="text-[8px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Notes</span>
                 <p className="text-slate-600 font-bold text-xs leading-relaxed">{currentTask.description || 'Aucune note.'}</p>
               </div>
 
               <div className="flex space-x-2 pt-2">
-                <button onClick={() => { setEditingTask(currentTask); setFormData(currentTask); setShowFormModal(true); setSelectedTaskId(null); }} className="flex-1 py-4 bg-slate-900 text-white font-black rounded-2xl text-[9px] uppercase tracking-widest active:scale-95">ÉDITER</button>
-                <button onClick={() => { if(confirm('Supprimer ?')) { onDeleteTask(currentTask.id); setSelectedTaskId(null); } }} className="w-12 h-12 bg-red-50 text-urgent flex items-center justify-center rounded-2xl active:scale-95">
+                <button onClick={() => { setEditingTask(currentTask); setFormData(currentTask); setShowFormModal(true); setSelectedTaskId(null); }} className="flex-1 py-4 bg-slate-900 text-white font-black rounded-2xl text-[9px] uppercase tracking-widest active:bg-black">ÉDITER</button>
+                <button onClick={() => { if(confirm('Supprimer ?')) { onDeleteTask(currentTask.id); setSelectedTaskId(null); } }} className="w-12 h-12 bg-red-50 text-urgent flex items-center justify-center rounded-2xl active:bg-red-100">
                   <Trash2 size={20} />
                 </button>
               </div>
@@ -212,19 +205,18 @@ const Tasks: React.FC<TasksProps> = ({
         </div>
       )}
 
-      {/* MODAL FORMULAIRE MISSION */}
       {showFormModal && (
-        <div className="fixed inset-0 z-[2000] bg-white animate-in slide-in-from-bottom duration-300 flex flex-col">
+        <div className="fixed inset-0 z-[2000] bg-white animate-in slide-in-from-bottom duration-200 flex flex-col">
           <header className="px-5 py-4 flex items-center justify-between border-b border-slate-50 safe-pt">
             <button onClick={() => setShowFormModal(false)} className="p-2 bg-slate-50 rounded-xl text-slate-400"><X size={20}/></button>
             <h3 className="font-black text-slate-900 uppercase text-xs">Mission</h3>
-            <button onClick={handleSubmit} className="bg-primary text-white px-5 py-2.5 rounded-xl font-black text-[10px] uppercase shadow-lg active:scale-95">Enregistrer</button>
+            <button onClick={handleSubmit} className="bg-primary text-white px-5 py-2.5 rounded-xl font-black text-[10px] uppercase shadow-lg active:opacity-80">Enregistrer</button>
           </header>
           
           <div className="p-6 space-y-6 flex-1 overflow-y-auto no-scrollbar">
               <div className="space-y-1">
                 <label className="text-[8px] font-black uppercase text-slate-300 tracking-widest px-1">Titre</label>
-                <input type="text" className="w-full text-xl font-black outline-none placeholder-slate-100 text-slate-900" placeholder="Nom de la tâche..." value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
+                <input type="text" className="w-full text-xl font-black outline-none placeholder-slate-100 text-slate-900" placeholder="Nom..." value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
               </div>
 
               <div className="space-y-1">
