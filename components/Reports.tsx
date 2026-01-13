@@ -55,7 +55,8 @@ const Reports: React.FC<ReportsProps> = ({ currentUser, tasks = [], users = [], 
     const completed = fTasks.filter(t => t.status === TaskStatus.DONE).length;
     const total = fTasks.length;
     const rate = total > 0 ? Math.round((completed / total) * 100) : 0;
-    const value = fLeads.reduce((acc, curr) => acc + (curr.value || 0), 0);
+    // Fix: Using 'valueMin' instead of the non-existent 'value' property on Lead type.
+    const value = fLeads.reduce((acc, curr) => acc + (curr.valueMin || 0), 0);
     
     return {
       completionRate: rate,
@@ -156,7 +157,8 @@ const Reports: React.FC<ReportsProps> = ({ currentUser, tasks = [], users = [], 
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                   <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 8, fontWeight: 900, fill: '#94a3b8'}} />
                   <YAxis hide />
-                  <Bar dataKey="value" fill="#F97316" radius={[8, 8, 0, 0]} barSize={30} />
+                  {/* Fix: Using 'valueMin' as the dataKey since 'value' property does not exist on Lead type. */}
+                  <Bar dataKey="valueMin" fill="#F97316" radius={[8, 8, 0, 0]} barSize={30} />
                 </BarChart>
               </ResponsiveContainer>
             ) : (

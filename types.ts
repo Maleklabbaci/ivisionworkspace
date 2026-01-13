@@ -54,7 +54,8 @@ export interface Lead {
   phone?: string;
   status: 'new' | 'contacted' | 'qualified' | 'lost';
   source?: string;
-  value?: number;
+  valueMin?: number;
+  valueMax?: number;
   description?: string;
   createdAt: string;
 }

@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { Lead, User, UserRole } from '../types';
-import { Search, Plus, Target, X, Mail, Phone, Building2, Trash2, Edit2, ChevronRight, Zap, TrendingUp, Filter, Lock, DollarSign, PieChart, CheckCircle2 } from 'lucide-react';
+import { Search, Plus, Target, X, Mail, Phone, Building2, Trash2, Edit2, ChevronRight, Zap, TrendingUp, Filter, Lock, DollarSign, PieChart, CheckCircle2, AlertTriangle } from 'lucide-react';
 
 interface LeadsProps {
   leads: Lead[];
@@ -15,9 +15,10 @@ interface LeadsProps {
 const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteLead, onConvertToClient, currentUser }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [formData, setFormData] = useState<Partial<Lead>>({
-    name: '', company: '', email: '', phone: '', status: 'new', source: '', value: 0, description: ''
+    name: '', company: '', email: '', phone: '', status: 'new', source: '', valueMin: 0, valueMax: 0, description: ''
   });
 
   const canAccess = currentUser && (
@@ -33,13 +34,21 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
     );
   }, [leads, searchTerm]);
 
-  // Statistiques du pipeline
   const stats = useMemo(() => {
-    const totalValue = leads.reduce((acc, curr) => acc + (curr.value || 0), 0);
+    const totalValue = leads.reduce((acc, curr) => acc + (curr.valueMin || 0), 0);
     const qualifiedCount = leads.filter(l => l.status === 'qualified').length;
     const newCount = leads.filter(l => l.status === 'new').length;
     return { totalValue, qualifiedCount, newCount };
   }, [leads]);
+
+  const formatValueRange = (min?: number, max?: number) => {
+    const hasMin = min && min > 0;
+    const hasMax = max && max > 0;
+    if (!hasMin && !hasMax) return "À définir";
+    if (!hasMin && hasMax) return `Moins de ${max?.toLocaleString()} DZD`;
+    if (hasMin && !hasMax) return `Plus de ${min?.toLocaleString()} DZD`;
+    return `${min?.toLocaleString()} - ${max?.toLocaleString()} DZD`;
+  };
 
   if (!canAccess) {
     return (
@@ -64,7 +73,8 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
       phone: formData.phone,
       status: formData.status as any || 'new',
       source: formData.source,
-      value: Number(formData.value) || 0,
+      valueMin: Number(formData.valueMin) || 0,
+      valueMax: Number(formData.valueMax) || 0,
       description: formData.description,
       createdAt: selectedLead?.createdAt || new Date().toISOString().split('T')[0]
     };
@@ -74,6 +84,15 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
     
     setShowModal(false);
     setSelectedLead(null);
+  };
+
+  const confirmDelete = () => {
+    if (selectedLead) {
+        onDeleteLead(selectedLead.id);
+        setShowDeleteConfirm(false);
+        setShowModal(false);
+        setSelectedLead(null);
+    }
   };
 
   const inputClasses = "w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-slate-900 placeholder-slate-300 focus:bg-white focus:border-orange-400 outline-none transition-all text-sm";
@@ -98,7 +117,7 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
             />
           </div>
           <button 
-            onClick={() => { setSelectedLead(null); setFormData({name: '', company: '', email: '', phone: '', status: 'new', source: '', value: 0, description: ''}); setShowModal(true); }} 
+            onClick={() => { setSelectedLead(null); setFormData({name: '', company: '', email: '', phone: '', status: 'new', source: '', valueMin: 0, valueMax: 0, description: ''}); setShowModal(true); }} 
             className="bg-orange-500 text-white p-4 px-8 rounded-3xl shadow-2xl shadow-orange-500/20 active-scale flex items-center justify-center font-black text-[10px] tracking-widest uppercase border-4 border-white hover:bg-orange-600 transition-all"
           >
             <Plus size={20} className="mr-2" strokeWidth={3} /> CAPTURER UN LEAD
@@ -113,7 +132,7 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
             <TrendingUp size={24} />
           </div>
           <div>
-            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Valeur du Pipeline</p>
+            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Valeur du Pipeline (Min)</p>
             <p className="text-xl font-black text-slate-900">{stats.totalValue.toLocaleString()} <span className="text-[10px] text-orange-500 ml-1">DZD</span></p>
           </div>
         </div>
@@ -163,7 +182,9 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
             <div className="mt-8 pt-5 border-t border-slate-50 flex items-center justify-between">
               <div className="flex flex-col">
                 <span className="text-[8px] font-black text-slate-300 uppercase tracking-widest mb-0.5">Valeur estimée</span>
-                <span className="text-sm font-black text-slate-900">{(lead.value || 0).toLocaleString()} <span className="text-[9px] text-orange-500 ml-0.5">DZD</span></span>
+                <span className="text-xs font-black text-slate-900">
+                    {formatValueRange(lead.valueMin, lead.valueMax)}
+                </span>
               </div>
               <div className="flex space-x-2">
                 <button 
@@ -187,6 +208,25 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
           </div>
         )}
       </div>
+
+      {/* Confirmation Modal (Custom Delete) */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-[3000] flex items-center justify-center p-6 animate-in fade-in duration-200">
+          <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-xl" onClick={() => setShowDeleteConfirm(false)}></div>
+          <div className="relative bg-white rounded-[3rem] p-10 max-w-sm w-full shadow-2xl animate-in zoom-in-95 duration-300 text-center border-b-[12px] border-red-500">
+            <div className="w-20 h-20 bg-red-50 rounded-3xl flex items-center justify-center mx-auto mb-6 text-red-500 animate-pulse">
+                <AlertTriangle size={40} />
+            </div>
+            <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tighter leading-tight">Supprimer prospect ?</h3>
+            <p className="text-slate-400 font-bold text-xs uppercase tracking-widest mt-4">Cette action est irréversible pour <span className="text-slate-900">{selectedLead?.name}</span>.</p>
+            
+            <div className="mt-10 space-y-3">
+                <button onClick={confirmDelete} className="w-full py-5 bg-red-500 text-white font-black rounded-3xl shadow-xl shadow-red-500/20 active-scale uppercase text-[10px] tracking-widest border-4 border-white">DÉTRUIRE DÉFINITIVEMENT</button>
+                <button onClick={() => setShowDeleteConfirm(false)} className="w-full py-4 text-slate-300 font-black uppercase text-[10px] tracking-widest hover:text-slate-900 transition-colors">ANNULER</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal Form */}
       {showModal && (
@@ -225,20 +265,29 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-3">Status actuel</label>
-                    <select className={inputClasses + " appearance-none"} value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as any})}>
-                      <option value="new">Nouveau Lead</option>
-                      <option value="contacted">Contact établi</option>
-                      <option value="qualified">Opportunité qualifiée</option>
-                      <option value="lost">Opportunité perdue</option>
-                    </select>
+                <div className="space-y-4">
+                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-3 block">Budget estimé (Fourchette DZD)</label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+                    <div className="relative">
+                        <DollarSign size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" />
+                        <input type="number" className={inputClasses + " pl-10"} value={formData.valueMin || ''} onChange={e => setFormData({...formData, valueMin: Number(e.target.value) || 0})} placeholder="Minimum" />
+                    </div>
+                    <div className="relative">
+                        <DollarSign size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" />
+                        <input type="number" className={inputClasses + " pl-10"} value={formData.valueMax || ''} onChange={e => setFormData({...formData, valueMax: Number(e.target.value) || 0})} placeholder="Maximum" />
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-3">Valeur Estimée (DZD)</label>
-                    <input type="number" className={inputClasses} value={formData.value} onChange={e => setFormData({...formData, value: Number(e.target.value)})} placeholder="Ex: 50000" />
-                  </div>
+                  <p className="text-[9px] text-slate-400 font-bold px-3 italic">Laissez un champ vide pour indiquer "Moins de..." ou "Plus de..."</p>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-3">Status actuel</label>
+                  <select className={inputClasses + " appearance-none"} value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as any})}>
+                    <option value="new">Nouveau Lead</option>
+                    <option value="contacted">Contact établi</option>
+                    <option value="qualified">Opportunité qualifiée</option>
+                    <option value="lost">Opportunité perdue</option>
+                  </select>
                 </div>
 
                 <div className="space-y-2">
@@ -262,7 +311,7 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
                 
                 {selectedLead && (
                   <button 
-                    onClick={() => { if(confirm('Voulez-vous vraiment supprimer ce prospect ?')) { onDeleteLead(selectedLead.id); setShowModal(false); } }} 
+                    onClick={() => setShowDeleteConfirm(true)} 
                     className="w-full py-4 text-urgent font-black text-[10px] uppercase tracking-widest hover:bg-red-50 rounded-2xl transition-colors"
                   >
                     Supprimer définitivement

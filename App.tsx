@@ -148,9 +148,45 @@ const AppContent: React.FC<{
 
   const handleAddLead = async (lead: Lead) => {
     const newId = generateUUID();
-    setLeads(prev => [{ ...lead, id: newId }, ...prev]);
+    const leadWithId = { ...lead, id: newId };
+    setLeads(prev => [leadWithId, ...prev]);
     addNotification("Lead capturé", lead.name, "success");
-    await supabase.from('leads').insert({ ...lead, id: newId });
+    
+    await supabase.from('leads').insert({
+      id: newId,
+      name: lead.name,
+      company: lead.company,
+      email: lead.email,
+      phone: lead.phone,
+      status: lead.status,
+      source: lead.source,
+      value_min: lead.valueMin,
+      value_max: lead.valueMax,
+      description: lead.description,
+      created_at: new Date().toISOString()
+    });
+  };
+
+  const handleUpdateLead = async (lead: Lead) => {
+    setLeads(prev => prev.map(l => l.id === lead.id ? lead : l));
+    await supabase.from('leads').update({
+      name: lead.name,
+      company: lead.company,
+      email: lead.email,
+      phone: lead.phone,
+      status: lead.status,
+      source: lead.source,
+      value_min: lead.valueMin,
+      value_max: lead.valueMax,
+      description: lead.description
+    }).eq('id', lead.id);
+  };
+
+  const handleDeleteLead = async (id: string) => {
+    const leadToDelete = leads.find(l => l.id === id);
+    setLeads(prev => prev.filter(l => l.id !== id));
+    addNotification("Lead supprimé", leadToDelete?.name || "Un prospect a été retiré", "info");
+    await supabase.from('leads').delete().eq('id', id);
   };
 
   const handleSendMessage = async (content: string, channelId: string) => {
@@ -185,7 +221,9 @@ const AppContent: React.FC<{
           <Route path="/reports" element={<Reports currentUser={currentUser} tasks={tasks} users={users} leads={leads} />} />
           <Route path="/clients" element={<Clients clients={clients} tasks={tasks} fileLinks={fileLinks} currentUser={currentUser} onAddClient={async() => {}} onUpdateClient={async() => {}} onDeleteClient={async() => {}} />} />
           <Route path="/calendar" element={<Calendar tasks={tasks} users={users} currentUser={currentUser} onAddTask={handleAddTask} onUpdateStatus={handleUpdateTaskStatus} />} />
-          <Route path="/leads" element={<Leads leads={leads} onAddLead={handleAddLead} onUpdateLead={async() => {}} onDeleteLead={async() => {}} onConvertToClient={async() => {}} currentUser={currentUser} />} />
+          <Route path="/leads" element={<Leads leads={leads} onAddLead={handleAddLead} onUpdateLead={handleUpdateLead} onDeleteLead={handleDeleteLead} onConvertToClient={async() => {
+            // Logique de conversion ici
+          }} currentUser={currentUser} />} />
         </Routes>
       </Suspense>
     </Layout>
@@ -247,7 +285,21 @@ const App: React.FC = () => {
         }
       }
       if (clRes.data) setClients(clRes.data as Client[]);
-      if (lRes.data) setLeads(lRes.data as Lead[]);
+      
+      if (lRes.data) setLeads(lRes.data.map((l: any) => ({
+        id: l.id,
+        name: l.name,
+        company: l.company,
+        email: l.email,
+        phone: l.phone,
+        status: l.status,
+        source: l.source,
+        valueMin: l.value_min || 0,
+        valueMax: l.value_max || 0,
+        description: l.description,
+        createdAt: l.created_at
+      })));
+
       if (cRes.data) setChannels(cRes.data as Channel[]);
       if (mRes.data) setMessages(mRes.data.map((m: any) => ({
         id: m.id, userId: m.user_id, channelId: m.channel_id, content: m.content,
@@ -255,8 +307,8 @@ const App: React.FC = () => {
         fullTimestamp: m.created_at
       })));
       if (tRes.data) setTasks(tRes.data.map((t: any) => ({
-        id: t.id, title: t.title, description: t.description, assigneeId: t.assignee_id,
-        dueDate: t.due_date, status: t.status as TaskStatus, type: t.type, priority: t.priority, clientId: t.client_id
+        id: t.id, title: t.title, description: t.description, assignee_id: t.assignee_id,
+        dueDate: t.due_date, status: t.status as TaskStatus, type: t.type, priority: t.priority, client_id: t.client_id
       })));
     } catch (e) { console.error(e); }
     finally { setIsLoading(false); }
