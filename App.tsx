@@ -136,7 +136,7 @@ const AppContent: React.FC<{
     const newTask = { ...task, id: taskId };
     setTasks(prev => [newTask, ...prev]);
     try {
-      await supabase.from('tasks').insert({
+      const { error } = await supabase.from('tasks').insert({
         id: taskId,
         title: newTask.title,
         description: newTask.description,
@@ -147,14 +147,18 @@ const AppContent: React.FC<{
         type: newTask.type || 'admin',
         priority: newTask.priority || 'medium'
       });
-      addNotification("Tâche créée", newTask.title, "success");
-    } catch (error) { console.error(error); }
+      if (error) throw error;
+      addNotification("Mission Ajoutée", newTask.title, "success");
+    } catch (error) { 
+      console.error(error);
+      addNotification("Erreur", "Échec ajout mission", "urgent");
+    }
   };
 
   const handleUpdateTask = async (task: Task) => {
     setTasks(prev => prev.map(t => t.id === task.id ? task : t));
     try {
-      await supabase.from('tasks').update({
+      const { error } = await supabase.from('tasks').update({
         title: task.title,
         description: task.description,
         assignee_id: formatIdForDb(task.assigneeId),
@@ -163,21 +167,46 @@ const AppContent: React.FC<{
         status: task.status,
         priority: task.priority
       }).eq('id', task.id);
+      if (error) throw error;
       addNotification("Mise à jour", "Modifications enregistrées", "success");
-    } catch (error) { console.error(error); }
+    } catch (error) { 
+      console.error(error);
+      addNotification("Erreur", "Échec sauvegarde", "urgent");
+    }
   };
 
   const handleDeleteTask = async (taskId: string) => {
     setTasks(prev => prev.filter(t => t.id !== taskId));
     try {
-      await supabase.from('tasks').delete().eq('id', taskId);
-      addNotification("Supprimé", "Mission retirée de la liste", "info");
-    } catch (error) { console.error(error); }
+      const { error } = await supabase.from('tasks').delete().eq('id', taskId);
+      if (error) throw error;
+      addNotification("Supprimé", "Mission retirée avec succès", "info");
+    } catch (error) { 
+      console.error(error);
+      addNotification("Erreur", "Échec suppression", "urgent");
+    }
   };
 
   const handleUpdateTaskStatus = async (taskId: string, status: TaskStatus) => {
+    // 1. Mise à jour LOCALE immédiate (UI réactive)
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status } : t));
-    await supabase.from('tasks').update({ status }).eq('id', taskId);
+    
+    try {
+      // 2. Mise à jour DISTANTE
+      const { error } = await supabase
+        .from('tasks')
+        .update({ status: status })
+        .eq('id', taskId);
+
+      if (error) throw error;
+      
+      addNotification("Statut Mis à jour", `Mission passée en ${status}`, "success");
+    } catch (error) {
+      console.error("Erreur mise à jour statut:", error);
+      addNotification("Erreur", "Le statut n'a pas pu être synchronisé", "urgent");
+      // 3. Rollback en cas d'erreur critique
+      await fetchInitialData(); 
+    }
   };
 
   const handleAddClient = async (client: Client) => {
@@ -288,7 +317,6 @@ const AppContent: React.FC<{
     addNotification("Conversion...", "Transfert vers le CRM", "info");
     try {
       const newClientId = generateUUID();
-      // 1. Créer le client avec un ID généré explicitement
       const { error: clientError } = await supabase.from('clients').insert({
         id: newClientId,
         name: lead.name,
@@ -300,7 +328,6 @@ const AppContent: React.FC<{
 
       if (clientError) throw clientError;
 
-      // 2. Mettre à jour l'état local clients
       setClients(prev => [...prev, {
         id: newClientId,
         name: lead.name,
@@ -310,7 +337,6 @@ const AppContent: React.FC<{
         description: lead.description
       }]);
 
-      // 3. Supprimer le lead
       await supabase.from('leads').delete().eq('id', formatIdForDb(lead.id));
       setLeads(prev => prev.filter(l => l.id !== lead.id));
 

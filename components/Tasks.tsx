@@ -150,6 +150,15 @@ const Tasks: React.FC<TasksProps> = ({
 
   const currentTask = useMemo(() => tasks.find(t => t.id === selectedTaskId), [tasks, selectedTaskId]);
 
+  const handleStatusChange = (status: TaskStatus) => {
+    if (currentTask) {
+      // 1. On lance l'action
+      onUpdateStatus(currentTask.id, status);
+      // 2. On ferme immédiatement pour que l'utilisateur voie le changement dans la liste
+      setSelectedTaskId(null);
+    }
+  };
+
   const FilterButton = ({ id, label, count, icon: Icon }: { id: TimeFilter, label: string, count: number, icon: any }) => (
     <button 
       onClick={() => setActiveFilter(id)}
@@ -238,7 +247,7 @@ const Tasks: React.FC<TasksProps> = ({
                 ].map((s) => (
                   <button 
                     key={s.id} 
-                    onClick={() => { onUpdateStatus(currentTask.id, s.id); setSelectedTaskId(null); }}
+                    onClick={() => handleStatusChange(s.id)}
                     className={`flex items-center space-x-3 p-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${currentTask.status === s.id ? s.color : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}
                   >
                     <s.icon size={16} />
