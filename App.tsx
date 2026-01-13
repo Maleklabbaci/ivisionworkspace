@@ -128,16 +128,16 @@ const AppContent: React.FC<{
 
   const formatIdForDb = (id: any) => {
     if (!id) return null;
-    if (!isNaN(id)) return Number(id);
     return String(id);
   };
 
   const handleAddTask = async (task: Task) => {
-    const newTask = { ...task, id: generateUUID() };
+    const taskId = generateUUID();
+    const newTask = { ...task, id: taskId };
     setTasks(prev => [newTask, ...prev]);
     try {
       await supabase.from('tasks').insert({
-        id: newTask.id,
+        id: taskId,
         title: newTask.title,
         description: newTask.description,
         assignee_id: formatIdForDb(task.assigneeId),
@@ -148,6 +148,30 @@ const AppContent: React.FC<{
         priority: newTask.priority || 'medium'
       });
       addNotification("Tâche créée", newTask.title, "success");
+    } catch (error) { console.error(error); }
+  };
+
+  const handleUpdateTask = async (task: Task) => {
+    setTasks(prev => prev.map(t => t.id === task.id ? task : t));
+    try {
+      await supabase.from('tasks').update({
+        title: task.title,
+        description: task.description,
+        assignee_id: formatIdForDb(task.assigneeId),
+        client_id: formatIdForDb(task.clientId),
+        due_date: task.dueDate,
+        status: task.status,
+        priority: task.priority
+      }).eq('id', task.id);
+      addNotification("Mise à jour", "Modifications enregistrées", "success");
+    } catch (error) { console.error(error); }
+  };
+
+  const handleDeleteTask = async (taskId: string) => {
+    setTasks(prev => prev.filter(t => t.id !== taskId));
+    try {
+      await supabase.from('tasks').delete().eq('id', taskId);
+      addNotification("Supprimé", "Mission retirée de la liste", "info");
     } catch (error) { console.error(error); }
   };
 
@@ -345,7 +369,7 @@ const AppContent: React.FC<{
         <Routes>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<Dashboard currentUser={currentUser} tasks={tasks} notifications={notifications} onNavigate={(v) => navigate(`/${v}`)} />} />
-          <Route path="/tasks" element={<Tasks tasks={tasks} users={users} clients={clients} currentUser={currentUser} onUpdateStatus={handleUpdateTaskStatus} onAddTask={handleAddTask} onUpdateTask={async() => {}} onDeleteTask={async() => {}} />} />
+          <Route path="/tasks" element={<Tasks tasks={tasks} users={users} clients={clients} currentUser={currentUser} onUpdateStatus={handleUpdateTaskStatus} onAddTask={handleAddTask} onUpdateTask={handleUpdateTask} onDeleteTask={handleDeleteTask} />} />
           <Route path="/chat" element={<Chat currentUser={currentUser} users={users} channels={channels} currentChannelId={currentChannelId} messages={messages} onlineUserIds={new Set()} onChannelChange={setCurrentChannelId} onSendMessage={handleSendMessage} onAddChannel={async() => {}} onDeleteChannel={() => {}} />} />
           <Route path="/files" element={<Files tasks={tasks} messages={messages} fileLinks={fileLinks} clients={clients} currentUser={currentUser} onAddFileLink={handleAddFileLink} onDeleteFileLink={handleDeleteFileLink} />} />
           <Route path="/team" element={<Team currentUser={currentUser} users={users} tasks={tasks} activities={[]} onlineUserIds={new Set()} onAddUser={async() => {}} onRemoveUser={async() => {}} onUpdateRole={() => {}} onApproveUser={() => {}} onUpdateMember={async(id, d) => {}} />} />
@@ -410,7 +434,7 @@ const App: React.FC = () => {
             if (user) {
               const name = user.user_metadata?.name || registerName || user.email?.split('@')[0];
               const newUser = { id: user.id, name, email: user.email!, role: UserRole.MEMBER, avatar: `https://ui-avatars.com/api/?name=${name}&background=random`, status: 'active', permissions: {} };
-              await supabase.from('users').insert(newUser);
+              await supabase.from('users').upsert(newUser);
               setCurrentUser(newUser as User);
             }
           }
@@ -446,12 +470,12 @@ const App: React.FC = () => {
         id: t.id, 
         title: t.title, 
         description: t.description, 
-        assignee_id: t.assignee_id,
-        due_date: t.due_date, 
+        assigneeId: t.assignee_id,
+        dueDate: t.due_date, 
         status: t.status as TaskStatus, 
         type: t.type, 
         priority: t.priority, 
-        client_id: t.client_id
+        clientId: t.client_id
       })));
     } catch (e) { console.error(e); }
     finally { setIsLoading(false); }

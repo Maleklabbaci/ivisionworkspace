@@ -100,21 +100,21 @@ const Tasks: React.FC<TasksProps> = ({
     return d.toISOString().split('T')[0];
   }, []);
 
+  const [formData, setFormData] = useState<Partial<Task>>({
+    title: '', description: '', assigneeId: currentUser.id, dueDate: todayStr, status: TaskStatus.TODO, priority: 'medium'
+  });
+
   const filteredTasks = useMemo(() => {
     return tasks.filter(task => {
       if (activeFilter === 'all') return true;
-      
-      // LOGIQUE : "Aujourd'hui" inclut les tâches en retard (overdue) non terminées
       if (activeFilter === 'today') {
         const isOverdue = task.dueDate < todayStr && task.status !== TaskStatus.DONE;
         const isToday = task.dueDate === todayStr;
         return isToday || isOverdue;
       }
-      
       if (activeFilter === 'week') {
         return task.dueDate >= todayStr && task.dueDate <= endOfWeekStr;
       }
-      
       if (activeFilter === 'month') {
         const d = new Date(task.dueDate);
         const now = new Date();
@@ -141,15 +141,12 @@ const Tasks: React.FC<TasksProps> = ({
     if (editingTask) {
       onUpdateTask({ ...editingTask, ...formData } as Task);
     } else {
-      onAddTask({ id: `temp-${Date.now()}`, ...formData } as Task);
+      onAddTask({ ...formData } as Task);
     }
     setShowFormModal(false);
     setEditingTask(null);
-  }, [editingTask, onAddTask, onUpdateTask]);
-
-  const [formData, setFormData] = useState<Partial<Task>>({
-    title: '', description: '', assigneeId: currentUser.id, dueDate: todayStr, status: TaskStatus.TODO, priority: 'medium'
-  });
+    setFormData({ title: '', description: '', assigneeId: currentUser.id, dueDate: todayStr, status: TaskStatus.TODO, priority: 'medium' });
+  }, [editingTask, formData, onAddTask, onUpdateTask, currentUser.id, todayStr]);
 
   const currentTask = useMemo(() => tasks.find(t => t.id === selectedTaskId), [tasks, selectedTaskId]);
 
@@ -209,8 +206,12 @@ const Tasks: React.FC<TasksProps> = ({
       </div>
 
       <button 
-        onClick={() => { setFormData({ title: '', description: '', assigneeId: currentUser.id, dueDate: todayStr, status: TaskStatus.TODO, priority: 'medium' }); setEditingTask(null); setShowFormModal(true); }}
-        className="fixed bottom-[calc(90px+env(safe-area-inset-bottom))] right-6 lg:right-12 w-16 h-16 bg-primary text-white rounded-3xl shadow-[0_20px_50px_rgba(0,102,255,0.3)] flex items-center justify-center z-40 active:scale-90 transition-all border-4 border-white"
+        onClick={() => { 
+          setFormData({ title: '', description: '', assigneeId: currentUser.id, dueDate: todayStr, status: TaskStatus.TODO, priority: 'medium' }); 
+          setEditingTask(null); 
+          setShowFormModal(true); 
+        }}
+        className="fixed bottom-[calc(90px+env(safe-area-inset-bottom))] right-6 lg:right-12 w-16 h-16 bg-primary text-white rounded-3xl shadow-[0_20px_50px_rgba(0,102,255,0.3)] flex items-center justify-center z-40 active-scale transition-all border-4 border-white"
       >
         <Plus size={32} strokeWidth={3} />
       </button>
@@ -237,7 +238,7 @@ const Tasks: React.FC<TasksProps> = ({
                 ].map((s) => (
                   <button 
                     key={s.id} 
-                    onClick={() => onUpdateStatus(currentTask.id, s.id)}
+                    onClick={() => { onUpdateStatus(currentTask.id, s.id); setSelectedTaskId(null); }}
                     className={`flex items-center space-x-3 p-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${currentTask.status === s.id ? s.color : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}
                   >
                     <s.icon size={16} />
@@ -270,7 +271,7 @@ const Tasks: React.FC<TasksProps> = ({
 
               <div className="flex space-x-4 pt-4">
                 <button onClick={() => { setEditingTask(currentTask); setFormData(currentTask); setShowFormModal(true); setSelectedTaskId(null); }} className="flex-1 py-5 bg-slate-900 text-white font-black rounded-3xl text-xs uppercase tracking-[0.2em] active-scale border-4 border-white shadow-xl transition-all">ÉDITER LA MISSION</button>
-                <button onClick={() => { if(confirm('Supprimer définitivement ?')) { onDeleteTask(currentTask.id); setSelectedTaskId(null); } }} className="w-20 h-20 bg-red-50 text-urgent flex items-center justify-center rounded-3xl active-scale border-4 border-white shadow-xl hover:bg-urgent hover:text-white transition-all">
+                <button onClick={() => { if(confirm('Supprimer définitivement cette mission ?')) { onDeleteTask(currentTask.id); setSelectedTaskId(null); } }} className="w-20 h-20 bg-red-50 text-urgent flex items-center justify-center rounded-3xl active-scale border-4 border-white shadow-xl hover:bg-urgent hover:text-white transition-all">
                   <Trash2 size={24} />
                 </button>
               </div>
@@ -285,7 +286,7 @@ const Tasks: React.FC<TasksProps> = ({
           <div className="relative bg-white rounded-t-[3rem] lg:rounded-[3rem] shadow-2xl w-full max-w-xl mx-auto overflow-hidden animate-in slide-in-from-bottom duration-300">
             <header className="px-8 py-6 flex items-center justify-between border-b border-slate-50 bg-white">
               <button onClick={() => setShowFormModal(false)} className="p-3 bg-slate-50 rounded-2xl text-slate-400 active-scale"><X size={24}/></button>
-              <h3 className="font-black text-slate-900 uppercase text-sm tracking-tighter">Configuration Mission</h3>
+              <h3 className="font-black text-slate-900 uppercase text-sm tracking-tighter">{editingTask ? 'Mise à jour Mission' : 'Configuration Mission'}</h3>
               <button onClick={handleSubmit} className="bg-primary text-white px-8 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl active-scale border-2 border-white">ENREGISTRER</button>
             </header>
             

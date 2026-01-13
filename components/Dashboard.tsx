@@ -23,18 +23,20 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], notifica
     (tasks || []).filter(t => t?.dueDate && t.dueDate < today && t.status !== TaskStatus.DONE), 
   [tasks, today]);
 
-  // TRI : Priorité Haute d'abord, puis par date d'échéance
+  // TRI : Priorité Haute d'abord, puis par date d'échéance. On ne garde que les tâches non terminées.
   const myActiveTasks = useMemo(() => {
-    const active = (tasks || []).filter(t => t?.assigneeId === currentUser?.id && t.status !== TaskStatus.DONE);
+    const active = (tasks || []).filter(t => t.status !== TaskStatus.DONE);
     return active.sort((a, b) => {
       const priorityWeight = { high: 0, medium: 1, low: 2 };
       const weightA = priorityWeight[a.priority || 'medium'];
       const weightB = priorityWeight[b.priority || 'medium'];
       
       if (weightA !== weightB) return weightA - weightB;
+      
+      // Date secondaire (plus proche d'abord)
       return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
     });
-  }, [tasks, currentUser?.id]);
+  }, [tasks]);
   
   const performanceScore = useMemo(() => {
     if (!tasks || tasks.length === 0) return 100;
@@ -48,6 +50,10 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], notifica
     return Math.max(0, Math.min(100, Math.round(score / tasks.length)));
   }, [tasks, today]);
 
+  const blockedCount = useMemo(() => 
+    (tasks || []).filter(t => t && t.status === TaskStatus.BLOCKED).length, 
+  [tasks]);
+
   useEffect(() => {
     if (overdueTasks.length > 0) {
       const hasSeenAlert = sessionStorage.getItem('ivision_alert_v2');
@@ -58,11 +64,16 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], notifica
     }
   }, [overdueTasks.length]);
 
+  const closeAlert = () => {
+    setShowCriticalPopup(false);
+    sessionStorage.setItem('ivision_alert_v2', 'true');
+  };
+
   const handleGetInsights = async () => {
     if (loadingAi) return;
     setLoadingAi(true);
     try {
-      const context = `Score: ${performanceScore}%. Missions: ${tasks.length}. Retards: ${overdueTasks.length}.`;
+      const context = `Score: ${performanceScore}%. Missions: ${tasks.length}. Retards: ${overdueTasks.length}. Bloquées: ${blockedCount}.`;
       const insight = await generateMarketingInsight(context);
       setAiInsight(insight);
       setShowInsightModal(true);
@@ -78,14 +89,14 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], notifica
       {/* ALERTE RETARD */}
       {showCriticalPopup && (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md animate-in fade-in" onClick={() => setShowCriticalPopup(false)}></div>
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md animate-in fade-in" onClick={closeAlert}></div>
           <div className="relative bg-white rounded-[3rem] shadow-2xl w-full max-w-xs overflow-hidden animate-in zoom-in-95 border-t-[12px] border-urgent p-8 text-center">
               <div className="w-20 h-20 bg-red-50 rounded-3xl flex items-center justify-center mx-auto mb-6">
                 <AlertTriangle size={40} className="text-urgent" />
               </div>
               <h3 className="text-2xl font-black uppercase tracking-tighter text-slate-900">Urgences</h3>
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2">{overdueTasks.length} missions en retard critique</p>
-              <button onClick={() => { setShowCriticalPopup(false); onNavigate('tasks'); }} className="w-full mt-8 py-5 bg-urgent text-white font-black rounded-2xl shadow-xl shadow-red-500/20 uppercase text-[10px] tracking-widest active-scale">RÉGULARISER MAINTENANT</button>
+              <button onClick={() => { closeAlert(); onNavigate('tasks'); }} className="w-full mt-8 py-5 bg-urgent text-white font-black rounded-2xl shadow-xl shadow-red-500/20 uppercase text-[10px] tracking-widest active-scale">RÉGULARISER MAINTENANT</button>
           </div>
         </div>
       )}
@@ -95,9 +106,10 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], notifica
         <div className="fixed inset-0 z-[1000] flex items-center justify-center p-6">
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-md animate-in fade-in" onClick={() => setShowInsightModal(false)}></div>
           <div className="relative bg-white rounded-[3rem] shadow-2xl w-full max-w-md overflow-hidden animate-in slide-in-from-bottom-8">
-            <div className="p-10 bg-slate-900 text-white">
+            <div className="p-10 bg-slate-900 text-white relative">
                 <Sparkles size={32} className="text-primary mb-4" />
-                <h3 className="text-2xl font-black uppercase tracking-tighter">Analyse Stratégique</h3>
+                <h3 className="text-2xl font-black uppercase tracking-tighter leading-none">Analyse Stratégique</h3>
+                <p className="text-slate-500 font-bold text-[9px] mt-2 uppercase tracking-widest">iVISION Intelligence</p>
             </div>
             <div className="p-10 space-y-6">
               <p className="text-sm font-bold text-slate-600 leading-relaxed">{aiInsight}</p>
@@ -138,7 +150,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], notifica
                <Target size={22} />
             </div>
             <div>
-                <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Leads Actifs</p>
+                <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Pipeline</p>
                 <p className="text-4xl font-black text-slate-900 tracking-tighter mt-1">{tasks.filter(t => t.clientId).length}</p>
             </div>
         </div>
@@ -168,7 +180,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], notifica
                   <p className="text-[10px] text-slate-300 font-black uppercase tracking-widest">Zéro mission en cours</p>
                 </div>
               ) : (
-                myActiveTasks.slice(0, 4).map(task => {
+                myActiveTasks.slice(0, 5).map(task => {
                   const isLate = task.dueDate && task.dueDate < today;
                   const priorityColor = task.priority === 'high' ? 'bg-urgent' : task.priority === 'medium' ? 'bg-orange-400' : 'bg-primary';
                   
@@ -192,13 +204,14 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], notifica
             </div>
           </section>
 
-          <section className="bg-slate-50 p-8 rounded-[3rem] border border-slate-100 flex flex-col items-center text-center justify-center group">
+          <section className="bg-slate-50 p-8 rounded-[3rem] border border-slate-100 flex flex-col items-center text-center justify-center group relative overflow-hidden">
+                <div className="absolute top-[-10px] right-[-10px] w-24 h-24 bg-primary/5 rounded-full blur-2xl"></div>
                 <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-primary mb-6 shadow-sm group-hover:rotate-12 transition-transform">
                     <TrendingUp size={24} />
                 </div>
                 <h4 className="font-black text-slate-900 text-lg uppercase tracking-tight">Analyse<br/>Performance</h4>
                 <p className="text-[10px] text-slate-400 font-bold mt-3 uppercase tracking-widest">Suivi des KPIs stratégiques.</p>
-                <button onClick={() => onNavigate('reports')} className="mt-8 px-8 py-4 bg-slate-900 text-white font-black text-[10px] uppercase tracking-widest rounded-2xl active-scale border-4 border-white shadow-xl">ACCÉDER</button>
+                <button onClick={() => onNavigate('reports')} className="mt-8 px-8 py-4 bg-slate-900 text-white font-black text-[10px] uppercase tracking-widest rounded-2xl active-scale border-4 border-white shadow-xl relative z-10">ACCÉDER</button>
           </section>
       </div>
     </div>
