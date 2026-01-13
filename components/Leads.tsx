@@ -1,7 +1,7 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Lead, User, UserRole } from '../types';
-import { Search, Plus, Target, X, Mail, Phone, Building2, Trash2, Edit2, ChevronRight, Zap, TrendingUp, Filter, Lock, DollarSign, PieChart, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Search, Plus, Target, X, Mail, Phone, Building2, Trash2, Edit2, ChevronRight, Zap, TrendingUp, Filter, Lock, DollarSign, PieChart, CheckCircle2, AlertTriangle, Loader2 } from 'lucide-react';
 
 interface LeadsProps {
   leads: Lead[];
@@ -16,6 +16,8 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [canConfirmDelete, setCanConfirmDelete] = useState(false);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [formData, setFormData] = useState<Partial<Lead>>({
     name: '', company: '', email: '', phone: '', status: 'new', source: '', valueMin: 0, valueMax: 0, description: ''
@@ -40,6 +42,15 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
     const newCount = leads.filter(l => l.status === 'new').length;
     return { totalValue, qualifiedCount, newCount };
   }, [leads]);
+
+  // Sécurité anti-double-clic pour le modal de suppression
+  useEffect(() => {
+    if (showDeleteConfirm) {
+      setCanConfirmDelete(false);
+      const timer = setTimeout(() => setCanConfirmDelete(true), 600);
+      return () => clearTimeout(timer);
+    }
+  }, [showDeleteConfirm]);
 
   const formatValueRange = (min?: number, max?: number) => {
     const hasMin = min && min > 0;
@@ -86,13 +97,20 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
     setSelectedLead(null);
   };
 
-  const confirmDelete = () => {
-    if (selectedLead) {
-        onDeleteLead(selectedLead.id);
-        setShowDeleteConfirm(false);
-        setShowModal(false);
-        setSelectedLead(null);
-    }
+  const confirmDelete = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!selectedLead || isDeleting || !canConfirmDelete) return;
+
+    setIsDeleting(true);
+    onDeleteLead(selectedLead.id);
+    
+    // Fermeture avec léger délai pour l'animation
+    setTimeout(() => {
+      setShowDeleteConfirm(false);
+      setShowModal(false);
+      setSelectedLead(null);
+      setIsDeleting(false);
+    }, 200);
   };
 
   const inputClasses = "w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-slate-900 placeholder-slate-300 focus:bg-white focus:border-orange-400 outline-none transition-all text-sm";
@@ -117,6 +135,7 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
             />
           </div>
           <button 
+            type="button"
             onClick={() => { setSelectedLead(null); setFormData({name: '', company: '', email: '', phone: '', status: 'new', source: '', valueMin: 0, valueMax: 0, description: ''}); setShowModal(true); }} 
             className="bg-orange-500 text-white p-4 px-8 rounded-3xl shadow-2xl shadow-orange-500/20 active-scale flex items-center justify-center font-black text-[10px] tracking-widest uppercase border-4 border-white hover:bg-orange-600 transition-all"
           >
@@ -188,6 +207,7 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
               </div>
               <div className="flex space-x-2">
                 <button 
+                  type="button"
                   onClick={(e) => { e.stopPropagation(); onConvertToClient(lead); }} 
                   className="w-10 h-10 bg-orange-50 text-orange-500 rounded-xl hover:bg-orange-500 hover:text-white transition-all shadow-sm flex items-center justify-center border border-orange-100"
                   title="Convertir en Client CRM"
@@ -212,17 +232,32 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
       {/* Confirmation Modal (Custom Delete) */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 z-[3000] flex items-center justify-center p-6 animate-in fade-in duration-200">
-          <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-xl" onClick={() => setShowDeleteConfirm(false)}></div>
+          <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-xl" onClick={() => !isDeleting && setShowDeleteConfirm(false)}></div>
           <div className="relative bg-white rounded-[3rem] p-10 max-w-sm w-full shadow-2xl animate-in zoom-in-95 duration-300 text-center border-b-[12px] border-red-500">
-            <div className="w-20 h-20 bg-red-50 rounded-3xl flex items-center justify-center mx-auto mb-6 text-red-500 animate-pulse">
-                <AlertTriangle size={40} />
+            <div className="w-20 h-20 bg-red-50 rounded-3xl flex items-center justify-center mx-auto mb-6 text-red-500">
+                <AlertTriangle size={40} className={isDeleting ? 'animate-spin' : 'animate-pulse'} />
             </div>
             <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tighter leading-tight">Supprimer prospect ?</h3>
             <p className="text-slate-400 font-bold text-xs uppercase tracking-widest mt-4">Cette action est irréversible pour <span className="text-slate-900">{selectedLead?.name}</span>.</p>
             
             <div className="mt-10 space-y-3">
-                <button onClick={confirmDelete} className="w-full py-5 bg-red-500 text-white font-black rounded-3xl shadow-xl shadow-red-500/20 active-scale uppercase text-[10px] tracking-widest border-4 border-white">DÉTRUIRE DÉFINITIVEMENT</button>
-                <button onClick={() => setShowDeleteConfirm(false)} className="w-full py-4 text-slate-300 font-black uppercase text-[10px] tracking-widest hover:text-slate-900 transition-colors">ANNULER</button>
+                <button 
+                  type="button"
+                  disabled={isDeleting || !canConfirmDelete}
+                  onClick={confirmDelete} 
+                  className="w-full py-5 bg-red-500 text-white font-black rounded-3xl shadow-xl shadow-red-500/20 active-scale uppercase text-[10px] tracking-widest border-4 border-white disabled:opacity-50 flex items-center justify-center"
+                >
+                  {isDeleting ? <Loader2 className="animate-spin" size={20} /> : 'DÉTRUIRE DÉFINITIVEMENT'}
+                </button>
+                {!isDeleting && (
+                  <button 
+                    type="button"
+                    onClick={() => setShowDeleteConfirm(false)} 
+                    className="w-full py-4 text-slate-300 font-black uppercase text-[10px] tracking-widest hover:text-slate-900 transition-colors"
+                  >
+                    ANNULER
+                  </button>
+                )}
             </div>
           </div>
         </div>
@@ -231,14 +266,14 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
       {/* Modal Form */}
       {showModal && (
         <div className="fixed inset-0 z-[2000] flex flex-col justify-end lg:justify-center p-0 lg:p-6">
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md animate-in fade-in" onClick={() => setShowModal(false)}></div>
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md animate-in fade-in" onClick={() => !isDeleting && setShowModal(false)}></div>
           <div className="relative bg-white rounded-t-[3rem] lg:rounded-[4rem] w-full max-w-2xl mx-auto flex flex-col modal-drawer shadow-2xl overflow-hidden border-b-[12px] border-orange-500">
             <header className="px-10 py-8 border-b border-slate-50 flex items-center justify-between bg-white z-20">
               <div>
                 <h3 className="text-xl font-black text-slate-900 tracking-tighter uppercase">{selectedLead ? 'Modifier Prospect' : 'Nouveau Prospect'}</h3>
                 <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest mt-1">Saisie rapide iVISION</p>
               </div>
-              <button onClick={() => setShowModal(false)} className="p-4 bg-slate-50 rounded-2xl text-slate-400 active-scale hover:bg-slate-100 transition-colors"><X size={24}/></button>
+              <button type="button" onClick={() => setShowModal(false)} className="p-4 bg-slate-50 rounded-2xl text-slate-400 active-scale hover:bg-slate-100 transition-colors"><X size={24}/></button>
             </header>
             
             <div className="p-10 space-y-8 flex-1 overflow-y-auto no-scrollbar pb-16">
@@ -303,6 +338,7 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
               
               <div className="pt-4 flex flex-col gap-4">
                 <button 
+                  type="button"
                   onClick={handleSubmit} 
                   className="w-full py-6 bg-orange-500 text-white rounded-[2.5rem] font-black text-xs uppercase tracking-[0.2em] shadow-2xl shadow-orange-500/20 border-4 border-white active-scale transition-all"
                 >
@@ -311,7 +347,8 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
                 
                 {selectedLead && (
                   <button 
-                    onClick={() => setShowDeleteConfirm(true)} 
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(true); }} 
                     className="w-full py-4 text-urgent font-black text-[10px] uppercase tracking-widest hover:bg-red-50 rounded-2xl transition-colors"
                   >
                     Supprimer définitivement

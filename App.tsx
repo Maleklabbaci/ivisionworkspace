@@ -68,6 +68,7 @@ const AuthUI = ({ isRegistering, setIsRegistering, handleAuth, email, setEmail, 
       </div>
       
       <button 
+        type="submit"
         disabled={isAuthProcessing} 
         className="w-full py-5 bg-primary text-white font-black rounded-3xl shadow-2xl shadow-primary/30 active-scale disabled:opacity-50 border-4 border-white uppercase text-[10px] tracking-widest mt-4 flex items-center justify-center"
       >
@@ -76,6 +77,7 @@ const AuthUI = ({ isRegistering, setIsRegistering, handleAuth, email, setEmail, 
     </form>
     
     <button 
+      type="button"
       onClick={() => setIsRegistering(!isRegistering)} 
       className="w-full mt-10 text-[9px] font-black text-slate-300 uppercase tracking-widest hover:text-primary transition-colors"
     >
@@ -113,7 +115,14 @@ const AppContent: React.FC<{
   addNotification: (title: string, message: string, type?: 'info' | 'success' | 'urgent') => void;
   removeNotification: (id: string) => void;
   notifications: ToastNotification[];
-}> = ({ currentUser, setCurrentUser, users, setUsers, tasks, setTasks, clients, setClients, leads, setLeads, channels, setChannels, messages, setMessages, fileLinks, addNotification, removeNotification, notifications }) => {
+  // Added fetchInitialData to props to fix the error in handleDeleteLead
+  fetchInitialData: (userId?: string) => Promise<void>;
+}> = ({ 
+  currentUser, setCurrentUser, users, setUsers, tasks, setTasks, 
+  clients, setClients, leads, setLeads, channels, setChannels, 
+  messages, setMessages, fileLinks, addNotification, removeNotification, 
+  notifications, fetchInitialData 
+}) => {
   const navigate = useNavigate();
   const [currentChannelId, setCurrentChannelId] = useState('general');
 
@@ -183,10 +192,23 @@ const AppContent: React.FC<{
   };
 
   const handleDeleteLead = async (id: string) => {
+    if (!id) return;
     const leadToDelete = leads.find(l => l.id === id);
+    if (!leadToDelete) return;
+
+    // Mise à jour optimiste immédiate
     setLeads(prev => prev.filter(l => l.id !== id));
-    addNotification("Lead supprimé", leadToDelete?.name || "Un prospect a été retiré", "info");
-    await supabase.from('leads').delete().eq('id', id);
+    addNotification("Lead supprimé", leadToDelete.name, "info");
+    
+    try {
+      const { error } = await supabase.from('leads').delete().eq('id', id);
+      if (error) throw error;
+    } catch (error) {
+      console.error("Erreur suppression lead:", error);
+      addNotification("Erreur", "Impossible de supprimer le lead sur le serveur", "urgent");
+      // fetchInitialData is now available as a prop
+      fetchInitialData(); 
+    }
   };
 
   const handleSendMessage = async (content: string, channelId: string) => {
@@ -220,10 +242,8 @@ const AppContent: React.FC<{
           <Route path="/settings" element={<Settings currentUser={currentUser} onUpdateProfile={async(d) => {}} />} />
           <Route path="/reports" element={<Reports currentUser={currentUser} tasks={tasks} users={users} leads={leads} />} />
           <Route path="/clients" element={<Clients clients={clients} tasks={tasks} fileLinks={fileLinks} currentUser={currentUser} onAddClient={async() => {}} onUpdateClient={async() => {}} onDeleteClient={async() => {}} />} />
-          <Route path="/calendar" element={<Calendar tasks={tasks} users={users} currentUser={currentUser} onAddTask={handleAddTask} onUpdateStatus={handleUpdateTaskStatus} />} />
-          <Route path="/leads" element={<Leads leads={leads} onAddLead={handleAddLead} onUpdateLead={handleUpdateLead} onDeleteLead={handleDeleteLead} onConvertToClient={async() => {
-            // Logique de conversion ici
-          }} currentUser={currentUser} />} />
+          <Route path="/calendar" element={<Calendar tasks={tasks} users={users} currentUser={currentUser} onAddTask={handleAddTask} onUpdateStatus={handleUpdateStatus} />} />
+          <Route path="/leads" element={<Leads leads={leads} onAddLead={handleAddLead} onUpdateLead={handleUpdateLead} onDeleteLead={handleDeleteLead} onConvertToClient={async() => {}} currentUser={currentUser} />} />
         </Routes>
       </Suspense>
     </Layout>
@@ -306,9 +326,17 @@ const App: React.FC = () => {
         timestamp: new Date(m.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
         fullTimestamp: m.created_at
       })));
+      // FIX: Correctly map snake_case from database to camelCase properties required by Task interface
       if (tRes.data) setTasks(tRes.data.map((t: any) => ({
-        id: t.id, title: t.title, description: t.description, assignee_id: t.assignee_id,
-        dueDate: t.due_date, status: t.status as TaskStatus, type: t.type, priority: t.priority, client_id: t.client_id
+        id: t.id, 
+        title: t.title, 
+        description: t.description, 
+        assigneeId: t.assignee_id,
+        dueDate: t.due_date, 
+        status: t.status as TaskStatus, 
+        type: t.type, 
+        priority: t.priority, 
+        clientId: t.client_id
       })));
     } catch (e) { console.error(e); }
     finally { setIsLoading(false); }
@@ -363,8 +391,9 @@ const App: React.FC = () => {
           users={users} setUsers={setUsers} tasks={tasks} setTasks={setTasks}
           clients={clients} setClients={setClients} leads={leads} setLeads={setLeads}
           channels={channels} setChannels={setChannels} messages={messages} setMessages={setMessages}
-          fileLinks={[]} notifications={notifications}
+          fileLinks={fileLinks} notifications={notifications}
           addNotification={addNotification} removeNotification={(id) => setNotifications(prev => prev.filter(n => n.id !== id))} 
+          fetchInitialData={fetchInitialData}
         />
       )}
     </HashRouter>
