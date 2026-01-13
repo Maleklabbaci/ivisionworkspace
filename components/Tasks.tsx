@@ -33,7 +33,7 @@ const TaskCard = memo(({ task, onClick, clientName, assignee }: TaskCardProps) =
         <div className={`w-1.5 h-10 rounded-full flex-shrink-0 ${
           task.status === TaskStatus.DONE ? 'bg-success' : 
           task.status === TaskStatus.BLOCKED || isLate ? 'bg-urgent' :
-          task.status === TaskStatus.IN_PROGRESS ? 'bg-primary' : 'bg-slate-200'
+          task.status === TaskStatus.IN_PROGRESS ? 'bg-[#1E3A8A]' : 'bg-[#60A5FA]'
         }`}></div>
         <div className="truncate">
           <h4 className={`font-black text-slate-900 truncate text-sm tracking-tight uppercase ${task.status === TaskStatus.DONE ? 'opacity-30 line-through' : ''}`}>
@@ -228,8 +228,8 @@ const Tasks: React.FC<TasksProps> = ({
             <div className="space-y-8 max-h-[70vh] overflow-y-auto no-scrollbar">
               <div className="grid grid-cols-2 gap-3">
                 {[
-                  { id: TaskStatus.TODO, label: 'À faire', color: 'bg-slate-100 text-slate-500', icon: Clock },
-                  { id: TaskStatus.IN_PROGRESS, label: 'En cours', color: 'bg-primary text-white shadow-xl', icon: PlayCircle },
+                  { id: TaskStatus.TODO, label: 'À faire', color: 'bg-[#60A5FA] text-white shadow-md', icon: Clock },
+                  { id: TaskStatus.IN_PROGRESS, label: 'En cours', color: 'bg-[#1E3A8A] text-white shadow-xl', icon: PlayCircle },
                   { id: TaskStatus.BLOCKED, label: 'Bloqué', color: 'bg-urgent text-white shadow-xl', icon: PauseCircle },
                   { id: TaskStatus.DONE, label: 'Terminé', color: 'bg-success text-white shadow-xl', icon: CheckCircle },
                 ].map((s) => (

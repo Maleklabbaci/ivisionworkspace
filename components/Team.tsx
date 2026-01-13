@@ -19,9 +19,11 @@ interface TeamProps {
 const PERMISSIONS_LIST = [
   { key: 'canCreateTasks', label: 'Ajouter Tâches' },
   { key: 'canManageTeam', label: 'Gérer Équipe' },
-  { key: 'canManageClients', label: 'Gérer Clients' },
+  { key: 'canManageLeads', label: 'Gérer les Leads' },
+  { key: 'canManageClients', label: 'Gérer Clients (CRM)' },
   { key: 'canViewReports', label: 'Rapports IA' },
   { key: 'canManageChannels', label: 'Gérer Salons' },
+  { key: 'canViewFiles', label: 'Gérer Documents' },
 ];
 
 const Team: React.FC<TeamProps> = ({ currentUser, users, onlineUserIds, onAddUser, onRemoveUser, onUpdateMember }) => {

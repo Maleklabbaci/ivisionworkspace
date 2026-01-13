@@ -24,11 +24,11 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], notifica
   }, []);
   
   const overdueTasks = useMemo(() => 
-    tasks.filter(t => t?.dueDate && t.dueDate < today && t.status !== TaskStatus.DONE), 
+    (tasks || []).filter(t => t?.dueDate && t.dueDate < today && t.status !== TaskStatus.DONE), 
   [tasks, today]);
 
   const myActiveTasks = useMemo(() => 
-    tasks.filter(t => t?.assigneeId === currentUser?.id && t.status !== TaskStatus.DONE), 
+    (tasks || []).filter(t => t?.assigneeId === currentUser?.id && t.status !== TaskStatus.DONE), 
   [tasks, currentUser?.id]);
   
   const completionRate = useMemo(() => {
@@ -38,7 +38,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], notifica
   }, [tasks]);
 
   const blockedCount = useMemo(() => 
-    tasks.filter(t => t.status === TaskStatus.BLOCKED).length, 
+    (tasks || []).filter(t => t && t.status === TaskStatus.BLOCKED).length, 
   [tasks]);
 
   // Alerte critique : Une seule fois par session
@@ -62,7 +62,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], notifica
     if (loadingAi) return;
     setLoadingAi(true);
     try {
-      const context = `Opérations : ${tasks.length} missions. Retards : ${overdueTasks.length}. Bloquées : ${blockedCount}.`;
+      const context = `Opérations : ${tasks?.length || 0} missions. Retards : ${overdueTasks.length}. Bloquées : ${blockedCount}.`;
       const insight = await generateMarketingInsight(context);
       setAiInsight(insight);
       setShowInsightModal(true);
@@ -128,10 +128,10 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], notifica
       <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 px-1">
         <div>
           <h1 className="text-4xl font-black tracking-tighter text-slate-900 uppercase">Dashboard</h1>
-          <p className="text-slate-300 font-bold text-[8px] uppercase tracking-[0.5em] mt-1">Status opérationnel : {tasks.length > 0 ? 'ACTIF' : 'ATTENTE'}</p>
+          <p className="text-slate-300 font-bold text-[8px] uppercase tracking-[0.5em] mt-1">Status opérationnel : {tasks?.length > 0 ? 'ACTIF' : 'ATTENTE'}</p>
         </div>
         <div className="hidden lg:flex items-center space-x-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50 p-2 px-4 rounded-xl border border-slate-100">
-            <div className={`w-2 h-2 rounded-full animate-pulse ${tasks.length > 0 ? 'bg-success' : 'bg-orange-400'}`}></div>
+            <div className={`w-2 h-2 rounded-full animate-pulse ${tasks?.length > 0 ? 'bg-success' : 'bg-orange-400'}`}></div>
             <span>Système iV Connecté</span>
         </div>
       </div>

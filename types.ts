@@ -19,6 +19,7 @@ export interface UserPermissions {
   canViewReports?: boolean;
   canExportReports?: boolean;
   canManageClients?: boolean;
+  canManageLeads?: boolean;
   canManageCampaigns?: boolean;
 }
 
@@ -43,6 +44,19 @@ export interface Client {
   phone?: string;
   address?: string;
   description?: string;
+}
+
+export interface Lead {
+  id: string;
+  name: string;
+  company?: string;
+  email?: string;
+  phone?: string;
+  status: 'new' | 'contacted' | 'qualified' | 'lost';
+  source?: string;
+  value?: number;
+  description?: string;
+  createdAt: string;
 }
 
 export interface ActivityLog {
@@ -125,7 +139,7 @@ export interface ToastNotification {
   type: 'info' | 'success' | 'urgent';
 }
 
-export type ViewState = 'dashboard' | 'tasks' | 'chat' | 'files' | 'team' | 'settings' | 'reports' | 'clients' | 'calendar';
+export type ViewState = 'dashboard' | 'tasks' | 'chat' | 'files' | 'team' | 'settings' | 'reports' | 'clients' | 'calendar' | 'leads';
 
 export type CampaignCategory = 'content' | 'ads' | 'social' | 'mixed';
 

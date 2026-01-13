@@ -1,7 +1,7 @@
 
-import React, { useState } from 'react';
-import { LayoutGrid, CheckSquare, MessageSquare, Briefcase, Settings, LogOut, Search, Menu, Bell, Users, FileText, Calendar as CalendarIcon } from 'lucide-react';
-import { User, Task, Message, Channel, FileLink } from '../types';
+import React, { useState, useMemo } from 'react';
+import { LayoutGrid, CheckSquare, MessageSquare, Briefcase, Settings, LogOut, Search, Menu, Bell, Users, FileText, Calendar as CalendarIcon, Target, TrendingUp, Sparkles, X } from 'lucide-react';
+import { User, Task, Message, Channel, FileLink, UserRole } from '../types';
 import { useLocation, useNavigate } from 'react-router-dom';
 import GlobalSearch from './GlobalSearch';
 
@@ -29,20 +29,45 @@ const Layout: React.FC<LayoutProps> = ({
   const currentPath = location.pathname.replace('/', '') || 'dashboard';
 
   const handleNavigate = (path: string) => {
+    if (path === currentPath && !isMoreMenuOpen) return;
     navigate(`/${path}`);
     setIsMoreMenuOpen(false);
-    window.scrollTo(0, 0);
+    window.scrollTo({ top: 0, behavior: 'instant' });
   };
 
-  const navItems = [
+  // 1. Navigation Mobile (Accès Direct : Home, Missions, Planning, Leads)
+  const mobileNavItems = useMemo(() => [
     { id: 'dashboard', label: 'Home', icon: LayoutGrid, path: 'dashboard' },
     { id: 'tasks', label: 'Missions', icon: CheckSquare, path: 'tasks' },
     { id: 'calendar', label: 'Planning', icon: CalendarIcon, path: 'calendar' },
-    { id: 'clients', label: 'CRM', icon: Briefcase, path: 'clients' },
-  ];
+    { id: 'leads', label: 'Leads', icon: Target, path: 'leads' },
+  ], []);
+
+  // 2. Menu "Plus" (CRM, Rapports, Chat, Équipe, Docs, Profil)
+  const moreMenuItems = useMemo(() => {
+    const items = [];
+    
+    // CRM et Rapports en priorité dans le menu Plus
+    if (currentUser.role !== UserRole.MEMBER || currentUser.permissions?.canManageClients) {
+      items.push({ id: 'clients', label: 'CRM Clients', icon: Briefcase, color: 'text-blue-500' });
+    }
+    
+    if (currentUser.role !== UserRole.MEMBER || currentUser.permissions?.canViewReports) {
+      items.push({ id: 'reports', label: 'Rapports IA', icon: TrendingUp, color: 'text-indigo-500' });
+    }
+
+    items.push(
+      { id: 'chat', label: 'Messages', icon: MessageSquare, color: 'text-orange-500', badge: unreadMessageCount > 0 },
+      { id: 'team', label: 'Équipe', icon: Users, color: 'text-primary' },
+      { id: 'files', label: 'Docs', icon: FileText, color: 'text-success' },
+      { id: 'settings', label: 'Profil', icon: Settings, color: 'text-slate-400' }
+    );
+
+    return items;
+  }, [currentUser, unreadMessageCount]);
 
   return (
-    <div className="min-h-screen w-full flex flex-col lg:flex-row bg-white font-sans text-slate-900">
+    <div className="min-h-screen w-full flex flex-col lg:flex-row bg-white font-sans text-slate-900 overflow-x-hidden">
       <GlobalSearch 
         isOpen={isSearchOpen} 
         onClose={() => setIsSearchOpen(false)} 
@@ -53,64 +78,67 @@ const Layout: React.FC<LayoutProps> = ({
         fileLinks={fileLinks}
       />
       
-      {/* SIDEBAR PC - Fixe et optimisée */}
-      <aside className="hidden lg:flex flex-col w-72 bg-slate-50 border-r border-slate-100 h-screen sticky top-0 overflow-y-auto no-scrollbar">
+      {/* SIDEBAR PC */}
+      <aside className="hidden lg:flex flex-col w-72 bg-slate-50 border-r border-slate-100 h-screen sticky top-0">
         <div className="p-8 flex items-center space-x-4">
             <div className="w-12 h-12 bg-primary rounded-2xl flex items-center justify-center text-white font-black text-sm shadow-xl shadow-primary/20">iV</div>
-            <div>
-              <span className="font-black text-xl tracking-tighter block leading-none">iVISION</span>
-              <span className="text-[9px] font-black text-primary uppercase tracking-[0.3em] mt-1 block">Workspace</span>
+            <div className="flex flex-col">
+              <span className="font-black text-xl tracking-tighter leading-none">iVISION</span>
+              <span className="text-[9px] font-black text-primary uppercase tracking-[0.3em] mt-1">Workspace</span>
             </div>
         </div>
         
-        <nav className="flex-1 px-6 space-y-2 mt-4">
-            {navItems.map(item => (
-                <button 
-                    key={item.id}
-                    onClick={() => handleNavigate(item.path)}
-                    className={`w-full flex items-center space-x-4 px-5 py-4 rounded-2xl font-bold text-sm transition-all sidebar-item ${currentPath === item.id ? 'bg-primary text-white shadow-2xl shadow-primary/30' : 'text-slate-400'}`}
-                >
+        <nav className="flex-1 px-6 space-y-1 mt-4 overflow-y-auto no-scrollbar">
+            {mobileNavItems.map(item => (
+                <button key={item.id} onClick={() => handleNavigate(item.path)} className={`w-full flex items-center space-x-4 px-5 py-4 rounded-2xl font-bold text-sm transition-all sidebar-item ${currentPath === item.id ? 'bg-primary text-white shadow-lg' : 'text-slate-400'}`}>
                     <item.icon size={20} />
                     <span>{item.label}</span>
                 </button>
             ))}
             
-            <div className="pt-8 pb-4">
-              <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest px-5">Outils d'agence</span>
+            <div className="pt-6 pb-2 px-5">
+              <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Expansion</span>
             </div>
 
-            {[
-              { id: 'chat', label: 'Communication', icon: MessageSquare, path: 'chat' },
-              { id: 'team', label: 'Collaborateurs', icon: Users, path: 'team' },
-              { id: 'files', label: 'Documents', icon: FileText, path: 'files' },
-            ].map(item => (
-              <button 
-                  key={item.id}
-                  onClick={() => handleNavigate(item.path)}
-                  className={`w-full flex items-center space-x-4 px-5 py-4 rounded-2xl font-bold text-sm transition-all sidebar-item ${currentPath === item.id ? 'bg-primary text-white shadow-2xl shadow-primary/30' : 'text-slate-400'}`}
-              >
+            <button onClick={() => handleNavigate('clients')} className={`w-full flex items-center space-x-4 px-5 py-4 rounded-2xl font-bold text-sm transition-all sidebar-item ${currentPath === 'clients' ? 'bg-primary text-white shadow-lg' : 'text-slate-400'}`}>
+              <Briefcase size={20} />
+              <span>CRM Clients</span>
+            </button>
+            <button onClick={() => handleNavigate('reports')} className={`w-full flex items-center space-x-4 px-5 py-4 rounded-2xl font-bold text-sm transition-all sidebar-item ${currentPath === 'reports' ? 'bg-primary text-white shadow-lg' : 'text-slate-400'}`}>
+              <TrendingUp size={20} />
+              <span>Rapports IA</span>
+            </button>
+
+            <div className="pt-6 pb-2 px-5">
+              <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Outils</span>
+            </div>
+            {['chat', 'team', 'files'].map(id => {
+              const item = moreMenuItems.find(m => m.id === id)!;
+              return (
+                <button key={id} onClick={() => handleNavigate(id)} className={`w-full flex items-center space-x-4 px-5 py-4 rounded-2xl font-bold text-sm transition-all sidebar-item ${currentPath === id ? 'bg-primary text-white shadow-lg' : 'text-slate-400'}`}>
                   <item.icon size={20} />
                   <span>{item.label}</span>
-              </button>
-            ))}
+                </button>
+              );
+            })}
         </nav>
 
         <div className="p-6 border-t border-slate-100 bg-slate-50/50">
             <button onClick={() => handleNavigate('settings')} className="w-full flex items-center space-x-4 p-4 rounded-2xl hover:bg-white transition-all group">
-                <img src={currentUser.avatar} className="w-10 h-10 rounded-xl object-cover shadow-sm group-hover:scale-110 transition-transform" alt="" />
+                <img src={currentUser.avatar} className="w-10 h-10 rounded-xl object-cover shadow-sm" alt="" />
                 <div className="flex-1 text-left truncate">
-                    <p className="font-black text-slate-900 text-xs truncate uppercase tracking-tight">{currentUser.name}</p>
+                    <p className="font-black text-slate-900 text-xs truncate uppercase">{currentUser.name}</p>
                     <p className="text-[10px] text-slate-400 font-bold">{currentUser.role}</p>
                 </div>
             </button>
-            <button onClick={onLogout} className="w-full mt-4 flex items-center justify-center space-x-3 p-4 text-red-500 font-black bg-white rounded-2xl shadow-sm hover:bg-red-50 transition-colors text-[10px] uppercase tracking-widest">
+            <button onClick={onLogout} className="w-full mt-2 flex items-center justify-center space-x-3 p-4 text-red-500 font-black bg-white rounded-2xl shadow-sm hover:bg-red-50 transition-colors text-[10px] uppercase tracking-widest">
                 <LogOut size={16} />
                 <span>Déconnexion</span>
             </button>
         </div>
       </aside>
 
-      {/* MOBILE HEADER - Inchangé */}
+      {/* MOBILE HEADER */}
       <header className="lg:hidden sticky top-0 flex items-center justify-between px-5 py-3 safe-pt bg-white/95 backdrop-blur-md z-[50] border-b border-slate-50">
         <div className="flex items-center space-x-2">
           <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white font-black text-[10px]">iV</div>
@@ -124,15 +152,14 @@ const Layout: React.FC<LayoutProps> = ({
         </div>
       </header>
 
-      {/* MAIN CONTENT - Largeur étendue sur PC */}
-      <main className="flex-1 w-full bg-white relative">
+      <main className="flex-1 w-full bg-white relative min-h-screen">
         <div className="w-full max-w-screen-2xl mx-auto px-4 py-6 lg:px-12 lg:py-10 pb-32">
           {children}
         </div>
 
-        {/* MOBILE NAV - Inchangé */}
-        <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-100 flex justify-around items-center px-4 pt-2 pb-[calc(10px+env(safe-area-inset-bottom))] z-[50] shadow-[0_-10px_30px_rgba(0,0,0,0.05)] rounded-t-[32px]">
-          {navItems.map(item => {
+        {/* MOBILE BOTTOM NAV - HOME, MISSIONS, PLANNING, LEADS + PLUS */}
+        <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-100 flex justify-around items-center px-2 pt-2 pb-[calc(10px+env(safe-area-inset-bottom))] z-[50] shadow-[0_-10px_30px_rgba(0,0,0,0.05)] rounded-t-[32px]">
+          {mobileNavItems.map(item => {
             const isActive = currentPath === item.id;
             return (
               <button key={item.id} onClick={() => handleNavigate(item.path)} className="flex flex-col items-center justify-center flex-1 py-1 transition-all active-scale">
@@ -143,34 +170,32 @@ const Layout: React.FC<LayoutProps> = ({
           })}
           <button onClick={() => setIsMoreMenuOpen(true)} className="flex flex-col items-center justify-center flex-1 py-1 text-slate-300 active-scale relative">
             <Menu size={20} />
-            {unreadMessageCount > 0 && <span className="absolute top-1 right-4 w-2 h-2 bg-primary rounded-full border border-white"></span>}
+            {(unreadMessageCount > 0) && <span className="absolute top-1 right-1/2 translate-x-3 w-2 h-2 bg-primary rounded-full border border-white"></span>}
             <span className="text-[8px] font-black mt-1 uppercase tracking-tighter opacity-60">Plus</span>
           </button>
         </nav>
       </main>
 
-      {/* MORE MENU MOBILE - Inchangé */}
+      {/* MORE MENU DRAWER */}
       {isMoreMenuOpen && (
         <div className="fixed inset-0 z-[100] flex flex-col justify-end lg:hidden">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setIsMoreMenuOpen(false)}></div>
-          <div className="relative bg-white rounded-t-[40px] p-6 pb-[calc(32px+env(safe-area-inset-bottom))] modal-drawer">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-in fade-in duration-100" onClick={() => setIsMoreMenuOpen(false)}></div>
+          <div className="relative bg-white rounded-t-[40px] p-6 pb-[calc(32px+env(safe-area-inset-bottom))] modal-drawer shadow-2xl">
             <div className="w-12 h-1.5 bg-slate-100 rounded-full mx-auto mb-8"></div>
-            <div className="grid grid-cols-2 gap-4">
-              {[
-                { id: 'team', label: 'Équipe', icon: Users, color: 'text-primary' },
-                { id: 'files', label: 'Docs', icon: FileText, color: 'text-success' },
-                { id: 'chat', label: 'Chat', icon: MessageSquare, color: 'text-orange-500', badge: unreadMessageCount > 0 },
-                { id: 'settings', label: 'Profil', icon: Settings, color: 'text-slate-400' }
-              ].map(item => (
-                <button key={item.id} onClick={() => handleNavigate(item.id)} className="flex flex-col items-center justify-center p-6 bg-slate-50 rounded-3xl border border-slate-100 active-scale relative">
-                  <div className={`w-12 h-12 bg-white rounded-2xl flex items-center justify-center mb-3 shadow-sm ${item.color}`}>
+            <div className="grid grid-cols-3 gap-3">
+              {moreMenuItems.map(item => (
+                <button key={item.id} onClick={() => handleNavigate(item.id)} className="flex flex-col items-center justify-center p-4 bg-slate-50 rounded-3xl border border-slate-100 active-scale relative transition-all">
+                  <div className={`w-12 h-12 bg-white rounded-2xl flex items-center justify-center mb-2 shadow-sm ${item.color}`}>
                     <item.icon size={22} />
                   </div>
-                  {item.badge && <span className="absolute top-4 right-8 bg-primary text-white text-[8px] font-black px-1.5 py-0.5 rounded-full border-2 border-white">{unreadMessageCount}</span>}
-                  <span className="font-black text-slate-700 text-[10px] uppercase tracking-widest">{item.label}</span>
+                  {item.badge && <span className="absolute top-3 right-5 bg-primary text-white text-[8px] font-black px-1.5 py-0.5 rounded-full border-2 border-white">{unreadMessageCount}</span>}
+                  <span className="font-black text-slate-700 text-[8px] uppercase tracking-widest text-center">{item.label}</span>
                 </button>
               ))}
             </div>
+            <button onClick={onLogout} className="w-full mt-6 py-4 bg-red-50 text-red-500 rounded-2xl font-black text-[10px] uppercase tracking-widest border border-red-100 active-scale">
+              Déconnexion
+            </button>
           </div>
         </div>
       )}
