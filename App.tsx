@@ -21,7 +21,7 @@ const Leads = lazy(() => import('./components/Leads'));
 
 const generateUUID = () => crypto.randomUUID();
 
-// Interface d'authentification complète
+// Interface d'authentification
 const AuthUI = ({ isRegistering, setIsRegistering, handleAuth, email, setEmail, password, setPassword, registerName, setRegisterName, isAuthProcessing }: any) => (
   <div className="bg-white w-full max-w-sm rounded-[3rem] shadow-2xl p-10 border border-slate-50 animate-in zoom-in-95 duration-300">
     <div className="text-center mb-10">
@@ -126,12 +126,9 @@ const AppContent: React.FC<{
   const navigate = useNavigate();
   const [currentChannelId, setCurrentChannelId] = useState('general');
 
-  // Formatage de l'ID pour correspondre aux colonnes de type BIGINT ou UUID de la DB
   const formatIdForDb = (id: any) => {
     if (!id) return null;
-    // Si c'est un prospect (généralement BIGINT auto-incrémenté)
     if (!isNaN(id)) return Number(id);
-    // Sinon c'est un UUID (string)
     return String(id);
   };
 
@@ -159,6 +156,41 @@ const AppContent: React.FC<{
     await supabase.from('tasks').update({ status }).eq('id', taskId);
   };
 
+  const handleAddClient = async (client: Client) => {
+    const newClient = { ...client, id: generateUUID() };
+    setClients(prev => [...prev, newClient]);
+    try {
+      await supabase.from('clients').insert({
+        id: newClient.id,
+        name: newClient.name,
+        company: newClient.company,
+        email: newClient.email,
+        phone: newClient.phone,
+        address: newClient.address,
+        description: newClient.description
+      });
+      addNotification("Client ajouté", newClient.name, "success");
+    } catch (error) { console.error(error); }
+  };
+
+  const handleUpdateClient = async (client: Client) => {
+    setClients(prev => prev.map(c => c.id === client.id ? client : c));
+    await supabase.from('clients').update({
+      name: client.name,
+      company: client.company,
+      email: client.email,
+      phone: client.phone,
+      address: client.address,
+      description: client.description
+    }).eq('id', client.id);
+  };
+
+  const handleDeleteClient = async (id: string) => {
+    setClients(prev => prev.filter(c => c.id !== id));
+    await supabase.from('clients').delete().eq('id', id);
+    addNotification("Client révoqué", "Suppression effectuée", "info");
+  };
+
   const handleAddLead = async (lead: Lead) => {
     addNotification("Enregistrement...", lead.name, "info");
     try {
@@ -175,7 +207,6 @@ const AppContent: React.FC<{
       }).select();
 
       if (error) throw error;
-
       if (data && data[0]) {
         const serverLead = {
           id: data[0].id,
@@ -194,8 +225,8 @@ const AppContent: React.FC<{
         addNotification("Prospect capturé", lead.name, "success");
       }
     } catch (error: any) {
-      console.error("Erreur ajout lead:", error);
-      addNotification("Erreur de Syntaxe", "Vérifiez les types de colonnes (UUID/INT)", "urgent");
+      console.error(error);
+      addNotification("Erreur", "Échec insertion lead", "urgent");
     }
   };
 
@@ -218,27 +249,51 @@ const AppContent: React.FC<{
     if (!id) return;
     const targetId = formatIdForDb(id);
     const leadToDelete = leads.find(l => String(l.id) === String(id));
-    
     try {
-      const { error, count } = await supabase
-        .from('leads')
-        .delete({ count: 'exact' })
-        .eq('id', targetId);
-
+      const { error } = await supabase.from('leads').delete().eq('id', targetId);
       if (error) throw error;
-
-      if (count === 0) {
-        throw new Error("Aucune ligne trouvée. Vérifiez que 'id' est bien la clé primaire.");
-      }
-
       setLeads(prev => prev.filter(l => String(l.id) !== String(id)));
       addNotification("Prospect supprimé", leadToDelete?.name || "", "info");
-      
     } catch (error: any) {
-      console.error("DÉTAILS ERREUR DB:", error);
-      addNotification("Erreur de Base", error.message, "urgent");
-      await fetchInitialData(); 
-      throw error;
+      console.error(error);
+      addNotification("Erreur", error.message, "urgent");
+    }
+  };
+
+  const handleConvertToClient = async (lead: Lead) => {
+    addNotification("Conversion...", "Transfert vers le CRM", "info");
+    try {
+      const newClientId = generateUUID();
+      // 1. Créer le client avec un ID généré explicitement
+      const { error: clientError } = await supabase.from('clients').insert({
+        id: newClientId,
+        name: lead.name,
+        company: lead.company,
+        email: lead.email,
+        phone: lead.phone,
+        description: lead.description || `Converti depuis Lead (${lead.source || 'Direct'})`
+      });
+
+      if (clientError) throw clientError;
+
+      // 2. Mettre à jour l'état local clients
+      setClients(prev => [...prev, {
+        id: newClientId,
+        name: lead.name,
+        company: lead.company,
+        email: lead.email,
+        phone: lead.phone,
+        description: lead.description
+      }]);
+
+      // 3. Supprimer le lead
+      await supabase.from('leads').delete().eq('id', formatIdForDb(lead.id));
+      setLeads(prev => prev.filter(l => l.id !== lead.id));
+
+      addNotification("Succès !", `${lead.name} est maintenant un client officiel.`, "success");
+    } catch (error: any) {
+      console.error("Erreur conversion lead:", error);
+      addNotification("Erreur de conversion", error.message, "urgent");
     }
   };
 
@@ -296,9 +351,9 @@ const AppContent: React.FC<{
           <Route path="/team" element={<Team currentUser={currentUser} users={users} tasks={tasks} activities={[]} onlineUserIds={new Set()} onAddUser={async() => {}} onRemoveUser={async() => {}} onUpdateRole={() => {}} onApproveUser={() => {}} onUpdateMember={async(id, d) => {}} />} />
           <Route path="/settings" element={<Settings currentUser={currentUser} onUpdateProfile={async(d) => {}} />} />
           <Route path="/reports" element={<Reports currentUser={currentUser} tasks={tasks} users={users} leads={leads} />} />
-          <Route path="/clients" element={<Clients clients={clients} tasks={tasks} fileLinks={fileLinks} currentUser={currentUser} onAddClient={async() => {}} onUpdateClient={async() => {}} onDeleteClient={async() => {}} />} />
+          <Route path="/clients" element={<Clients clients={clients} tasks={tasks} fileLinks={fileLinks} currentUser={currentUser} onAddClient={handleAddClient} onUpdateClient={handleUpdateClient} onDeleteClient={handleDeleteClient} />} />
           <Route path="/calendar" element={<Calendar tasks={tasks} users={users} currentUser={currentUser} onAddTask={handleAddTask} onUpdateStatus={handleUpdateTaskStatus} />} />
-          <Route path="/leads" element={<Leads leads={leads} onAddLead={handleAddLead} onUpdateLead={handleUpdateLead} onDeleteLead={handleDeleteLead} onConvertToClient={async() => {}} currentUser={currentUser} />} />
+          <Route path="/leads" element={<Leads leads={leads} onAddLead={handleAddLead} onUpdateLead={handleUpdateLead} onDeleteLead={handleDeleteLead} onConvertToClient={handleConvertToClient} currentUser={currentUser} />} />
         </Routes>
       </Suspense>
     </Layout>
