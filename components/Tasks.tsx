@@ -92,25 +92,24 @@ const Tasks: React.FC<TasksProps> = ({
   const clientMap = useMemo(() => new Map(clients.map(c => [c.id, c])), [clients]);
   const userMap = useMemo(() => new Map(users.map(u => [u.id, u])), [users]);
 
-  const [formData, setFormData] = useState<Partial<Task>>({
-    title: '', description: '', assigneeId: currentUser.id, dueDate: new Date().toISOString().split('T')[0], status: TaskStatus.TODO, priority: 'medium'
-  });
-
-  // Calculs temporels pour le filtrage
-  const todayDate = new Date();
-  const todayStr = todayDate.toISOString().split('T')[0];
+  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
   
-  const endOfWeek = new Date();
-  endOfWeek.setDate(todayDate.getDate() + 7);
-  const endOfWeekStr = endOfWeek.toISOString().split('T')[0];
-  
-  const currentMonth = todayDate.getMonth();
-  const currentYear = todayDate.getFullYear();
+  const endOfWeekStr = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 7);
+    return d.toISOString().split('T')[0];
+  }, []);
 
   const filteredTasks = useMemo(() => {
     return tasks.filter(task => {
       if (activeFilter === 'all') return true;
-      if (activeFilter === 'today') return task.dueDate === todayStr;
+      
+      // LOGIQUE : "Aujourd'hui" inclut les tâches en retard (overdue) non terminées
+      if (activeFilter === 'today') {
+        const isOverdue = task.dueDate < todayStr && task.status !== TaskStatus.DONE;
+        const isToday = task.dueDate === todayStr;
+        return isToday || isOverdue;
+      }
       
       if (activeFilter === 'week') {
         return task.dueDate >= todayStr && task.dueDate <= endOfWeekStr;
@@ -118,22 +117,23 @@ const Tasks: React.FC<TasksProps> = ({
       
       if (activeFilter === 'month') {
         const d = new Date(task.dueDate);
-        return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+        const now = new Date();
+        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
       }
       return true;
     });
-  }, [tasks, activeFilter, todayStr, endOfWeekStr, currentMonth, currentYear]);
+  }, [tasks, activeFilter, todayStr, endOfWeekStr]);
 
-  // Compteurs pour les badges
   const counts = useMemo(() => ({
     all: tasks.length,
-    today: tasks.filter(t => t.dueDate === todayStr).length,
+    today: tasks.filter(t => t.dueDate === todayStr || (t.dueDate < todayStr && t.status !== TaskStatus.DONE)).length,
     week: tasks.filter(t => t.dueDate >= todayStr && t.dueDate <= endOfWeekStr).length,
     month: tasks.filter(t => {
         const d = new Date(t.dueDate);
-        return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+        const now = new Date();
+        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
     }).length
-  }), [tasks, todayStr, endOfWeekStr, currentMonth, currentYear]);
+  }), [tasks, todayStr, endOfWeekStr]);
 
   const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
@@ -145,7 +145,11 @@ const Tasks: React.FC<TasksProps> = ({
     }
     setShowFormModal(false);
     setEditingTask(null);
-  }, [formData, editingTask, onAddTask, onUpdateTask]);
+  }, [editingTask, onAddTask, onUpdateTask]);
+
+  const [formData, setFormData] = useState<Partial<Task>>({
+    title: '', description: '', assigneeId: currentUser.id, dueDate: todayStr, status: TaskStatus.TODO, priority: 'medium'
+  });
 
   const currentTask = useMemo(() => tasks.find(t => t.id === selectedTaskId), [tasks, selectedTaskId]);
 
@@ -173,10 +177,9 @@ const Tasks: React.FC<TasksProps> = ({
         </div>
       </div>
 
-      {/* TABS TEMPORELS */}
       <div className="flex space-x-2 lg:space-x-4 p-1 overflow-x-auto no-scrollbar pb-2">
         <FilterButton id="all" label="Toutes" count={counts.all} icon={CheckSquare} />
-        <FilterButton id="today" label="Jour" count={counts.today} icon={CalendarDays} />
+        <FilterButton id="today" label="Focus" count={counts.today} icon={CalendarDays} />
         <FilterButton id="week" label="Semaine" count={counts.week} icon={CalendarRange} />
         <FilterButton id="month" label="Mois" count={counts.month} icon={CalendarCheck} />
       </div>
@@ -206,13 +209,12 @@ const Tasks: React.FC<TasksProps> = ({
       </div>
 
       <button 
-        onClick={() => { setFormData({ title: '', description: '', assigneeId: currentUser.id, dueDate: new Date().toISOString().split('T')[0], status: TaskStatus.TODO, priority: 'medium' }); setEditingTask(null); setShowFormModal(true); }}
+        onClick={() => { setFormData({ title: '', description: '', assigneeId: currentUser.id, dueDate: todayStr, status: TaskStatus.TODO, priority: 'medium' }); setEditingTask(null); setShowFormModal(true); }}
         className="fixed bottom-[calc(90px+env(safe-area-inset-bottom))] right-6 lg:right-12 w-16 h-16 bg-primary text-white rounded-3xl shadow-[0_20px_50px_rgba(0,102,255,0.3)] flex items-center justify-center z-40 active:scale-90 transition-all border-4 border-white"
       >
         <Plus size={32} strokeWidth={3} />
       </button>
 
-      {/* MODAL DÉTAILS - Optimisé PC */}
       {selectedTaskId && currentTask && (
         <div className="fixed inset-0 z-[1000] flex flex-col justify-end lg:justify-center p-0 lg:p-6">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={() => setSelectedTaskId(null)}></div>
@@ -277,7 +279,6 @@ const Tasks: React.FC<TasksProps> = ({
         </div>
       )}
 
-      {/* FORMULAIRE - Optimisé PC */}
       {showFormModal && (
         <div className="fixed inset-0 z-[2000] flex flex-col justify-end lg:justify-center p-0 lg:p-6">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={() => setShowFormModal(false)}></div>

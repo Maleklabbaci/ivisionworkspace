@@ -37,7 +37,6 @@ const Campaigns: React.FC<CampaignsProps> = ({ currentUser, campaignsData, onUpd
       );
   }
 
-  // Visualisation des 4 états de mission globaux
   const taskStatusDistribution = [
     { name: 'À faire', value: tasks.filter(t => t.status === TaskStatus.TODO).length, status: TaskStatus.TODO },
     { name: 'En cours', value: tasks.filter(t => t.status === TaskStatus.IN_PROGRESS).length, status: TaskStatus.IN_PROGRESS },
@@ -45,10 +44,10 @@ const Campaigns: React.FC<CampaignsProps> = ({ currentUser, campaignsData, onUpd
     { name: 'Terminé', value: tasks.filter(t => t.status === TaskStatus.DONE).length, status: TaskStatus.DONE },
   ].filter(d => d.value > 0);
 
-  // Intensité opérationnelle par projet (Clicks + Conversions comme proxy d'effort)
+  // ALGORITHME D'EFFORT : Conversions x10 + Clicks x0.5 + Impressions / 1000
   const operationalIntensityData = campaignsData.map(c => ({
     name: c.name,
-    effort: c.clicks + (c.conversions * 5) // Pondération de l'effort par conversions
+    effort: Math.round((c.conversions * 10) + (c.clicks * 0.5) + (c.impressions / 1000))
   }));
 
   const handleAddSubmit = (e: React.FormEvent) => {
@@ -73,7 +72,6 @@ const Campaigns: React.FC<CampaignsProps> = ({ currentUser, campaignsData, onUpd
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* ÉTAT DU WORKFLOW (4 STATUTS) */}
         <div className="bg-white p-10 rounded-5xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
             <div className="flex items-center justify-between mb-8">
               <div>
@@ -105,7 +103,6 @@ const Campaigns: React.FC<CampaignsProps> = ({ currentUser, campaignsData, onUpd
             </div>
         </div>
 
-        {/* INTENSITÉ OPÉRATIONNELLE */}
         <div className="bg-white p-10 rounded-5xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
             <div className="flex items-center justify-between mb-8">
               <div>
