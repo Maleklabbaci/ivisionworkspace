@@ -7,7 +7,7 @@ interface LeadsProps {
   leads: Lead[];
   onAddLead: (lead: Lead) => void;
   onUpdateLead: (lead: Lead) => void;
-  onDeleteLead: (id: string) => void;
+  onDeleteLead: (id: string) => Promise<void>;
   onConvertToClient: (lead: Lead) => void;
   currentUser: User;
 }
@@ -17,7 +17,6 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
   const [showModal, setShowModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [canConfirmDelete, setCanConfirmDelete] = useState(false);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [formData, setFormData] = useState<Partial<Lead>>({
     name: '', company: '', email: '', phone: '', status: 'new', source: '', valueMin: 0, valueMax: 0, description: ''
@@ -42,15 +41,6 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
     const newCount = leads.filter(l => l.status === 'new').length;
     return { totalValue, qualifiedCount, newCount };
   }, [leads]);
-
-  // Sécurité anti-double-clic pour le modal de suppression
-  useEffect(() => {
-    if (showDeleteConfirm) {
-      setCanConfirmDelete(false);
-      const timer = setTimeout(() => setCanConfirmDelete(true), 600);
-      return () => clearTimeout(timer);
-    }
-  }, [showDeleteConfirm]);
 
   const formatValueRange = (min?: number, max?: number) => {
     const hasMin = min && min > 0;
@@ -97,20 +87,24 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
     setSelectedLead(null);
   };
 
-  const confirmDelete = (e: React.MouseEvent) => {
+  const confirmDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!selectedLead || isDeleting || !canConfirmDelete) return;
+    if (!selectedLead || isDeleting) return;
 
     setIsDeleting(true);
-    onDeleteLead(selectedLead.id);
-    
-    // Fermeture avec léger délai pour l'animation
-    setTimeout(() => {
-      setShowDeleteConfirm(false);
-      setShowModal(false);
-      setSelectedLead(null);
-      setIsDeleting(false);
-    }, 200);
+    try {
+        // On attend que la suppression soit effectuée sur App.tsx (Supabase)
+        await onDeleteLead(selectedLead.id);
+        
+        // On ne ferme les fenêtres que si ça a marché
+        setShowDeleteConfirm(false);
+        setShowModal(false);
+        setSelectedLead(null);
+    } catch (err) {
+        console.error("Échec de la suppression dans le composant Leads", err);
+    } finally {
+        setIsDeleting(false);
+    }
   };
 
   const inputClasses = "w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-slate-900 placeholder-slate-300 focus:bg-white focus:border-orange-400 outline-none transition-all text-sm";
@@ -243,7 +237,7 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
             <div className="mt-10 space-y-3">
                 <button 
                   type="button"
-                  disabled={isDeleting || !canConfirmDelete}
+                  disabled={isDeleting}
                   onClick={confirmDelete} 
                   className="w-full py-5 bg-red-500 text-white font-black rounded-3xl shadow-xl shadow-red-500/20 active-scale uppercase text-[10px] tracking-widest border-4 border-white disabled:opacity-50 flex items-center justify-center"
                 >

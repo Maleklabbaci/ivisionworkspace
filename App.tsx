@@ -196,16 +196,18 @@ const AppContent: React.FC<{
     const leadToDelete = leads.find(l => l.id === id);
     if (!leadToDelete) return;
 
+    // Suppression optimiste locale
     setLeads(prev => prev.filter(l => l.id !== id));
-    addNotification("Lead supprimé", leadToDelete.name, "info");
     
     try {
       const { error } = await supabase.from('leads').delete().eq('id', id);
       if (error) throw error;
+      addNotification("Lead supprimé", leadToDelete.name, "info");
     } catch (error) {
       console.error("Erreur suppression lead:", error);
-      addNotification("Erreur", "Impossible de supprimer le lead sur le serveur", "urgent");
-      fetchInitialData(); 
+      addNotification("Erreur", "Le prospect n'a pas pu être supprimé sur le serveur", "urgent");
+      // En cas d'échec, on recharge pour restaurer l'état
+      await fetchInitialData(); 
     }
   };
 
