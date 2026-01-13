@@ -126,27 +126,31 @@ const AppContent: React.FC<{
   const navigate = useNavigate();
   const [currentChannelId, setCurrentChannelId] = useState('general');
 
-  const cleanId = (id?: string) => {
-    if (!id || id.length < 32 || id.includes('temp')) return null;
-    return id;
+  // Formatage de l'ID pour correspondre aux colonnes de type BIGINT ou UUID de la DB
+  const formatIdForDb = (id: any) => {
+    if (!id) return null;
+    // Si c'est un prospect (généralement BIGINT auto-incrémenté)
+    if (!isNaN(id)) return Number(id);
+    // Sinon c'est un UUID (string)
+    return String(id);
   };
 
   const handleAddTask = async (task: Task) => {
     const newTask = { ...task, id: generateUUID() };
     setTasks(prev => [newTask, ...prev]);
-    addNotification("Tâche créée", newTask.title, "success");
     try {
       await supabase.from('tasks').insert({
         id: newTask.id,
         title: newTask.title,
         description: newTask.description,
-        assignee_id: cleanId(newTask.assigneeId),
-        client_id: cleanId(newTask.clientId),
+        assignee_id: formatIdForDb(task.assigneeId),
+        client_id: formatIdForDb(task.clientId),
         due_date: newTask.dueDate,
         status: newTask.status,
         type: newTask.type || 'admin',
         priority: newTask.priority || 'medium'
       });
+      addNotification("Tâche créée", newTask.title, "success");
     } catch (error) { console.error(error); }
   };
 
@@ -156,24 +160,43 @@ const AppContent: React.FC<{
   };
 
   const handleAddLead = async (lead: Lead) => {
-    const newId = generateUUID();
-    const leadWithId = { ...lead, id: newId };
-    setLeads(prev => [leadWithId, ...prev]);
-    addNotification("Lead capturé", lead.name, "success");
-    
-    await supabase.from('leads').insert({
-      id: newId,
-      name: lead.name,
-      company: lead.company,
-      email: lead.email,
-      phone: lead.phone,
-      status: lead.status,
-      source: lead.source,
-      value_min: lead.valueMin,
-      value_max: lead.valueMax,
-      description: lead.description,
-      created_at: new Date().toISOString()
-    });
+    addNotification("Enregistrement...", lead.name, "info");
+    try {
+      const { data, error } = await supabase.from('leads').insert({
+        name: lead.name,
+        company: lead.company,
+        email: lead.email,
+        phone: lead.phone,
+        status: lead.status || 'new',
+        source: lead.source,
+        value_min: lead.valueMin,
+        value_max: lead.valueMax,
+        description: lead.description
+      }).select();
+
+      if (error) throw error;
+
+      if (data && data[0]) {
+        const serverLead = {
+          id: data[0].id,
+          name: data[0].name,
+          company: data[0].company,
+          email: data[0].email,
+          phone: data[0].phone,
+          status: data[0].status,
+          source: data[0].source,
+          valueMin: data[0].value_min || 0,
+          valueMax: data[0].value_max || 0,
+          description: data[0].description,
+          createdAt: data[0].created_at
+        };
+        setLeads(prev => [serverLead, ...prev]);
+        addNotification("Prospect capturé", lead.name, "success");
+      }
+    } catch (error: any) {
+      console.error("Erreur ajout lead:", error);
+      addNotification("Erreur de Syntaxe", "Vérifiez les types de colonnes (UUID/INT)", "urgent");
+    }
   };
 
   const handleUpdateLead = async (lead: Lead) => {
@@ -188,26 +211,34 @@ const AppContent: React.FC<{
       value_min: lead.valueMin,
       value_max: lead.valueMax,
       description: lead.description
-    }).eq('id', lead.id);
+    }).eq('id', formatIdForDb(lead.id));
   };
 
-  const handleDeleteLead = async (id: string) => {
+  const handleDeleteLead = async (id: any) => {
     if (!id) return;
-    const leadToDelete = leads.find(l => l.id === id);
-    if (!leadToDelete) return;
-
-    // Suppression optimiste locale
-    setLeads(prev => prev.filter(l => l.id !== id));
+    const targetId = formatIdForDb(id);
+    const leadToDelete = leads.find(l => String(l.id) === String(id));
     
     try {
-      const { error } = await supabase.from('leads').delete().eq('id', id);
+      const { error, count } = await supabase
+        .from('leads')
+        .delete({ count: 'exact' })
+        .eq('id', targetId);
+
       if (error) throw error;
-      addNotification("Lead supprimé", leadToDelete.name, "info");
-    } catch (error) {
-      console.error("Erreur suppression lead:", error);
-      addNotification("Erreur", "Le prospect n'a pas pu être supprimé sur le serveur", "urgent");
-      // En cas d'échec, on recharge pour restaurer l'état
+
+      if (count === 0) {
+        throw new Error("Aucune ligne trouvée. Vérifiez que 'id' est bien la clé primaire.");
+      }
+
+      setLeads(prev => prev.filter(l => String(l.id) !== String(id)));
+      addNotification("Prospect supprimé", leadToDelete?.name || "", "info");
+      
+    } catch (error: any) {
+      console.error("DÉTAILS ERREUR DB:", error);
+      addNotification("Erreur de Base", error.message, "urgent");
       await fetchInitialData(); 
+      throw error;
     }
   };
 
@@ -238,7 +269,7 @@ const AppContent: React.FC<{
       id: newLink.id,
       name: newLink.name,
       url: newLink.url,
-      client_id: cleanId(newLink.clientId),
+      client_id: formatIdForDb(newLink.clientId),
       created_by: newLink.createdBy
     });
   };
@@ -352,7 +383,7 @@ const App: React.FC = () => {
 
       if (cRes.data) setChannels(cRes.data as Channel[]);
       if (mRes.data) setMessages(mRes.data.map((m: any) => ({
-        id: m.id, userId: m.user_id, channelId: m.channel_id, content: m.content,
+        id: m.id, userId: m.user_id, channel_id: m.channel_id, content: m.content,
         timestamp: new Date(m.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
         fullTimestamp: m.created_at
       })));
@@ -360,12 +391,12 @@ const App: React.FC = () => {
         id: t.id, 
         title: t.title, 
         description: t.description, 
-        assigneeId: t.assignee_id,
-        dueDate: t.due_date, 
+        assignee_id: t.assignee_id,
+        due_date: t.due_date, 
         status: t.status as TaskStatus, 
         type: t.type, 
         priority: t.priority, 
-        clientId: t.client_id
+        client_id: t.client_id
       })));
     } catch (e) { console.error(e); }
     finally { setIsLoading(false); }
