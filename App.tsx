@@ -112,15 +112,15 @@ const AppContent: React.FC<{
   messages: Message[];
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   fileLinks: FileLink[];
+  setFileLinks: React.Dispatch<React.SetStateAction<FileLink[]>>;
   addNotification: (title: string, message: string, type?: 'info' | 'success' | 'urgent') => void;
   removeNotification: (id: string) => void;
   notifications: ToastNotification[];
-  // Added fetchInitialData to props to fix the error in handleDeleteLead
   fetchInitialData: (userId?: string) => Promise<void>;
 }> = ({ 
   currentUser, setCurrentUser, users, setUsers, tasks, setTasks, 
   clients, setClients, leads, setLeads, channels, setChannels, 
-  messages, setMessages, fileLinks, addNotification, removeNotification, 
+  messages, setMessages, fileLinks, setFileLinks, addNotification, removeNotification, 
   notifications, fetchInitialData 
 }) => {
   const navigate = useNavigate();
@@ -196,7 +196,6 @@ const AppContent: React.FC<{
     const leadToDelete = leads.find(l => l.id === id);
     if (!leadToDelete) return;
 
-    // Mise à jour optimiste immédiate
     setLeads(prev => prev.filter(l => l.id !== id));
     addNotification("Lead supprimé", leadToDelete.name, "info");
     
@@ -206,7 +205,6 @@ const AppContent: React.FC<{
     } catch (error) {
       console.error("Erreur suppression lead:", error);
       addNotification("Erreur", "Impossible de supprimer le lead sur le serveur", "urgent");
-      // fetchInitialData is now available as a prop
       fetchInitialData(); 
     }
   };
@@ -224,6 +222,30 @@ const AppContent: React.FC<{
     });
   };
 
+  const handleAddFileLink = async (name: string, url: string, clientId?: string) => {
+    const newLink: FileLink = {
+      id: generateUUID(),
+      name,
+      url,
+      clientId,
+      createdBy: currentUser.id,
+      createdAt: new Date().toISOString()
+    };
+    setFileLinks(prev => [newLink, ...prev]);
+    await supabase.from('file_links').insert({
+      id: newLink.id,
+      name: newLink.name,
+      url: newLink.url,
+      client_id: cleanId(newLink.clientId),
+      created_by: newLink.createdBy
+    });
+  };
+
+  const handleDeleteFileLink = async (id: string) => {
+    setFileLinks(prev => prev.filter(f => f.id !== id));
+    await supabase.from('file_links').delete().eq('id', id);
+  };
+
   return (
     <Layout 
       currentUser={currentUser} onLogout={() => supabase.auth.signOut()} 
@@ -237,12 +259,12 @@ const AppContent: React.FC<{
           <Route path="/dashboard" element={<Dashboard currentUser={currentUser} tasks={tasks} notifications={notifications} onNavigate={(v) => navigate(`/${v}`)} />} />
           <Route path="/tasks" element={<Tasks tasks={tasks} users={users} clients={clients} currentUser={currentUser} onUpdateStatus={handleUpdateTaskStatus} onAddTask={handleAddTask} onUpdateTask={async() => {}} onDeleteTask={async() => {}} />} />
           <Route path="/chat" element={<Chat currentUser={currentUser} users={users} channels={channels} currentChannelId={currentChannelId} messages={messages} onlineUserIds={new Set()} onChannelChange={setCurrentChannelId} onSendMessage={handleSendMessage} onAddChannel={async() => {}} onDeleteChannel={() => {}} />} />
-          <Route path="/files" element={<Files tasks={tasks} messages={messages} fileLinks={fileLinks} clients={clients} currentUser={currentUser} />} />
+          <Route path="/files" element={<Files tasks={tasks} messages={messages} fileLinks={fileLinks} clients={clients} currentUser={currentUser} onAddFileLink={handleAddFileLink} onDeleteFileLink={handleDeleteFileLink} />} />
           <Route path="/team" element={<Team currentUser={currentUser} users={users} tasks={tasks} activities={[]} onlineUserIds={new Set()} onAddUser={async() => {}} onRemoveUser={async() => {}} onUpdateRole={() => {}} onApproveUser={() => {}} onUpdateMember={async(id, d) => {}} />} />
           <Route path="/settings" element={<Settings currentUser={currentUser} onUpdateProfile={async(d) => {}} />} />
           <Route path="/reports" element={<Reports currentUser={currentUser} tasks={tasks} users={users} leads={leads} />} />
           <Route path="/clients" element={<Clients clients={clients} tasks={tasks} fileLinks={fileLinks} currentUser={currentUser} onAddClient={async() => {}} onUpdateClient={async() => {}} onDeleteClient={async() => {}} />} />
-          <Route path="/calendar" element={<Calendar tasks={tasks} users={users} currentUser={currentUser} onAddTask={handleAddTask} onUpdateStatus={handleUpdateStatus} />} />
+          <Route path="/calendar" element={<Calendar tasks={tasks} users={users} currentUser={currentUser} onAddTask={handleAddTask} onUpdateStatus={handleUpdateTaskStatus} />} />
           <Route path="/leads" element={<Leads leads={leads} onAddLead={handleAddLead} onUpdateLead={handleUpdateLead} onDeleteLead={handleDeleteLead} onConvertToClient={async() => {}} currentUser={currentUser} />} />
         </Routes>
       </Suspense>
@@ -258,6 +280,7 @@ const App: React.FC = () => {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
+  const [fileLinks, setFileLinks] = useState<FileLink[]>([]);
   const [notifications, setNotifications] = useState<ToastNotification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthProcessing, setIsAuthProcessing] = useState(false);
@@ -274,13 +297,14 @@ const App: React.FC = () => {
   const fetchInitialData = useCallback(async (userId?: string) => {
     if (!isConfigured) return;
     try {
-      const [uRes, cRes, mRes, tRes, clRes, lRes] = await Promise.all([
+      const [uRes, cRes, mRes, tRes, clRes, lRes, flRes] = await Promise.all([
         supabase.from('users').select('*'),
         supabase.from('channels').select('*'),
         supabase.from('messages').select('*').order('created_at', { ascending: true }),
         supabase.from('tasks').select('*').order('created_at', { ascending: false }),
         supabase.from('clients').select('*'),
-        supabase.from('leads').select('*').order('created_at', { ascending: false })
+        supabase.from('leads').select('*').order('created_at', { ascending: false }),
+        supabase.from('file_links').select('*').order('created_at', { ascending: false })
       ]);
 
       if (uRes.data) {
@@ -320,13 +344,16 @@ const App: React.FC = () => {
         createdAt: l.created_at
       })));
 
+      if (flRes.data) setFileLinks(flRes.data.map((f: any) => ({
+        id: f.id, name: f.name, url: f.url, clientId: f.client_id, createdBy: f.created_by, createdAt: f.created_at
+      })));
+
       if (cRes.data) setChannels(cRes.data as Channel[]);
       if (mRes.data) setMessages(mRes.data.map((m: any) => ({
         id: m.id, userId: m.user_id, channelId: m.channel_id, content: m.content,
         timestamp: new Date(m.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
         fullTimestamp: m.created_at
       })));
-      // FIX: Correctly map snake_case from database to camelCase properties required by Task interface
       if (tRes.data) setTasks(tRes.data.map((t: any) => ({
         id: t.id, 
         title: t.title, 
@@ -391,7 +418,7 @@ const App: React.FC = () => {
           users={users} setUsers={setUsers} tasks={tasks} setTasks={setTasks}
           clients={clients} setClients={setClients} leads={leads} setLeads={setLeads}
           channels={channels} setChannels={setChannels} messages={messages} setMessages={setMessages}
-          fileLinks={fileLinks} notifications={notifications}
+          fileLinks={fileLinks} setFileLinks={setFileLinks} notifications={notifications}
           addNotification={addNotification} removeNotification={(id) => setNotifications(prev => prev.filter(n => n.id !== id))} 
           fetchInitialData={fetchInitialData}
         />
