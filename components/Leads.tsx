@@ -72,22 +72,26 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name) return;
+    
     const leadData: Lead = {
       id: selectedLead?.id || `lead-${Date.now()}`,
       name: formData.name,
-      company: formData.company,
-      email: formData.email,
-      phone: formData.phone,
-      status: formData.status as any || 'new',
-      source: formData.source,
+      company: formData.company || '',
+      email: formData.email || '',
+      phone: formData.phone || '',
+      status: (formData.status as any) || 'new',
+      source: formData.source || '',
       valueMin: Number(formData.valueMin) || 0,
       valueMax: Number(formData.valueMax) || 0,
-      description: formData.description,
+      description: formData.description || '',
       createdAt: selectedLead?.createdAt || new Date().toISOString().split('T')[0]
     };
 
-    if (selectedLead && viewMode === 'edit') onUpdateLead(leadData);
-    else onAddLead(leadData);
+    if (selectedLead && viewMode === 'edit') {
+      onUpdateLead(leadData);
+    } else {
+      onAddLead(leadData);
+    }
     
     setViewMode('list');
     setSelectedLead(null);
@@ -106,6 +110,17 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
     } finally {
         setIsDeleting(false);
     }
+  };
+
+  const formatCurrencyCompact = (val: number) => {
+    if (val >= 1000000) return (val / 1000000).toFixed(1) + 'M';
+    if (val >= 1000) return (val / 1000).toFixed(0) + 'k';
+    return val.toString();
+  };
+
+  const formatFullNumber = (val: number | undefined) => {
+    if (val === undefined || val === null || val === 0) return null;
+    return new Intl.NumberFormat('fr-FR').format(val);
   };
 
   const inputClasses = "w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-slate-900 placeholder-slate-300 focus:bg-white focus:border-orange-400 outline-none transition-all text-sm";
@@ -130,7 +145,11 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
             />
           </div>
           <button 
-            onClick={() => { setSelectedLead(null); setFormData({name: '', company: '', email: '', phone: '', status: 'new', source: '', valueMin: 0, valueMax: 0, description: ''}); setViewMode('edit'); }} 
+            onClick={() => { 
+              setSelectedLead(null); 
+              setFormData({name: '', company: '', email: '', phone: '', status: 'new', source: '', valueMin: 0, valueMax: 0, description: ''}); 
+              setViewMode('edit'); 
+            }} 
             className="bg-orange-500 text-white p-4 px-8 rounded-3xl shadow-2xl shadow-orange-500/20 active-scale flex items-center justify-center font-black text-[10px] tracking-widest uppercase border-4 border-white transition-all"
           >
             <Plus size={20} className="mr-2" strokeWidth={3} /> CAPTURER UN LEAD
@@ -145,8 +164,8 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
             <TrendingUp size={24} />
           </div>
           <div>
-            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Volume Estimé</p>
-            <p className="text-xl font-black text-slate-900">{stats.totalValue.toLocaleString()} <span className="text-[10px] text-orange-500 ml-1">DZD</span></p>
+            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Valeur Estimée (Min)</p>
+            <p className="text-xl font-black text-slate-900">{new Intl.NumberFormat('fr-FR').format(stats.totalValue)} <span className="text-[10px] text-orange-500 ml-1">DZD</span></p>
           </div>
         </div>
         <div className="bg-white p-6 rounded-[2.5rem] border border-slate-50 shadow-sm flex items-center space-x-5">
@@ -192,8 +211,14 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1 truncate">{lead.company || 'Compte Particulier'}</p>
             <div className="mt-8 pt-5 border-t border-slate-50 flex items-center justify-between">
               <div className="flex flex-col">
-                <span className="text-[8px] font-black text-slate-300 uppercase tracking-widest mb-0.5">Valeur</span>
-                <span className="text-xs font-black text-slate-900">{lead.valueMin?.toLocaleString() || '0'} DZD</span>
+                <span className="text-[8px] font-black text-slate-300 uppercase tracking-widest mb-0.5">Budget Potentiel</span>
+                <span className="text-xs font-black text-slate-900">
+                  {(!lead.valueMin || lead.valueMin === 0) && lead.valueMax ? `< ${formatCurrencyCompact(lead.valueMax)}` :
+                   lead.valueMin && (!lead.valueMax || lead.valueMax === 0) ? `> ${formatCurrencyCompact(lead.valueMin)}` :
+                   lead.valueMin && lead.valueMax ? `${formatCurrencyCompact(lead.valueMin)} - ${formatCurrencyCompact(lead.valueMax)}` :
+                   '0'}
+                  <span className="ml-1 text-[8px] text-slate-300">DZD</span>
+                </span>
               </div>
               <ChevronRight size={18} className="text-slate-100 group-hover:text-orange-500 transition-colors" />
             </div>
@@ -202,7 +227,7 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
       </div>
 
       {/* MODAL PRINCIPALE - DÉTAILS ET ÉDITION */}
-      {(viewMode === 'view' || viewMode === 'edit') && selectedLead && (
+      {(viewMode === 'view' || viewMode === 'edit') && (
         <div className="fixed inset-0 z-[1000] flex flex-col justify-end lg:justify-center p-0 lg:p-6">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md animate-in fade-in" onClick={() => setViewMode('list')}></div>
           
@@ -210,7 +235,7 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
             <header className="px-10 py-8 border-b border-slate-50 flex items-center justify-between bg-white z-20">
               <div>
                 <h3 className="text-xl font-black text-slate-900 tracking-tighter uppercase">
-                    {viewMode === 'view' ? 'Fiche Contact' : 'Édition Prospect'}
+                    {viewMode === 'view' ? 'Fiche Contact' : selectedLead ? 'Édition Prospect' : 'Nouvelle Capture'}
                 </h3>
                 <p className="text-[9px] font-black text-orange-400 uppercase tracking-widest mt-1">iVISION SALES TOOL</p>
               </div>
@@ -218,7 +243,7 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
             </header>
             
             <div className="p-10 space-y-8 flex-1 overflow-y-auto no-scrollbar pb-16">
-              {viewMode === 'view' ? (
+              {viewMode === 'view' && selectedLead ? (
                 /* VUE CONSULTATION - SALES DASHBOARD */
                 <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
                     {/* INFO PRINCIPALE */}
@@ -267,7 +292,13 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
                         </div>
                         <div className="p-6 bg-slate-50 rounded-[2rem] border border-slate-100">
                             <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-2 px-1">Budget Potentiel</label>
-                            <p className="font-black text-slate-900 text-xs">{selectedLead.valueMin?.toLocaleString()} DZD</p>
+                            <p className="font-black text-slate-900 text-xs uppercase tracking-tight">
+                              {(!selectedLead.valueMin || selectedLead.valueMin === 0) && selectedLead.valueMax ? `Moins de ${formatFullNumber(selectedLead.valueMax)}` :
+                               selectedLead.valueMin && (!selectedLead.valueMax || selectedLead.valueMax === 0) ? `À partir de ${formatFullNumber(selectedLead.valueMin)}` :
+                               selectedLead.valueMin && selectedLead.valueMax ? `Entre ${formatFullNumber(selectedLead.valueMin)} et ${formatFullNumber(selectedLead.valueMax)}` :
+                               'Budget non défini'}
+                              <span className="text-[10px] text-orange-500 ml-1">DZD</span>
+                            </p>
                         </div>
                     </div>
 
@@ -337,8 +368,24 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-3">Budget Min (DZD)</label>
-                        <input type="number" className={inputClasses} value={formData.valueMin || ''} onChange={e => setFormData({...formData, valueMin: Number(e.target.value)})} />
+                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-3">Budget Minimum (DZD)</label>
+                        <input type="number" className={inputClasses} value={formData.valueMin || ''} onChange={e => setFormData({...formData, valueMin: Number(e.target.value)})} placeholder="10000" />
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-3">Budget Maximum (DZD)</label>
+                        <input type="number" className={inputClasses} value={formData.valueMax || ''} onChange={e => setFormData({...formData, valueMax: Number(e.target.value)})} placeholder="50000" />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-3">Statut Initial</label>
+                        <select className={inputClasses} value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as any})}>
+                            <option value="new">Nouveau</option>
+                            <option value="contacted">Contacté</option>
+                            <option value="qualified">Qualifié</option>
+                            <option value="lost">Perdu</option>
+                        </select>
                     </div>
                     <div className="space-y-2">
                         <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-3">Source</label>
@@ -357,8 +404,10 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
                   </div>
 
                   <div className="pt-4 flex space-x-4">
-                    <button type="button" onClick={() => setViewMode('view')} className="flex-1 py-6 bg-slate-100 text-slate-400 rounded-[2.5rem] font-black text-[10px] uppercase tracking-widest active-scale">ANNULER</button>
-                    <button type="submit" className="flex-[2] py-6 bg-orange-500 text-white rounded-[2.5rem] font-black text-xs uppercase tracking-[0.2em] shadow-2xl shadow-orange-500/20 border-4 border-white active-scale">ENREGISTRER MODIFS</button>
+                    <button type="button" onClick={() => setViewMode(selectedLead ? 'view' : 'list')} className="flex-1 py-6 bg-slate-100 text-slate-400 rounded-[2.5rem] font-black text-[10px] uppercase tracking-widest active-scale">ANNULER</button>
+                    <button type="submit" className="flex-[2] py-6 bg-orange-500 text-white rounded-[2.5rem] font-black text-xs uppercase tracking-[0.2em] shadow-2xl shadow-orange-500/20 border-4 border-white active-scale">
+                      {selectedLead ? 'ENREGISTRER MODIFS' : 'CAPTURER MAINTENANT'}
+                    </button>
                   </div>
                 </form>
               )}
