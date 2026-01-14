@@ -1,9 +1,11 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 
-// Guideline: L'API Key est exclusivement gérée par process.env.API_KEY
+// Fonction pour récupérer la meilleure clé disponible
 const getAIClient = () => {
-  return new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const customKey = localStorage.getItem('ivision_custom_gemini_key');
+  const apiKey = customKey || process.env.API_KEY;
+  return new GoogleGenAI({ apiKey: apiKey as string });
 };
 
 export const generateMarketingInsight = async (context: string): Promise<string> => {
@@ -19,7 +21,7 @@ export const generateMarketingInsight = async (context: string): Promise<string>
     return response.text?.trim() || "Analyse indisponible.";
   } catch (error) {
     console.error("Gemini Error:", error);
-    return "Erreur lors de l'analyse IA.";
+    return "Erreur lors de l'analyse IA. Vérifiez la clé API dans les paramètres.";
   }
 };
 
