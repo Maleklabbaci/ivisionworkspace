@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { User, UserRole, Task, ActivityLog } from '../types';
-import { X, UserPlus, ChevronRight, Check, Trash2 } from 'lucide-react';
+import { X, UserPlus, ChevronRight, Check, Trash2, Lock, Mail, User as UserIcon } from 'lucide-react';
 
 interface TeamProps {
   currentUser: User;
@@ -9,7 +9,7 @@ interface TeamProps {
   tasks: Task[];
   activities: ActivityLog[];
   onlineUserIds: Set<string>;
-  onAddUser: (user: User) => void;
+  onAddUser: (data: { name: string; email: string; password: string; role: UserRole }) => Promise<void>;
   onRemoveUser: (userId: string) => void;
   onUpdateRole: (userId: string, role: UserRole) => void;
   onApproveUser: (userId: string) => void;
@@ -29,32 +29,38 @@ const PERMISSIONS_LIST = [
 const Team: React.FC<TeamProps> = ({ currentUser, users, onlineUserIds, onAddUser, onRemoveUser, onUpdateMember }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [newUser, setNewUser] = useState<Partial<User>>({ name: '', email: '', role: UserRole.MEMBER });
+  const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: UserRole.MEMBER });
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const validate = () => {
     const e: Record<string, string> = {};
     if (!newUser.name?.trim()) e.name = "Nom obligatoire";
     if (!newUser.email?.includes('@')) e.email = "Email invalide";
+    if (newUser.password.length < 6) e.password = "Minimum 6 caractères";
     setErrors(e);
     return Object.keys(e).length === 0;
   };
 
-  const handleAddSubmit = (e: React.FormEvent) => {
+  const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
-    onAddUser({
-        id: `temp-${Date.now()}`,
-        name: newUser.name!,
-        email: newUser.email!,
-        role: newUser.role || UserRole.MEMBER,
-        avatar: `https://ui-avatars.com/api/?name=${newUser.name!.replace(/\s+/g, '+')}&background=random`,
-        notificationPref: 'all',
-        status: 'pending',
-        permissions: {}
-    } as User);
-    setShowAddModal(false);
-    setNewUser({ name: '', email: '', role: UserRole.MEMBER });
+    
+    setIsSubmitting(true);
+    try {
+      await onAddUser({
+          name: newUser.name,
+          email: newUser.email,
+          password: newUser.password,
+          role: newUser.role
+      });
+      setShowAddModal(false);
+      setNewUser({ name: '', email: '', password: '', role: UserRole.MEMBER });
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleSaveEdit = () => {
@@ -95,24 +101,51 @@ const Team: React.FC<TeamProps> = ({ currentUser, users, onlineUserIds, onAddUse
           ))}
       </div>
 
-      <button onClick={() => { setErrors({}); setShowAddModal(true); }} className="fixed bottom-[calc(90px+env(safe-area-inset-bottom))] right-6 w-16 h-16 bg-primary text-white rounded-3xl shadow-2xl flex items-center justify-center z-30 border-4 border-white active-scale transition-transform"><UserPlus size={28} strokeWidth={3} /></button>
+      {currentUser.role === UserRole.ADMIN && (
+        <button onClick={() => { setErrors({}); setShowAddModal(true); }} className="fixed bottom-[calc(90px+env(safe-area-inset-bottom))] right-6 w-16 h-16 bg-primary text-white rounded-3xl shadow-2xl flex items-center justify-center z-30 border-4 border-white active-scale transition-transform">
+          <UserPlus size={28} strokeWidth={3} />
+        </button>
+      )}
 
       {showAddModal && (
           <div className="fixed inset-0 bg-white z-[120] animate-in slide-in-from-bottom duration-400 flex flex-col safe-pt">
               <header className="px-6 py-5 flex items-center justify-between border-b border-slate-50">
                   <button onClick={() => setShowAddModal(false)} className="p-3 bg-slate-50 rounded-2xl text-slate-400 active-scale"><X size={24}/></button>
-                  <h3 className="font-black text-slate-900 tracking-tighter uppercase text-sm">Nouveau Membre</h3>
-                  <button onClick={handleAddSubmit} className="text-primary font-black text-xs tracking-widest bg-primary/5 px-5 py-3 rounded-2xl active-scale">VALIDER</button>
+                  <h3 className="font-black text-slate-900 tracking-tighter uppercase text-sm">Nouveau Collaborateur</h3>
+                  <button onClick={handleAddSubmit} disabled={isSubmitting} className="text-primary font-black text-xs tracking-widest bg-primary/5 px-5 py-3 rounded-2xl active-scale disabled:opacity-50">
+                    {isSubmitting ? "CRÉATION..." : "VALIDER"}
+                  </button>
               </header>
-              <form className="p-8 space-y-8 flex-1 overflow-y-auto no-scrollbar pb-32">
+              <form onSubmit={handleAddSubmit} className="p-8 space-y-8 flex-1 overflow-y-auto no-scrollbar pb-32">
                   <div className="space-y-6">
                       <div className="space-y-2">
-                          <label className="text-[10px] font-black uppercase text-slate-300 tracking-[0.2em] px-1">Nom Complet</label>
+                          <label className="text-[10px] font-black uppercase text-slate-300 tracking-[0.2em] px-1 flex items-center">
+                            <UserIcon size={12} className="mr-2" /> Nom Complet
+                          </label>
                           <input type="text" className={`${inputClasses} ${errors.name ? 'border-urgent' : ''}`} value={newUser.name} onChange={e => setNewUser({...newUser, name: e.target.value})} placeholder="Ex: Jean Martin" />
                       </div>
                       <div className="space-y-2">
-                          <label className="text-[10px] font-black uppercase text-slate-300 tracking-[0.2em] px-1">Email professionnel</label>
+                          <label className="text-[10px] font-black uppercase text-slate-300 tracking-[0.2em] px-1 flex items-center">
+                            <Mail size={12} className="mr-2" /> Email professionnel
+                          </label>
                           <input type="email" className={`${inputClasses} ${errors.email ? 'border-urgent' : ''}`} value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} placeholder="jean@ivision.com" />
+                      </div>
+                      <div className="space-y-2">
+                          <label className="text-[10px] font-black uppercase text-slate-300 tracking-[0.2em] px-1 flex items-center">
+                            <Lock size={12} className="mr-2" /> Mot de passe temporaire
+                          </label>
+                          <input type="password" className={`${inputClasses} ${errors.password ? 'border-urgent' : ''}`} value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} placeholder="••••••••" />
+                          <p className="text-[9px] text-slate-400 px-2">L'utilisateur pourra modifier ce mot de passe plus tard.</p>
+                      </div>
+                      <div className="space-y-2">
+                          <label className="text-[10px] font-black uppercase text-slate-300 tracking-[0.2em] px-1">Rôle initial</label>
+                          <select className={inputClasses} value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value as UserRole})}>
+                              <option value={UserRole.MEMBER}>Membre Standard</option>
+                              <option value={UserRole.PROJECT_MANAGER}>Chef de Projet</option>
+                              <option value={UserRole.COMMUNITY_MANAGER}>Community Manager</option>
+                              <option value={UserRole.ANALYST}>Analyste Marketing</option>
+                              <option value={UserRole.ADMIN}>Administrateur</option>
+                          </select>
                       </div>
                   </div>
               </form>
@@ -153,7 +186,7 @@ const Team: React.FC<TeamProps> = ({ currentUser, users, onlineUserIds, onAddUse
                           })}
                       </div>
                   </div>
-                  {editingUser.id !== currentUser.id && (
+                  {editingUser.id !== currentUser.id && currentUser.role === UserRole.ADMIN && (
                       <button onClick={() => { if(confirm("Supprimer l'accès ?")) { onRemoveUser(editingUser.id); setEditingUser(null); } }} className="w-full p-6 text-urgent font-black bg-red-50 rounded-[2.5rem] flex items-center justify-center space-x-3 active-scale transition-colors border-4 border-white shadow-xl shadow-red-500/5">
                           <Trash2 size={24} />
                           <span className="uppercase text-[10px] tracking-widest">Révoquer définitivement</span>

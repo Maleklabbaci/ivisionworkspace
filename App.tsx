@@ -428,6 +428,49 @@ const AppContent: React.FC<{
   }, [currentUser, setFileLinks, addNotification]);
 
   // TEAM HANDLERS
+  const handleAddUser = useCallback(async (payload: { name: string; email: string; password: string; role: UserRole }) => {
+    try {
+      // 1. Inscription Auth
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: payload.email,
+        password: payload.password,
+        options: { data: { name: payload.name } }
+      });
+      if (authError) throw authError;
+
+      if (authData.user) {
+        // 2. Création record DB
+        const newUser: User = {
+          id: authData.user.id,
+          name: payload.name,
+          email: payload.email,
+          role: payload.role,
+          avatar: `https://ui-avatars.com/api/?name=${payload.name.replace(/\s+/g, '+')}&background=random`,
+          status: 'active',
+          notificationPref: 'all',
+          permissions: {}
+        };
+
+        const { error: dbError } = await supabase.from('users').insert({
+          id: newUser.id,
+          name: newUser.name,
+          email: newUser.email,
+          role: newUser.role,
+          status: 'active'
+        });
+        
+        if (dbError) throw dbError;
+        
+        setUsers(prev => [...prev, newUser]);
+        addNotification("Équipe", `Collaborateur ${payload.name} créé avec succès.`, "success");
+      }
+    } catch (e: any) {
+      console.error(e);
+      addNotification("Erreur", `Échec de création : ${e.message}`, "urgent");
+      throw e;
+    }
+  }, [setUsers, addNotification]);
+
   const handleUpdateMember = useCallback(async (userId: string, updates: Partial<User>) => {
     setUsers(prev => prev.map(u => u.id === userId ? { ...u, ...updates } : u));
     try {
@@ -437,7 +480,6 @@ const AppContent: React.FC<{
       }).eq('id', userId);
       if (error) throw error;
       
-      // Si on met à jour la clé de l'admin actuel, on l'applique immédiatement
       if (userId === currentUser.id && updates.ai_api_key) {
         setGeminiApiKey(updates.ai_api_key);
       }
@@ -462,11 +504,7 @@ const AppContent: React.FC<{
           <Route path="/settings" element={<Settings currentUser={currentUser} onUpdateProfile={async (data) => {
               setUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, ...data } : u));
               await supabase.from('users').update(data).eq('id', currentUser.id);
-              
-              if (data.ai_api_key) {
-                setGeminiApiKey(data.ai_api_key);
-              }
-              
+              if (data.ai_api_key) setGeminiApiKey(data.ai_api_key);
               addNotification("Paramètres", "Profil mis à jour", "success");
           }} />} />
           <Route path="/chat" element={<Chat currentUser={currentUser} users={users} channels={channels} currentChannelId={channels[0]?.id || "general"} messages={messages} onlineUserIds={new Set()} onChannelChange={() => {}} onSendMessage={handleSendMessage} onAddChannel={() => {}} onDeleteChannel={() => {}} />} />
@@ -477,7 +515,7 @@ const AppContent: React.FC<{
           }} />} />
           <Route path="/calendar" element={<Calendar tasks={tasks} users={users} currentUser={currentUser} onAddTask={handleAddTask} onUpdateStatus={handleUpdateTaskStatus} />} />
           <Route path="/reports" element={<Reports currentUser={currentUser} tasks={tasks} users={users} leads={leads} />} />
-          <Route path="/team" element={<Team currentUser={currentUser} users={users} tasks={tasks} activities={[]} onlineUserIds={new Set()} onAddUser={() => {}} onRemoveUser={async (id) => {
+          <Route path="/team" element={<Team currentUser={currentUser} users={users} tasks={tasks} activities={[]} onlineUserIds={new Set()} onAddUser={handleAddUser} onRemoveUser={async (id) => {
               await supabase.from('users').delete().eq('id', id);
               setUsers(prev => prev.filter(u => u.id !== id));
           }} onUpdateRole={() => {}} onApproveUser={() => {}} onUpdateMember={handleUpdateMember} />} />
@@ -536,11 +574,10 @@ const App: React.FC = () => {
         const mappedUsers = uRes.data.map((u: any) => ({
           id: u.id, name: u.name, email: u.email, role: u.role as UserRole, avatar: u.avatar || `https://ui-avatars.com/api/?name=${u.name}&background=random`,
           status: u.status, permissions: u.permissions || {},
-          ai_api_key: u.ai_api_key // On inclut la clé API dans le mapping
+          ai_api_key: u.ai_api_key 
         }));
         setUsers(mappedUsers);
         
-        // RECHERCHE DE LA CLÉ API GLOBALE (Configurée par l'Admin)
         const adminUser = mappedUsers.find(u => u.role === UserRole.ADMIN && u.ai_api_key);
         if (adminUser?.ai_api_key) {
           setGeminiApiKey(adminUser.ai_api_key);
@@ -552,40 +589,16 @@ const App: React.FC = () => {
         }
       }
       if (clRes.data) setClients(clRes.data as Client[]);
-
-      if (lRes.data) {
-          const now = new Date();
-          const fiveDaysInMs = 5 * 24 * 60 * 60 * 1000;
-          const filteredLeads = [];
-          
-          for (const lead of lRes.data) {
-              const updatedAt = new Date(lead.updated_at || lead.created_at);
-              if (lead.status === 'lost' && (now.getTime() - updatedAt.getTime()) > fiveDaysInMs) {
-                  supabase.from('leads').delete().eq('id', lead.id).then(() => console.debug(`Lead ${lead.id} auto-supprimé`));
-              } else {
-                  filteredLeads.push({
-                      id: lead.id, name: lead.name, company: lead.company, email: lead.email, phone: lead.phone, status: lead.status,
-                      valueMin: lead.value_min || 0, valueMax: lead.value_max || 0, description: lead.description, createdAt: lead.created_at, updatedAt: lead.updated_at
-                  });
-              }
-          }
-          setLeads(filteredLeads);
-      }
-
+      if (lRes.data) setLeads(lRes.data.map((lead: any) => ({
+        id: lead.id, name: lead.name, company: lead.company, email: lead.email, phone: lead.phone, status: lead.status,
+        valueMin: lead.value_min || 0, valueMax: lead.value_max || 0, description: lead.description, createdAt: lead.created_at
+      })));
       if (cRes.data) setChannels(cRes.data as Channel[]);
       if (mRes.data) setMessages(mRes.data.map((m: any) => ({
         id: m.id, userId: m.user_id, channelId: m.channel_id, content: m.content, timestamp: new Date(m.created_at).toLocaleTimeString(), fullTimestamp: m.created_at
       })));
       if (tRes.data) setTasks(tRes.data.map((t: any) => ({
-        id: t.id, 
-        title: t.title, 
-        description: t.description, 
-        assigneeId: t.assignee_id, 
-        status: t.status as TaskStatus, 
-        dueDate: t.due_date, 
-        priority: t.priority, 
-        clientId: t.client_id,
-        type: t.type || 'content'
+        id: t.id, title: t.title, description: t.description, assigneeId: t.assignee_id, status: t.status as TaskStatus, dueDate: t.due_date, priority: t.priority, clientId: t.client_id, type: t.type || 'content'
       })));
       if (fRes.data) setFileLinks(fRes.data.map((f: any) => ({
         id: f.id, name: f.name, url: f.url, createdAt: new Date(f.created_at).toLocaleDateString()
@@ -618,9 +631,7 @@ const App: React.FC = () => {
         const { error, data } = await supabase.auth.signUp({ email, password, options: { data: { name: registerName } } });
         if (error) throw error;
         if (data.user) {
-            await supabase.from('users').insert({
-                id: data.user.id, name: registerName, email: email, role: UserRole.MEMBER, status: 'active'
-            });
+            await supabase.from('users').insert({ id: data.user.id, name: registerName, email: email, role: UserRole.MEMBER, status: 'active' });
         }
         addNotification("Compte créé", "Accès iVISION activé.", "success");
         setIsRegistering(false);
