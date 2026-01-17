@@ -216,6 +216,26 @@ const AppContent: React.FC<{
     } catch (e) { console.error(e); }
   }, [setLeads, setClients, addNotification, navigate]);
 
+  const handleMoveClientToLead = useCallback(async (client: Client) => {
+    try {
+      const { data, error } = await supabase.from('leads').insert({
+        name: client.name,
+        company: client.company,
+        email: client.email,
+        phone: client.phone,
+        description: client.description,
+        status: 'new'
+      }).select();
+      if (data) {
+        setLeads(prev => [data[0], ...prev]);
+        await supabase.from('clients').delete().eq('id', client.id);
+        setClients(prev => prev.filter(c => String(c.id) !== String(client.id)));
+        addNotification("CRM", "Client rétrogradé en prospect", "info");
+        navigate('/leads');
+      }
+    } catch (e) { console.error(e); }
+  }, [setLeads, setClients, addNotification, navigate]);
+
   // CHAT HANDLERS
   const handleSendMessage = useCallback(async (content: string, channelId: string) => {
     try {
@@ -275,7 +295,7 @@ const AppContent: React.FC<{
               addNotification("Paramètres", "Profil mis à jour", "success");
           }} />} />
           <Route path="/chat" element={<Chat currentUser={currentUser} users={users} channels={channels} currentChannelId={channels[0]?.id || "general"} messages={messages} onlineUserIds={new Set()} onChannelChange={() => {}} onSendMessage={handleSendMessage} onAddChannel={() => {}} onDeleteChannel={() => {}} />} />
-          <Route path="/clients" element={<Clients clients={clients} tasks={tasks} fileLinks={fileLinks} currentUser={currentUser} onDeleteClient={async (id) => {
+          <Route path="/clients" element={<Clients clients={clients} tasks={tasks} fileLinks={fileLinks} currentUser={currentUser} onMoveToLead={handleMoveClientToLead} onDeleteClient={async (id) => {
             await supabase.from('clients').delete().eq('id', id);
             setClients(prev => prev.filter(c => String(c.id) !== String(id)));
             addNotification("CRM", "Client supprimé", "info");
@@ -376,7 +396,7 @@ const App: React.FC = () => {
         id: m.id, userId: m.user_id, channelId: m.channel_id, content: m.content, timestamp: new Date(m.created_at).toLocaleTimeString(), fullTimestamp: m.created_at
       })));
       if (tRes.data) setTasks(tRes.data.map((t: any) => ({
-        id: t.id, title: t.title, description: t.description, assigneeId: t.assignee_id, status: t.status as TaskStatus, dueDate: t.due_date, priority: t.priority, clientId: t.client_id
+        id: t.id, title: t.title, description: t.description, assignee_id: t.assignee_id, status: t.status as TaskStatus, dueDate: t.due_date, priority: t.priority, client_id: t.client_id
       })));
       if (fRes.data) setFileLinks(fRes.data.map((f: any) => ({
         id: f.id, name: f.name, url: f.url, createdAt: new Date(f.created_at).toLocaleDateString()
