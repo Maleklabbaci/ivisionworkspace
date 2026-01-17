@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
-import { Client, Task, FileLink, TaskStatus, User, UserRole, Lead } from '../types';
-import { Users, Plus, Search, MapPin, Mail, Phone, Building2, Trash2, Edit2, X, CheckCircle, FileText, ArrowUpDown, Calendar, AlertCircle, ArrowUp, ArrowDown, Lock, Briefcase, ChevronRight, AlignLeft, Target } from 'lucide-react';
+import { Client, Task, FileLink, TaskStatus, User, UserRole } from '../types';
+import { Users, Plus, Search, MapPin, Mail, Phone, Trash2, Edit2, X, CheckCircle, FileText, Lock, Briefcase, ChevronRight, Target } from 'lucide-react';
 
 interface ClientsProps {
   clients: Client[];
@@ -50,12 +50,18 @@ const Clients: React.FC<ClientsProps> = ({ clients, tasks, fileLinks, onAddClien
     );
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = (e: React.FormEvent | React.MouseEvent) => {
+    if (e && e.preventDefault) e.preventDefault();
     if (!formData.name) return;
-    if (editingClient && onUpdateClient) onUpdateClient({ ...editingClient, ...formData } as Client);
-    else if (onAddClient) onAddClient({ id: `client-${Date.now()}`, ...formData } as Client);
+    
+    if (editingClient && onUpdateClient) {
+      onUpdateClient({ ...editingClient, ...formData } as Client);
+    } else if (onAddClient) {
+      // On laisse App.tsx générer le vrai UUID
+      onAddClient({ ...formData } as Client);
+    }
     setShowModal(false);
+    setFormData({name: '', company: '', email: '', phone: '', address: '', description: ''});
   };
 
   const inputClasses = "w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-slate-900 placeholder-slate-300 focus:bg-white focus:border-primary/20 outline-none transition-all text-sm";
@@ -116,7 +122,7 @@ const Clients: React.FC<ClientsProps> = ({ clients, tasks, fileLinks, onAddClien
           )}
       </div>
 
-      {/* DÉTAILS CLIENT - ADAPTÉ PC */}
+      {/* DÉTAILS CLIENT */}
       {selectedClient && (
           <div className="fixed inset-0 z-[1000] flex flex-col justify-end lg:justify-center p-0 lg:p-6">
               <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={() => setSelectedClient(null)}></div>
@@ -169,29 +175,6 @@ const Clients: React.FC<ClientsProps> = ({ clients, tasks, fileLinks, onAddClien
                             </div>
                        </div>
 
-                       <div className="space-y-4">
-                            <div className="flex items-center justify-between px-1">
-                                <div className="flex items-center space-x-3">
-                                    <div className="w-1 h-4 bg-primary rounded-full"></div>
-                                    <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em]">Historique iVISION</h4>
-                                </div>
-                                <span className="bg-primary/10 text-primary text-[9px] font-black px-3 py-1.5 rounded-xl uppercase">
-                                    {tasks.filter(t => t.clientId === selectedClient.id).length} Missions
-                                </span>
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                {tasks.filter(t => t.clientId === selectedClient.id).map(task => (
-                                    <div key={task.id} className="bg-white p-4 rounded-2xl border border-slate-100 flex items-center justify-between shadow-sm">
-                                        <div className="flex items-center space-x-3 truncate">
-                                            <div className={`w-1 h-8 rounded-full ${task.status === TaskStatus.DONE ? 'bg-success' : 'bg-primary'}`}></div>
-                                            <h4 className="font-bold text-slate-900 text-[11px] truncate uppercase">{task.title}</h4>
-                                        </div>
-                                        <CheckCircle size={16} className={task.status === TaskStatus.DONE ? 'text-success' : 'text-slate-100'} />
-                                    </div>
-                                ))}
-                            </div>
-                       </div>
-                       
                        <div className="pt-6 flex flex-col space-y-4">
                            <button 
                                 onClick={() => { if(confirm('Rétrograder ce client en Prospect ?')) { onMoveToLead?.(selectedClient); setSelectedClient(null); } }}
@@ -214,56 +197,56 @@ const Clients: React.FC<ClientsProps> = ({ clients, tasks, fileLinks, onAddClien
           </div>
       )}
 
-      {/* FORMULAIRE - ADAPTÉ PC */}
+      {/* FORMULAIRE AJOUT/ÉDITION */}
       {showModal && (
           <div className="fixed inset-0 z-[2000] flex flex-col justify-end lg:justify-center p-0 lg:p-6">
               <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowModal(false)}></div>
-              <div className="relative bg-white rounded-t-[2.5rem] lg:rounded-[3rem] w-full max-w-xl mx-auto flex flex-col modal-drawer shadow-2xl overflow-hidden">
+              <form onSubmit={handleSubmit} className="relative bg-white rounded-t-[2.5rem] lg:rounded-[3rem] w-full max-w-xl mx-auto flex flex-col modal-drawer shadow-2xl overflow-hidden">
                   <header className="px-8 py-6 border-b border-slate-50 flex items-center justify-between bg-white z-20">
                       <h3 className="text-sm font-black text-slate-900 tracking-tighter uppercase">{editingClient ? 'Modifier le partenaire' : 'Nouveau Partenaire'}</h3>
-                      <button onClick={() => setShowModal(false)} className="p-3 bg-slate-50 rounded-2xl text-slate-400 active-scale"><X size={24}/></button>
+                      <button type="button" onClick={() => setShowModal(false)} className="p-3 bg-slate-50 rounded-2xl text-slate-400 active-scale"><X size={24}/></button>
                   </header>
                   
                   <div className="p-8 space-y-6 flex-1 overflow-y-auto no-scrollbar">
                       <div className="space-y-6">
                           <div className="space-y-3">
                               <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-2">Identification</label>
-                              <input required type="text" className={inputClasses} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="Nom du contact principal *" />
-                              <input type="text" className={inputClasses} value={formData.company} onChange={e => setFormData({...formData, company: e.target.value})} placeholder="Nom de l'organisation" />
+                              <input required type="text" className={inputClasses} value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="Nom du contact principal *" />
+                              <input type="text" className={inputClasses} value={formData.company || ''} onChange={e => setFormData({...formData, company: e.target.value})} placeholder="Nom de l'organisation" />
                           </div>
 
                           <div className="grid grid-cols-2 gap-4">
                               <div className="space-y-3">
                                 <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-2">Communication</label>
-                                <input type="email" className={inputClasses} value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} placeholder="Email professionnel" />
+                                <input type="email" className={inputClasses} value={formData.email || ''} onChange={e => setFormData({...formData, email: e.target.value})} placeholder="Email professionnel" />
                               </div>
                               <div className="space-y-3">
                                 <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-2">Direct</label>
-                                <input type="tel" className={inputClasses} value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} placeholder="Téléphone" />
+                                <input type="tel" className={inputClasses} value={formData.phone || ''} onChange={e => setFormData({...formData, phone: e.target.value})} placeholder="Téléphone" />
                               </div>
                           </div>
 
                           <div className="space-y-3">
                               <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-2">Géographie</label>
-                              <input type="text" className={inputClasses} value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} placeholder="Adresse complète de l'organisation" />
+                              <input type="text" className={inputClasses} value={formData.address || ''} onChange={e => setFormData({...formData, address: e.target.value})} placeholder="Adresse complète de l'organisation" />
                           </div>
 
                           <div className="space-y-3">
                               <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-2">Analyse & Briefing</label>
                               <textarea 
                                   className="w-full h-40 p-6 bg-slate-50 border border-slate-100 rounded-[2rem] font-bold text-slate-900 placeholder-slate-300 focus:bg-white focus:border-primary/20 outline-none transition-all text-sm resize-none" 
-                                  value={formData.description} 
+                                  value={formData.description || ''} 
                                   onChange={e => setFormData({...formData, description: e.target.value})} 
                                   placeholder="Notes stratégiques..."
                               />
                           </div>
                       </div>
                       
-                      <button onClick={handleSubmit} className="w-full py-6 bg-primary text-white rounded-[2rem] font-black text-xs uppercase tracking-[0.2em] shadow-2xl shadow-primary/20 border-4 border-white active-scale transition-all">
-                        FINALISER LE PROFIL
+                      <button type="submit" className="w-full py-6 bg-primary text-white rounded-[2rem] font-black text-xs uppercase tracking-[0.2em] shadow-2xl shadow-primary/20 border-4 border-white active-scale transition-all">
+                        {editingClient ? 'METTRE À JOUR LE PROFIL' : 'FINALISER LE PROFIL'}
                       </button>
                   </div>
-              </div>
+              </form>
           </div>
       )}
     </div>

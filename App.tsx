@@ -158,13 +158,13 @@ const AppContent: React.FC<{
     try {
       const { error } = await supabase.from('tasks').update({
         title: task.title,
-        description: task.description,
+        description: task.description || null,
         assignee_id: task.assigneeId,
         status: task.status,
         due_date: task.dueDate,
-        priority: task.priority,
+        priority: task.priority || 'medium',
         client_id: task.clientId || null,
-        type: task.type
+        type: task.type || 'content'
       }).eq('id', task.id);
       
       if (error) throw error;
@@ -180,7 +180,7 @@ const AppContent: React.FC<{
       const { data, error } = await supabase.from('tasks').insert({
         id: generateUUID(),
         title: task.title,
-        description: task.description,
+        description: task.description || null,
         assignee_id: task.assigneeId,
         status: task.status,
         due_date: task.dueDate,
@@ -223,14 +223,61 @@ const AppContent: React.FC<{
     }
   }, [setTasks, addNotification]);
 
+  // CLIENTS HANDLERS
+  const handleAddClient = useCallback(async (client: Client) => {
+    try {
+      const { data, error } = await supabase.from('clients').insert({
+        id: generateUUID(),
+        name: client.name,
+        company: client.company || null,
+        email: client.email || null,
+        phone: client.phone || null,
+        address: client.address || null,
+        description: client.description || null
+      }).select();
+      if (error) throw error;
+      if (data) {
+        setClients(prev => [...prev, data[0] as Client]);
+        addNotification("CRM", "Nouveau compte partenaire ajouté", "success");
+      }
+    } catch (e: any) {
+      console.error(e);
+      addNotification("Erreur", `Impossible d'ajouter le client : ${e.message}`, "urgent");
+    }
+  }, [setClients, addNotification]);
+
+  const handleUpdateClient = useCallback(async (client: Client) => {
+    setClients(prev => prev.map(c => c.id === client.id ? { ...client } : c));
+    try {
+      const { error } = await supabase.from('clients').update({
+        name: client.name,
+        company: client.company || null,
+        email: client.email || null,
+        phone: client.phone || null,
+        address: client.address || null,
+        description: client.description || null
+      }).eq('id', client.id);
+      if (error) throw error;
+      addNotification("CRM", "Compte mis à jour", "success");
+    } catch (e: any) {
+      console.error(e);
+      addNotification("Erreur", `Mise à jour échouée : ${e.message}`, "urgent");
+    }
+  }, [setClients, addNotification]);
+
   // LEADS HANDLERS
   const handleAddLead = useCallback(async (lead: Lead) => {
     try {
       const { data, error } = await supabase.from('leads').insert({
         id: generateUUID(),
-        name: lead.name, company: lead.company, email: lead.email,
-        phone: lead.phone, status: lead.status, value_min: lead.valueMin,
-        value_max: lead.valueMax, description: lead.description
+        name: lead.name, 
+        company: lead.company || null, 
+        email: lead.email || null,
+        phone: lead.phone || null, 
+        status: lead.status || 'new', 
+        value_min: lead.valueMin || 0,
+        value_max: lead.valueMax || 0, 
+        description: lead.description || null
       }).select();
       if (error) throw error;
       if (data) {
@@ -250,7 +297,7 @@ const AppContent: React.FC<{
       }
     } catch (e: any) { 
       console.error(e); 
-      addNotification("Erreur", "Impossible d'ajouter le prospect", "urgent");
+      addNotification("Erreur", `Impossible d'ajouter le prospect : ${e.message}`, "urgent");
     }
   }, [setLeads, addNotification]);
 
@@ -258,9 +305,14 @@ const AppContent: React.FC<{
     setLeads(prev => prev.map(l => String(l.id) === String(lead.id) ? { ...lead } : l));
     try {
       const { error } = await supabase.from('leads').update({
-        name: lead.name, company: lead.company, email: lead.email,
-        phone: lead.phone, status: lead.status, value_min: lead.valueMin,
-        value_max: lead.valueMax, description: lead.description
+        name: lead.name, 
+        company: lead.company || null, 
+        email: lead.email || null,
+        phone: lead.phone || null, 
+        status: lead.status, 
+        value_min: lead.valueMin,
+        value_max: lead.valueMax, 
+        description: lead.description || null
       }).eq('id', lead.id);
       if (error) throw error;
       addNotification("Pipeline", "Prospect mis à jour", "success");
@@ -286,8 +338,11 @@ const AppContent: React.FC<{
     try {
       const { data, error } = await supabase.from('clients').insert({
         id: generateUUID(),
-        name: lead.name, company: lead.company, email: lead.email,
-        phone: lead.phone, description: lead.description
+        name: lead.name, 
+        company: lead.company || null, 
+        email: lead.email || null,
+        phone: lead.phone || null, 
+        description: lead.description || null
       }).select();
       if (error) throw error;
       if (data) {
@@ -297,9 +352,9 @@ const AppContent: React.FC<{
         addNotification("CRM", "Prospect converti en client !", "success");
         navigate('/clients');
       }
-    } catch (e) { 
+    } catch (e: any) { 
       console.error(e);
-      addNotification("Erreur", "Conversion échouée", "urgent");
+      addNotification("Erreur", `Conversion échouée : ${e.message}`, "urgent");
     }
   }, [setLeads, setClients, addNotification, navigate]);
 
@@ -308,10 +363,10 @@ const AppContent: React.FC<{
       const { data, error } = await supabase.from('leads').insert({
         id: generateUUID(),
         name: client.name,
-        company: client.company,
-        email: client.email,
-        phone: client.phone,
-        description: client.description,
+        company: client.company || null,
+        email: client.email || null,
+        phone: client.phone || null,
+        description: client.description || null,
         status: 'new'
       }).select();
       if (error) throw error;
@@ -403,7 +458,7 @@ const AppContent: React.FC<{
               addNotification("Paramètres", "Profil mis à jour", "success");
           }} />} />
           <Route path="/chat" element={<Chat currentUser={currentUser} users={users} channels={channels} currentChannelId={channels[0]?.id || "general"} messages={messages} onlineUserIds={new Set()} onChannelChange={() => {}} onSendMessage={handleSendMessage} onAddChannel={() => {}} onDeleteChannel={() => {}} />} />
-          <Route path="/clients" element={<Clients clients={clients} tasks={tasks} fileLinks={fileLinks} currentUser={currentUser} onMoveToLead={handleMoveClientToLead} onDeleteClient={async (id) => {
+          <Route path="/clients" element={<Clients clients={clients} tasks={tasks} fileLinks={fileLinks} currentUser={currentUser} onAddClient={handleAddClient} onUpdateClient={handleUpdateClient} onMoveToLead={handleMoveClientToLead} onDeleteClient={async (id) => {
             await supabase.from('clients').delete().eq('id', id);
             setClients(prev => prev.filter(c => String(c.id) !== String(id)));
             addNotification("CRM", "Client supprimé", "info");
