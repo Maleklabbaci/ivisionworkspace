@@ -1,27 +1,29 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 
-// Fonction pour récupérer la meilleure clé disponible
+// Use process.env.API_KEY exclusively as per Gemini guidelines.
+// Assume process.env.API_KEY is pre-configured and valid.
 const getAIClient = () => {
-  const customKey = localStorage.getItem('ivision_custom_gemini_key');
-  const apiKey = customKey || process.env.API_KEY;
-  return new GoogleGenAI({ apiKey: apiKey as string });
+  return new GoogleGenAI({ apiKey: process.env.API_KEY as string });
 };
 
 export const generateMarketingInsight = async (context: string): Promise<string> => {
   try {
     const ai = getAIClient();
+    // Use the recommended model for basic text/summarization tasks.
     const model = 'gemini-3-flash-preview';
     
+    // Always call generateContent directly on ai.models.
     const response = await ai.models.generateContent({
       model: model,
       contents: `Expert Marketing. Analyse ces KPIs iVISION et donne 3 conseils courts (max 50 mots total) : ${context}`,
     });
 
+    // Access the extracted string directly from the text property (getter).
     return response.text?.trim() || "Analyse indisponible.";
   } catch (error) {
     console.error("Gemini Error:", error);
-    return "Erreur lors de l'analyse IA. Vérifiez la clé API dans les paramètres.";
+    return "Erreur lors de l'analyse IA. Vérifiez la configuration de la clé API.";
   }
 };
 
@@ -42,6 +44,7 @@ export const brainstormTaskIdeas = async (topic: string): Promise<string[]> => {
       }
     });
 
+    // Directly access text property from GenerateContentResponse.
     return JSON.parse(response.text || "[]");
   } catch (error) {
     return ["Audit de campagne", "Optimisation SEO", "Rédaction contenu"];
@@ -80,6 +83,7 @@ export const parseLeadFromText = async (text: string): Promise<any> => {
       }
     });
 
+    // Directly access text property from GenerateContentResponse.
     return JSON.parse(response.text || "{}");
   } catch (error) {
     console.error("Magic Tool Error:", error);

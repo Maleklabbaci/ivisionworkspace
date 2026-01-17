@@ -5,9 +5,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#ffffff">
     
-    <title>iVISION - Workspace</title>
+    <title>iVISION - Enterprise Workspace</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script>
@@ -16,15 +17,13 @@
           extend: {
             fontFamily: { sans: ['"Plus Jakarta Sans"', 'sans-serif'] },
             colors: {
-              primary: '#0066FF',
-              urgent: '#FF3B30',
-              success: '#34C759',
-              slate: { 50: '#F2F2F7', 100: '#E5E5EA', 200: '#D1D1D6', 400: '#8E8E93', 800: '#2C2C2E', 900: '#1C1C1E' }
+              primary: { DEFAULT: '#0061FF', soft: '#EBF2FF', deep: '#0047BD' },
+              vibrant: { indigo: '#6366F1', violet: '#8B5CF6', emerald: '#10B981', amber: '#F59E0B', rose: '#F43F5E', sky: '#0EA5E9', orange: '#FF7A00' },
+              urgent: '#E11D48',
+              success: '#10B981',
+              slate: { 50: '#F8FAFC', 100: '#F1F5F9', 200: '#E2E8F0', 400: '#94A3B8', 800: '#1E293B', 900: '#0F172A' }
             },
-            borderRadius: {
-              '4xl': '2rem',
-              '5xl': '2.5rem',
-            }
+            borderRadius: { 'xl': '0.75rem', '2xl': '1rem', '3xl': '1.5rem', '4xl': '2rem', '5xl': '2.5rem' }
           }
         }
       }
@@ -38,94 +37,52 @@
         -webkit-font-smoothing: antialiased; 
         box-sizing: border-box;
         -webkit-tap-highlight-color: transparent;
+        margin: 0; padding: 0;
       }
       
       html, body {
         height: 100%;
         width: 100%;
-        margin: 0;
-        padding: 0;
         background-color: #ffffff;
-        overflow-y: auto;
-        overflow-x: hidden;
-        -webkit-overflow-scrolling: touch;
+        color: #0F172A;
+        overflow: hidden; /* Verrouille le défilement du body pour utiliser le scroll interne */
+        position: fixed; /* Empêche le bounce effect sur mobile */
       }
 
-      /* Scrollbar moderne pour PC */
-      @media (min-width: 1024px) {
-        ::-webkit-scrollbar {
-          width: 6px;
-          height: 6px;
-        }
-        ::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        ::-webkit-scrollbar-thumb {
-          background: #E5E5EA;
-          border-radius: 10px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-          background: #D1D1D6;
-        }
-      }
+      #root { height: 100%; width: 100%; display: flex; flex-direction: column; }
 
-      #root {
-        min-height: 100%;
-        display: flex;
-        flex-direction: column;
-      }
-
-      .active-scale:active { 
-        transform: scale(0.98); 
-        opacity: 0.9;
-      }
-      
+      .active-scale:active { transform: scale(0.98); opacity: 0.9; }
       .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-      /* Animation Mobile Drawer */
-      @media (max-width: 1023px) {
-        .modal-drawer {
-          animation: drawerUp 0.15s cubic-bezier(0, 0, 0.2, 1) forwards;
-          will-change: transform;
-        }
-      }
-
-      /* Comportement Modal PC (Centré au lieu de Drawer) */
-      @media (min-width: 1024px) {
-        .modal-drawer {
-          animation: modalFadeIn 0.2s ease-out forwards;
-          margin: auto;
-          max-width: 500px;
-          border-radius: 2.5rem !important;
-          max-height: 85vh;
-        }
-      }
-
-      @keyframes drawerUp {
-        from { transform: translateY(100%); }
-        to { transform: translateY(0); }
+      .modal-drawer {
+        animation: modalFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
       }
 
       @keyframes modalFadeIn {
-        from { opacity: 0; transform: scale(0.95) translateY(10px); }
-        to { opacity: 1; transform: scale(1) translateY(0); }
+        from { opacity: 0; transform: translateY(20px) scale(0.98); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
       }
 
-      @media (hover: hover) {
-        .hover-effect:hover {
-          border-color: rgba(0, 102, 255, 0.2) !important;
-          background-color: #f8fafc !important;
-          transform: translateY(-2px);
-        }
-        .sidebar-item:hover {
-          background-color: #ffffff;
-          color: #0066FF;
-          padding-left: 1.5rem;
+      .card-formal {
+        background: #ffffff;
+        border: 1px solid #E2E8F0;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+
+      @media (min-width: 1024px) {
+        .card-formal:hover {
+          border-color: #0061FF;
+          box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.05);
+          transform: translateY(-4px);
         }
       }
 
-      .safe-pt { padding-top: var(--safe-top); }
-      .safe-pb { padding-bottom: var(--safe-bottom); }
+      .glass-card {
+        background: rgba(255, 255, 255, 0.9);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+      }
     </style>
   <script type="importmap">
 {

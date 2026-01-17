@@ -1,7 +1,7 @@
 
-import React, { useState, useRef, useEffect } from 'react';
-import { User, UserRole } from '../types';
-import { Camera, Mail, Phone, User as UserIcon, Loader2, Cpu, ShieldCheck, Sparkles, Key, Eye, EyeOff } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { User } from '../types';
+import { Camera, Mail, Phone, User as UserIcon, Loader2 } from 'lucide-react';
 
 interface SettingsProps {
   currentUser: User;
@@ -15,16 +15,12 @@ const Settings: React.FC<SettingsProps> = ({ currentUser, onUpdateProfile }) => 
     phoneNumber: currentUser.phoneNumber || '',
     newPassword: '',
     confirmPassword: '',
-    customApiKey: localStorage.getItem('ivision_custom_gemini_key') || ''
   });
   
-  const [showKey, setShowKey] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState(currentUser.avatar);
   const [isSaving, setIsSaving] = useState(false);
   const [showSavedFeedback, setShowSavedFeedback] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const isAdmin = currentUser.role === UserRole.ADMIN;
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
@@ -35,15 +31,7 @@ const Settings: React.FC<SettingsProps> = ({ currentUser, onUpdateProfile }) => 
     setIsSaving(true);
     
     try {
-      // Sauvegarde de la clé IA si Admin
-      if (isAdmin) {
-        if (formData.customApiKey.trim()) {
-          localStorage.setItem('ivision_custom_gemini_key', formData.customApiKey.trim());
-        } else {
-          localStorage.removeItem('ivision_custom_gemini_key');
-        }
-      }
-
+      // API Key management removed as it must be strictly handled via environment variables.
       await onUpdateProfile({
         name: formData.name, 
         email: formData.email, 
@@ -103,62 +91,7 @@ const Settings: React.FC<SettingsProps> = ({ currentUser, onUpdateProfile }) => 
             </div>
         </div>
 
-        {/* Sécurité & IA - RÉSERVÉ ADMIN */}
-        {isAdmin && (
-          <div className="bg-slate-900 p-10 rounded-[3.5rem] border-4 border-white shadow-2xl space-y-8 relative overflow-hidden group">
-              <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity">
-                  <Cpu size={120} />
-              </div>
-              
-              <div className="relative z-10">
-                  <div className="flex items-center space-x-3 mb-6">
-                      <div className="w-10 h-10 bg-primary/20 rounded-xl flex items-center justify-center text-primary">
-                          <ShieldCheck size={20} />
-                      </div>
-                      <h3 className="text-sm font-black text-white uppercase tracking-widest">Sécurité & Intelligence IA</h3>
-                  </div>
-
-                  <div className="space-y-6">
-                      <div className="bg-white/5 p-6 rounded-[2.5rem] border border-white/10 flex items-center justify-between">
-                          <div className="flex items-center space-x-4">
-                              <Sparkles size={20} className="text-primary" />
-                              <div>
-                                  <p className="text-white font-black text-[10px] uppercase tracking-widest">Moteur iVISION</p>
-                                  <p className="text-success font-bold text-[9px] uppercase">Actif (Gemini Flash)</p>
-                              </div>
-                          </div>
-                          <div className="w-3 h-3 bg-success rounded-full shadow-[0_0_10px_rgba(52,199,89,0.5)]"></div>
-                      </div>
-
-                      <div className="space-y-3">
-                          <label className="text-[10px] font-black text-white/40 uppercase tracking-widest px-2">Configuration Clé API Globale</label>
-                          <div className="relative">
-                              <input 
-                                type={showKey ? "text" : "password"}
-                                name="customApiKey"
-                                value={formData.customApiKey}
-                                onChange={handleChange}
-                                className="w-full p-5 bg-white/5 border border-white/10 rounded-3xl font-bold text-white placeholder-white/10 focus:bg-white/10 focus:border-primary/50 outline-none transition-all pl-12 text-sm"
-                                placeholder="Saisir la clé Gemini API..."
-                              />
-                              <Key size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" />
-                              <button 
-                                type="button"
-                                onClick={() => setShowKey(!showKey)}
-                                className="absolute right-4 top-1/2 -translate-y-1/2 text-white/20 hover:text-white transition-colors"
-                              >
-                                {showKey ? <EyeOff size={18} /> : <Eye size={18} />}
-                              </button>
-                          </div>
-                      </div>
-
-                      <p className="text-[9px] text-white/30 font-bold uppercase tracking-widest px-2 leading-relaxed">
-                          La clé API configurée ici sera utilisée pour toutes les fonctions intelligentes de la plateforme (Leads, Insights, Rapports).
-                      </p>
-                  </div>
-              </div>
-          </div>
-        )}
+        {/* Gemini API key configuration UI removed as per SDK guidelines: MUST exclusively use environment variables. */}
 
         <button 
           type="submit" 
