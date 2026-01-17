@@ -1,7 +1,8 @@
 
 import React, { useState, useMemo, useCallback, memo } from 'react';
 import { Lead, User, UserRole } from '../types';
-import { Search, Plus, Target, X, Mail, Phone, Trash2, Edit2, ChevronRight, Zap, TrendingUp, Lock, CheckCircle2, AlertTriangle, Loader2, MessageSquare, Sparkles, Wand2, PhoneCall, UserCheck, UserMinus } from 'lucide-react';
+import { Search, Plus, Target, X, Mail, Phone, Trash2, Edit2, ChevronRight, Zap, TrendingUp, Lock, CheckCircle2, AlertTriangle, Loader2, Sparkles, Wand2, PhoneCall, UserCheck, UserMinus, MessageSquare } from 'lucide-react';
+import { parseLeadFromText } from '../services/geminiService';
 
 interface LeadCardProps {
   lead: Lead;
@@ -9,9 +10,10 @@ interface LeadCardProps {
   statusStyle: any;
 }
 
-// Memoization pour éviter les re-renders inutiles de la liste
 const LeadCard = memo(({ lead, onClick, statusStyle }: LeadCardProps) => {
   const StatusIcon = statusStyle.icon;
+  const hasRange = lead.valueMax && lead.valueMax > (lead.valueMin || 0);
+  
   return (
     <div 
       className={`bg-white p-6 rounded-[2.5rem] border-2 border-transparent border-l-[6px] shadow-sm hover:shadow-xl hover:translate-y-[-4px] active-scale group cursor-pointer flex flex-col transition-all ${statusStyle.accent}`}
@@ -31,7 +33,10 @@ const LeadCard = memo(({ lead, onClick, statusStyle }: LeadCardProps) => {
         <div className="flex flex-col">
           <span className="text-[8px] font-black text-slate-300 uppercase mb-0.5">Potentiel iV</span>
           <span className="text-xs font-black text-slate-900">
-            {new Intl.NumberFormat('fr-FR').format(lead.valueMin || 0)} <span className="text-[8px] text-slate-300">DZD</span>
+            {new Intl.NumberFormat('fr-FR').format(lead.valueMin || 0)} 
+            {hasRange && <span className="mx-1 text-slate-300">-</span>}
+            {hasRange && new Intl.NumberFormat('fr-FR').format(lead.valueMax || 0)}
+            <span className="text-[8px] text-slate-300 ml-1">DZD</span>
           </span>
         </div>
         <ChevronRight size={18} className={`${statusStyle.text}`} />
@@ -59,12 +64,13 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isMagicProcessing, setIsMagicProcessing] = useState(false);
+  const [magicText, setMagicText] = useState('');
   
   const [formData, setFormData] = useState<Partial<Lead>>(EMPTY_LEAD_FORM);
 
   const inputClasses = "w-full p-5 bg-slate-50 border border-slate-100 rounded-3xl font-bold text-slate-900 placeholder-slate-300 focus:bg-white focus:border-primary/20 transition-all outline-none text-sm";
 
-  // Récupération stable du lead pour éviter les duplications lors de l'affichage
   const currentLead = useMemo(() => 
     leads.find(l => String(l.id) === String(selectedLeadId)), 
   [leads, selectedLeadId]);
@@ -111,7 +117,26 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
     setViewMode('list');
     setSelectedLeadId(null);
     setFormData(EMPTY_LEAD_FORM);
+    setMagicText('');
   }, []);
+
+  const handleMagicCapture = async () => {
+    if (!magicText.trim()) return;
+    setIsMagicProcessing(true);
+    try {
+      const parsedData = await parseLeadFromText(magicText);
+      setFormData({
+        ...EMPTY_LEAD_FORM,
+        ...parsedData,
+        status: 'new'
+      });
+      setMagicText('');
+    } catch (err) {
+      alert("Échec de la magie iVISION. Remplissez le formulaire manuellement.");
+    } finally {
+      setIsMagicProcessing(false);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -119,7 +144,7 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
     
     const leadToSave: Lead = {
       id: currentLead?.id || `lead-${crypto.randomUUID()}`,
-      name: formData.name,
+      name: formData.name || '',
       company: formData.company || '',
       email: formData.email || '',
       phone: formData.phone || '',
@@ -155,11 +180,7 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
           <p className="text-orange-500 font-black text-[10px] uppercase tracking-[0.4em] mt-2">Acquisition Strategique</p>
         </div>
         <div className="flex flex-col md:flex-row gap-3">
-          <div className="relative md:w-80">
-            <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" />
-            <input type="text" placeholder="Filtrer..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-12 pr-4 py-4 bg-white border border-slate-100 rounded-3xl shadow-sm text-xs font-bold outline-none" />
-          </div>
-          <button onClick={() => { setSelectedLeadId(null); setFormData(EMPTY_LEAD_FORM); setViewMode('edit'); }} className="bg-orange-500 text-white p-4 px-8 rounded-3xl shadow-2xl active-scale flex items-center justify-center font-black text-[10px] tracking-widest uppercase border-4 border-white transition-all">
+          <button onClick={() => { setSelectedLeadId(null); setFormData(EMPTY_LEAD_FORM); setViewMode('edit'); }} className="bg-orange-500 text-white p-4 px-10 rounded-3xl shadow-2xl active-scale flex items-center justify-center font-black text-[10px] tracking-widest uppercase border-4 border-white transition-all">
             <Plus size={20} className="mr-2" strokeWidth={3} /> CAPTURER UN LEAD
           </button>
         </div>
@@ -198,13 +219,14 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
             statusStyle={getStatusStyle(lead.status)} 
           />
         ))}
+        {filteredLeads.length === 0 && <div className="col-span-full py-40 text-center opacity-20"><Target size={64} className="mx-auto" /></div>}
       </div>
 
       {(viewMode === 'view' || viewMode === 'edit') && (
         <div className="fixed inset-0 z-[1000] flex flex-col justify-end lg:justify-center p-0 lg:p-6 animate-in fade-in">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={handleCloseModal}></div>
-          <div className="relative bg-white rounded-t-[3rem] lg:rounded-[4rem] w-full max-w-2xl mx-auto flex flex-col shadow-2xl overflow-hidden border-b-[12px] border-orange-500 modal-drawer">
-            <header className="px-10 py-8 border-b border-slate-50 flex items-center justify-between bg-white sticky top-0 z-20">
+          <div className="relative bg-white rounded-t-[3rem] lg:rounded-[4rem] w-full max-w-2xl mx-auto flex flex-col shadow-2xl overflow-hidden border-b-[12px] border-orange-500 modal-drawer max-h-[90vh]">
+            <header className="px-10 py-8 border-b border-slate-50 flex items-center justify-between bg-white sticky top-0 z-30">
               <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter">
                 {viewMode === 'view' ? 'Fiche Lead' : currentLead ? 'Mise à jour' : 'Nouvelle Saisie'}
               </h3>
@@ -247,9 +269,13 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
                                 <option value="lost">Abandonné</option>
                             </select>
                         </div>
-                        <div className="p-6 bg-slate-50 rounded-[2rem] border border-slate-100">
-                            <label className="text-[9px] font-black text-slate-400 uppercase mb-2 block px-1">Potentiel iV</label>
-                            <p className="font-black text-slate-900 text-xs uppercase">{new Intl.NumberFormat('fr-FR').format(currentLead.valueMin || 0)} DZD</p>
+                        <div className="p-6 bg-slate-50 rounded-[2rem] border border-slate-100 flex flex-col justify-center">
+                            <label className="text-[9px] font-black text-slate-400 uppercase mb-1 block px-1">Potentiel iV</label>
+                            <p className="font-black text-slate-900 text-xs uppercase">
+                                {new Intl.NumberFormat('fr-FR').format(currentLead.valueMin || 0)} 
+                                {currentLead.valueMax && currentLead.valueMax > currentLead.valueMin ? ` - ${new Intl.NumberFormat('fr-FR').format(currentLead.valueMax)}` : ''} 
+                                <span className="text-[10px] text-orange-500 ml-1">DZD</span>
+                            </p>
                         </div>
                     </div>
 
@@ -276,29 +302,78 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
                 </div>
               ) : (
                 <form onSubmit={handleSubmit} className="space-y-8 animate-in slide-in-from-bottom-4">
+                  {!currentLead && (
+                    <div className="bg-slate-900 p-8 rounded-[3rem] border-4 border-white shadow-2xl space-y-6 relative overflow-hidden group">
+                      <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity">
+                        <Sparkles size={80} className="text-primary" />
+                      </div>
+                      <div className="relative z-10">
+                        <div className="flex items-center space-x-3 mb-4">
+                          <Wand2 size={20} className="text-primary" />
+                          <h4 className="text-[10px] font-black text-white uppercase tracking-widest">Magic Capture IA</h4>
+                        </div>
+                        <p className="text-[9px] text-white/40 font-bold uppercase tracking-widest mb-4 px-1">
+                          Décrivez le prospect en langage naturel pour remplir le formulaire instantanément.
+                        </p>
+                        <div className="relative">
+                          <textarea 
+                            value={magicText}
+                            onChange={(e) => setMagicText(e.target.value)}
+                            className="w-full h-32 p-5 bg-white/5 border border-white/10 rounded-[2rem] font-bold text-white placeholder-white/10 focus:bg-white/10 focus:border-primary/50 outline-none transition-all text-xs resize-none"
+                            placeholder="Ex: Amine de chez Google Algeria, amine@google.dz. Budget entre 200k et 300k pour du SEO..."
+                          />
+                          <button 
+                            type="button"
+                            disabled={isMagicProcessing || !magicText.trim()}
+                            onClick={handleMagicCapture}
+                            className="absolute bottom-4 right-4 bg-primary text-white p-4 rounded-2xl shadow-xl active-scale disabled:opacity-30 disabled:scale-100 transition-all border-2 border-white/10"
+                          >
+                            {isMagicProcessing ? <Loader2 className="animate-spin" size={18} /> : <Zap size={18} />}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-2 gap-6">
-                    <input required type="text" className={inputClasses} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="Nom complet *" />
-                    <input type="text" className={inputClasses} value={formData.company} onChange={e => setFormData({...formData, company: e.target.value})} placeholder="Entreprise" />
+                    <div className="space-y-2">
+                        <label className="text-[9px] font-black uppercase text-slate-400 px-2">Nom Complet *</label>
+                        <input required type="text" className={inputClasses} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="Ex: Ahmed Ben" />
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-[9px] font-black uppercase text-slate-400 px-2">Entreprise</label>
+                        <input type="text" className={inputClasses} value={formData.company} onChange={e => setFormData({...formData, company: e.target.value})} placeholder="Nom de la boîte" />
+                    </div>
                   </div>
                   <div className="grid grid-cols-2 gap-6">
-                    <input type="email" className={inputClasses} value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} placeholder="Email" />
-                    <input type="tel" className={inputClasses} value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} placeholder="Téléphone" />
+                    <div className="space-y-2">
+                        <label className="text-[9px] font-black uppercase text-slate-400 px-2">Email</label>
+                        <input type="email" className={inputClasses} value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} placeholder="ahmed@pro.com" />
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-[9px] font-black uppercase text-slate-400 px-2">Téléphone</label>
+                        <input type="tel" className={inputClasses} value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} placeholder="+213..." />
+                    </div>
                   </div>
                   <div className="grid grid-cols-2 gap-6">
-                    <input type="number" className={inputClasses} value={formData.valueMin || ''} onChange={e => setFormData({...formData, valueMin: Number(e.target.value)})} placeholder="Budget (DZD)" />
-                    <select className={inputClasses} value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as any})}>
-                        <option value="new">Nouveau</option>
-                        <option value="contacted">Contacté</option>
-                        <option value="qualified">Qualifié</option>
-                        <option value="lost">Perdu</option>
-                    </select>
+                    <div className="space-y-2">
+                        <label className="text-[9px] font-black uppercase text-slate-400 px-2">Budget Min (DZD)</label>
+                        <input type="number" className={inputClasses} value={formData.valueMin || ''} onChange={e => setFormData({...formData, valueMin: Number(e.target.value)})} placeholder="0" />
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-[9px] font-black uppercase text-slate-400 px-2">Budget Max (DZD)</label>
+                        <input type="number" className={inputClasses} value={formData.valueMax || ''} onChange={e => setFormData({...formData, valueMax: Number(e.target.value)})} placeholder="0" />
+                    </div>
                   </div>
-                  <textarea className="w-full h-40 p-6 bg-slate-50 border border-slate-100 rounded-[2.5rem] font-bold text-slate-900 text-sm outline-none resize-none" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} placeholder="Notes..." />
+                  <div className="space-y-2">
+                    <label className="text-[9px] font-black uppercase text-slate-400 px-2">Notes & Contexte</label>
+                    <textarea className="w-full h-40 p-6 bg-slate-50 border border-slate-100 rounded-[2.5rem] font-bold text-slate-900 text-sm outline-none resize-none focus:bg-white transition-all" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} placeholder="Notes stratégiques..." />
+                  </div>
 
                   <div className="pt-4 flex space-x-4">
                     <button type="button" onClick={handleCloseModal} className="flex-1 py-6 bg-slate-100 text-slate-400 rounded-[2.5rem] font-black text-[10px] uppercase tracking-widest active-scale">ANNULER</button>
                     <button type="submit" className="flex-[2] py-6 bg-orange-500 text-white rounded-[2.5rem] font-black text-xs uppercase tracking-[0.2em] border-4 border-white shadow-xl shadow-orange-500/20 active-scale">
-                      {currentLead ? 'ENREGISTRER' : 'CAPTURER LE PROSPECT'}
+                      {currentLead ? 'ENREGISTRER' : 'FINALISER LA CAPTURE'}
                     </button>
                   </div>
                 </form>
@@ -308,7 +383,6 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
         </div>
       )}
 
-      {/* Confirmation Suppression */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 z-[3000] flex items-center justify-center p-6 animate-in fade-in">
           <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-xl" onClick={() => !isDeleting && setShowDeleteConfirm(false)}></div>

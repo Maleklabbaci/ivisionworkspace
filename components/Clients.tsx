@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
-import { Client, Task, FileLink, TaskStatus, User, UserRole } from '../types';
-import { Users, Plus, Search, MapPin, Mail, Phone, Building2, Trash2, Edit2, X, CheckCircle, FileText, ArrowUpDown, Calendar, AlertCircle, ArrowUp, ArrowDown, Lock, Briefcase, ChevronRight, AlignLeft } from 'lucide-react';
+import { Client, Task, FileLink, TaskStatus, User, UserRole, Lead } from '../types';
+import { Users, Plus, Search, MapPin, Mail, Phone, Building2, Trash2, Edit2, X, CheckCircle, FileText, ArrowUpDown, Calendar, AlertCircle, ArrowUp, ArrowDown, Lock, Briefcase, ChevronRight, AlignLeft, Target } from 'lucide-react';
 
 interface ClientsProps {
   clients: Client[];
@@ -10,10 +10,11 @@ interface ClientsProps {
   onAddClient?: (client: Client) => void;
   onUpdateClient?: (client: Client) => void;
   onDeleteClient?: (id: string) => void;
+  onMoveToLead?: (client: Client) => void;
   currentUser?: User;
 }
 
-const Clients: React.FC<ClientsProps> = ({ clients, tasks, fileLinks, onAddClient, onUpdateClient, onDeleteClient, currentUser }) => {
+const Clients: React.FC<ClientsProps> = ({ clients, tasks, fileLinks, onAddClient, onUpdateClient, onDeleteClient, onMoveToLead, currentUser }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
@@ -191,13 +192,22 @@ const Clients: React.FC<ClientsProps> = ({ clients, tasks, fileLinks, onAddClien
                             </div>
                        </div>
                        
-                       <div className="pt-6 flex space-x-4">
-                           <button onClick={() => { setEditingClient(selectedClient); setFormData(selectedClient); setShowModal(true); setSelectedClient(null); }} className="flex-1 py-5 bg-slate-900 text-white font-black text-xs uppercase tracking-widest rounded-[2rem] active-scale transition-all border-4 border-white shadow-xl flex items-center justify-center">
-                               <Edit2 size={18} className="mr-3" /> CONFIGURER LE COMPTE
+                       <div className="pt-6 flex flex-col space-y-4">
+                           <button 
+                                onClick={() => { if(confirm('Rétrograder ce client en Prospect ?')) { onMoveToLead?.(selectedClient); setSelectedClient(null); } }}
+                                className="w-full py-6 bg-orange-500 text-white font-black text-xs uppercase tracking-[0.2em] rounded-[2rem] active-scale transition-all border-4 border-white shadow-xl shadow-orange-500/20 flex items-center justify-center space-x-3"
+                           >
+                               <Target size={20} /> <span>RÉTROGRADER EN LEAD PIPELINE</span>
                            </button>
-                           <button onClick={() => { if(confirm('Révoquer ce client ?')) { onDeleteClient?.(selectedClient.id); setSelectedClient(null); } }} className="w-20 h-20 bg-red-50 text-urgent flex items-center justify-center rounded-[2rem] active-scale transition-all border-4 border-white shadow-xl">
-                               <Trash2 size={28} />
-                           </button>
+
+                           <div className="flex space-x-4">
+                               <button onClick={() => { setEditingClient(selectedClient); setFormData(selectedClient); setShowModal(true); setSelectedClient(null); }} className="flex-1 py-5 bg-slate-900 text-white font-black text-xs uppercase tracking-widest rounded-[2rem] active-scale transition-all border-4 border-white shadow-xl flex items-center justify-center">
+                                   <Edit2 size={18} className="mr-3" /> CONFIGURER
+                               </button>
+                               <button onClick={() => { if(confirm('Révoquer ce client ?')) { onDeleteClient?.(selectedClient.id); setSelectedClient(null); } }} className="w-20 h-20 bg-red-50 text-urgent flex items-center justify-center rounded-[2rem] active-scale transition-all border-4 border-white shadow-xl">
+                                   <Trash2 size={28} />
+                               </button>
+                           </div>
                        </div>
                   </div>
               </div>

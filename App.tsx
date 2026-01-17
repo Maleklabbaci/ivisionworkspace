@@ -7,7 +7,7 @@ import ToastContainer from './components/Toast';
 import { User, UserRole, Task, TaskStatus, Channel, ToastNotification, Message, Client, FileLink, Lead } from './types';
 import { Mail, Lock, Loader2, User as UserIcon, Sparkles, Zap } from 'lucide-react';
 
-// Modules Lazy-Loaded pour alléger le bundle initial
+// Modules Lazy-Loaded
 const Dashboard = lazy(() => import('./components/Dashboard'));
 const Tasks = lazy(() => import('./components/Tasks'));
 const Chat = lazy(() => import('./components/Chat'));
@@ -22,25 +22,25 @@ const Leads = lazy(() => import('./components/Leads'));
 const generateUUID = () => crypto.randomUUID();
 
 const PageSkeleton = () => (
-  <div className="w-full animate-in fade-in duration-700 space-y-10 px-4">
+  <div className="w-full animate-in fade-in duration-500 space-y-10 px-4">
     <div className="flex justify-between items-end mb-12">
       <div className="space-y-3">
-        <div className="h-12 w-64 bg-slate-50 rounded-2xl animate-pulse"></div>
-        <div className="h-3 w-40 bg-slate-50 rounded-full animate-pulse opacity-50"></div>
+        <div className="h-10 w-48 bg-slate-50 rounded-2xl animate-pulse"></div>
+        <div className="h-3 w-32 bg-slate-50 rounded-full animate-pulse opacity-50"></div>
       </div>
-      <div className="h-14 w-14 bg-slate-50 rounded-2xl animate-pulse"></div>
+      <div className="h-12 w-12 bg-slate-50 rounded-2xl animate-pulse"></div>
     </div>
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
       {[1, 2, 3, 4].map(i => (
-        <div key={i} className="h-48 bg-slate-50 rounded-[3rem] animate-pulse"></div>
+        <div key={i} className="h-40 bg-slate-50 rounded-[2.5rem] animate-pulse"></div>
       ))}
     </div>
-    <div className="h-96 w-full bg-slate-50 rounded-[3.5rem] animate-pulse"></div>
+    <div className="h-80 w-full bg-slate-50 rounded-[3rem] animate-pulse"></div>
   </div>
 );
 
-const AuthUI = ({ isRegistering, setIsRegistering, handleAuth, email, setEmail, password, setPassword, registerName, setRegisterName, isAuthProcessing }: any) => (
-  <div className="bg-white w-full max-w-sm rounded-[3.5rem] shadow-[0_40px_120px_rgba(0,0,0,0.08)] p-12 border border-slate-50 animate-in zoom-in-95 slide-in-from-bottom-12 duration-700">
+const AuthUI = ({ isRegistering, setIsRegistering, handleAuth, email, setEmail, password, setPassword, registerName, setRegisterName, isAuthProcessing, isEntering }: any) => (
+  <div className={`bg-white w-full max-w-sm rounded-[3.5rem] shadow-[0_40px_120px_rgba(0,0,0,0.08)] p-12 border border-slate-50 transition-all duration-500 ease-out ${isEntering ? 'opacity-0 scale-95 blur-xl pointer-events-none translate-y-4' : 'animate-in zoom-in-95 slide-in-from-bottom-12'}`}>
     <div className="text-center mb-12">
       <div className="w-20 h-20 bg-primary rounded-[2.5rem] flex items-center justify-center text-white font-black text-2xl mx-auto shadow-2xl shadow-primary/30 mb-8 animate-bounce-slow">iV</div>
       <h1 className="text-4xl font-black tracking-tighter text-slate-900 mb-1 uppercase">iVISION</h1>
@@ -86,8 +86,8 @@ const AuthUI = ({ isRegistering, setIsRegistering, handleAuth, email, setEmail, 
       
       <button 
         type="submit"
-        disabled={isAuthProcessing} 
-        className="w-full py-6 bg-primary text-white font-black rounded-3xl shadow-2xl shadow-primary/40 active-scale disabled:opacity-50 border-4 border-white uppercase text-xs tracking-[0.2em] mt-8 flex items-center justify-center"
+        disabled={isAuthProcessing || isEntering} 
+        className="w-full py-6 bg-primary text-white font-black rounded-3xl shadow-2xl shadow-primary/40 active-scale disabled:opacity-50 border-4 border-white uppercase text-xs tracking-[0.2em] mt-8 flex items-center justify-center transition-all"
       >
         {isAuthProcessing ? <Loader2 className="animate-spin" /> : (isRegistering ? "CRÉER UN ACCÈS" : "DÉVERROUILLER")}
       </button>
@@ -118,11 +118,34 @@ const AppContent: React.FC<{
   notifications: ToastNotification[];
   fetchInitialData: (userId?: string) => Promise<void>;
   setLeads: React.Dispatch<React.SetStateAction<Lead[]>>;
+  setClients: React.Dispatch<React.SetStateAction<Client[]>>;
 }> = ({ 
   currentUser, users, tasks, clients, leads, channels, messages, fileLinks, 
-  addNotification, removeNotification, notifications, fetchInitialData, setLeads
+  addNotification, removeNotification, notifications, fetchInitialData, setLeads, setClients
 }) => {
   const navigate = useNavigate();
+
+  const handleAddLead = useCallback(async (lead: Lead) => {
+    try {
+      const { data, error } = await supabase.from('leads').insert({
+        name: lead.name,
+        company: lead.company,
+        email: lead.email,
+        phone: lead.phone,
+        status: lead.status,
+        value_min: lead.valueMin,
+        value_max: lead.valueMax,
+        description: lead.description
+      }).select();
+      
+      if (error) throw error;
+      if (data) {
+        const newLead = { ...lead, id: data[0].id };
+        setLeads(prev => [newLead, ...prev]);
+        addNotification("Pipeline", "Nouveau prospect capturé", "success");
+      }
+    } catch (e) { console.error(e); }
+  }, [setLeads, addNotification]);
 
   const handleUpdateLead = useCallback(async (lead: Lead) => {
     setLeads(prev => prev.map(l => String(l.id) === String(lead.id) ? { ...lead } : l));
@@ -134,13 +157,64 @@ const AppContent: React.FC<{
         phone: lead.phone,
         status: lead.status,
         value_min: lead.valueMin,
+        value_max: lead.valueMax,
         description: lead.description
       }).eq('id', lead.id);
       addNotification("Synchronisation", "Lead mis à jour", "success");
-    } catch (e) {
-      console.error(e);
-    }
+    } catch (e) { console.error(e); }
   }, [setLeads, addNotification]);
+
+  const handleDeleteLead = useCallback(async (id: string) => {
+    try {
+      const { error } = await supabase.from('leads').delete().eq('id', id);
+      if (error) throw error;
+      setLeads(prev => prev.filter(l => String(l.id) !== String(id)));
+      addNotification("Système", "Prospect supprimé", "info");
+    } catch (e) { console.error(e); }
+  }, [setLeads, addNotification]);
+
+  const handleConvertToClient = useCallback(async (lead: Lead) => {
+    try {
+      const { data, error } = await supabase.from('clients').insert({
+        name: lead.name,
+        company: lead.company,
+        email: lead.email,
+        phone: lead.phone,
+        description: lead.description
+      }).select();
+      
+      if (error) throw error;
+      if (data) {
+        setClients(prev => [...prev, data[0] as Client]);
+        await supabase.from('leads').delete().eq('id', lead.id);
+        setLeads(prev => prev.filter(l => String(l.id) !== String(lead.id)));
+        addNotification("CRM", "Prospect converti en client !", "success");
+        navigate('/clients');
+      }
+    } catch (e) { console.error(e); }
+  }, [setLeads, setClients, addNotification, navigate]);
+
+  const handleMoveToLead = useCallback(async (client: Client) => {
+    try {
+      const { data, error } = await supabase.from('leads').insert({
+        name: client.name,
+        company: client.company,
+        email: client.email,
+        phone: client.phone,
+        status: 'qualified',
+        description: client.description
+      }).select();
+      
+      if (error) throw error;
+      if (data) {
+        setLeads(prev => [data[0] as Lead, ...prev]);
+        await supabase.from('clients').delete().eq('id', client.id);
+        setClients(prev => prev.filter(c => String(c.id) !== String(client.id)));
+        addNotification("CRM", "Client rétrogradé en prospect", "info");
+        navigate('/leads');
+      }
+    } catch (e) { console.error(e); }
+  }, [setLeads, setClients, addNotification, navigate]);
 
   return (
     <Layout 
@@ -153,11 +227,17 @@ const AppContent: React.FC<{
       <Suspense fallback={<PageSkeleton />}>
         <Routes>
           <Route path="/dashboard" element={<Dashboard currentUser={currentUser} tasks={tasks} notifications={notifications} onNavigate={(v) => navigate(`/${v}`)} />} />
-          <Route path="/leads" element={<Leads leads={leads} onAddLead={async (l) => {}} onUpdateLead={handleUpdateLead} onDeleteLead={async (id) => {}} onConvertToClient={async (l) => {}} currentUser={currentUser} />} />
+          <Route path="/leads" element={<Leads leads={leads} onAddLead={handleAddLead} onUpdateLead={handleUpdateLead} onDeleteLead={handleDeleteLead} onConvertToClient={handleConvertToClient} currentUser={currentUser} />} />
           <Route path="/tasks" element={<Tasks tasks={tasks} users={users} clients={clients} currentUser={currentUser} onUpdateStatus={async () => {}} onAddTask={async () => {}} onUpdateTask={async () => {}} onDeleteTask={async () => {}} />} />
           <Route path="/settings" element={<Settings currentUser={currentUser} onUpdateProfile={async () => {}} />} />
           <Route path="/chat" element={<Chat currentUser={currentUser} users={users} channels={channels} currentChannelId="general" messages={messages} onlineUserIds={new Set()} onChannelChange={() => {}} onSendMessage={() => {}} onAddChannel={() => {}} onDeleteChannel={() => {}} />} />
-          <Route path="/clients" element={<Clients clients={clients} tasks={tasks} fileLinks={fileLinks} currentUser={currentUser} />} />
+          <Route path="/clients" element={<Clients clients={clients} tasks={tasks} fileLinks={fileLinks} currentUser={currentUser} onMoveToLead={handleMoveToLead} onDeleteClient={async (id) => {
+            const { error } = await supabase.from('clients').delete().eq('id', id);
+            if (!error) {
+              setClients(prev => prev.filter(c => String(c.id) !== String(id)));
+              addNotification("CRM", "Client supprimé", "info");
+            }
+          }} />} />
           <Route path="/calendar" element={<Calendar tasks={tasks} users={users} currentUser={currentUser} onAddTask={async () => {}} onUpdateStatus={async () => {}} />} />
           <Route path="/reports" element={<Reports currentUser={currentUser} tasks={tasks} users={users} leads={leads} />} />
           <Route path="/team" element={<Team currentUser={currentUser} users={users} tasks={tasks} activities={[]} onlineUserIds={new Set()} onAddUser={async () => {}} onRemoveUser={async () => {}} onUpdateRole={() => {}} onApproveUser={() => {}} onUpdateMember={async () => {}} />} />
@@ -181,6 +261,7 @@ const App: React.FC = () => {
   const [notifications, setNotifications] = useState<ToastNotification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthProcessing, setIsAuthProcessing] = useState(false);
+  const [isEntering, setIsEntering] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
   
   const [email, setEmail] = useState('');
@@ -209,7 +290,10 @@ const App: React.FC = () => {
           status: u.status, permissions: u.permissions || {}
         }));
         setUsers(mappedUsers);
-        if (userId) setCurrentUser(mappedUsers.find((u: any) => u.id === userId) || null);
+        if (userId) {
+          const matched = mappedUsers.find((u: any) => u.id === userId);
+          if (matched) setCurrentUser(matched);
+        }
       }
       if (clRes.data) setClients(clRes.data as Client[]);
       if (lRes.data) setLeads(lRes.data.map((l: any) => ({
@@ -225,18 +309,24 @@ const App: React.FC = () => {
       })));
     } catch (e) { console.error(e); }
     finally { 
-      // Petit délai pour laisser l'animation de fin de chargement respirer
-      setTimeout(() => setIsLoading(false), 800);
+      setIsLoading(false);
+      // Réinitialisation de isEntering pour permettre au contenu de s'afficher
+      setIsEntering(false);
     }
   }, []);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) fetchInitialData(session.user.id);
-      else { setCurrentUser(null); setIsLoading(false); }
+      if (session?.user) {
+        if (!currentUser) fetchInitialData(session.user.id);
+      } else {
+        setCurrentUser(null);
+        setIsLoading(false);
+        setIsEntering(false);
+      }
     });
     return () => subscription.unsubscribe();
-  }, [fetchInitialData]);
+  }, [fetchInitialData, currentUser]);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -245,26 +335,31 @@ const App: React.FC = () => {
       if (isRegistering) {
         const { error } = await supabase.auth.signUp({ email, password, options: { data: { name: registerName } } });
         if (error) throw error;
-        addNotification("Compte créé", "Connectez-vous.", "success");
+        addNotification("Compte créé", "Vous pouvez maintenant vous connecter.", "success");
         setIsRegistering(false);
       } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { error, data } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
+        // Déclenche l'animation de sortie du formulaire
+        setIsEntering(true);
+        if (data.user) {
+          await fetchInitialData(data.user.id);
+        }
       }
     } catch (err: any) {
       addNotification("Erreur", err.message, "urgent");
+      setIsEntering(false);
     } finally { setIsAuthProcessing(false); }
   };
 
-  if (isLoading) return (
-    <div className="h-screen w-screen flex flex-col items-center justify-center bg-white space-y-10 animate-in fade-in duration-1000">
+  if (isLoading && !currentUser) return (
+    <div className="h-screen w-screen flex flex-col items-center justify-center bg-white space-y-10 animate-in fade-in duration-700">
       <div className="relative">
-        <div className="w-28 h-28 border-[6px] border-slate-50 border-t-primary rounded-full animate-spin"></div>
+        <div className="w-24 h-24 border-[5px] border-slate-50 border-t-primary rounded-full animate-spin"></div>
         <div className="absolute inset-0 flex items-center justify-center font-black text-primary text-2xl tracking-tighter">iV</div>
       </div>
       <div className="text-center">
-        <p className="text-[14px] font-black uppercase tracking-[0.8em] text-slate-300">Synchronisation iVISION</p>
-        <p className="text-[9px] font-bold text-slate-100 uppercase mt-4 animate-pulse">Initialisation du workspace...</p>
+        <p className="text-[12px] font-black uppercase tracking-[0.8em] text-slate-300">Synchronisation iVISION</p>
       </div>
     </div>
   );
@@ -272,19 +367,20 @@ const App: React.FC = () => {
   return (
     <HashRouter>
       {!currentUser ? (
-        <div className="h-screen w-screen bg-slate-50 flex items-center justify-center p-6 bg-[radial-gradient(circle_at_center,_#ffffff_0%,_#f1f5f9_100%)] animate-in fade-in duration-500">
+        <div className="h-screen w-screen bg-slate-50 flex items-center justify-center p-6 bg-[radial-gradient(circle_at_center,_#ffffff_0%,_#f1f5f9_100%)]">
           <ToastContainer notifications={notifications} onDismiss={(id) => setNotifications(prev => prev.filter(n => n.id !== id))} />
           <AuthUI 
             isRegistering={isRegistering} setIsRegistering={setIsRegistering} handleAuth={handleAuth}
             email={email} setEmail={setEmail} password={password} setPassword={setPassword}
             registerName={registerName} setRegisterName={setRegisterName} isAuthProcessing={isAuthProcessing}
+            isEntering={isEntering}
           />
         </div>
       ) : (
-        <div className="animate-in fade-in duration-700">
+        <div className={`transition-all duration-1000 ease-out ${isEntering ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}>
           <AppContent 
             currentUser={currentUser} users={users} tasks={tasks}
-            clients={clients} leads={leads} setLeads={setLeads}
+            clients={clients} setClients={setClients} leads={leads} setLeads={setLeads}
             channels={channels} messages={messages} fileLinks={fileLinks}
             notifications={notifications}
             addNotification={addNotification}
