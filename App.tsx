@@ -151,7 +151,17 @@ const AppContent: React.FC<{
         client_id: task.clientId
       }).select();
       if (data) {
-        setTasks(prev => [data[0], ...prev]);
+        setTasks(prev => [{
+            id: data[0].id,
+            title: data[0].title,
+            description: data[0].description,
+            assigneeId: data[0].assignee_id,
+            status: data[0].status,
+            dueDate: data[0].due_date,
+            priority: data[0].priority,
+            clientId: data[0].client_id,
+            type: 'content'
+        }, ...prev]);
         addNotification("Missions", "Nouvelle mission ajoutée", "success");
       }
     } catch (e) { console.error(e); }
@@ -227,7 +237,18 @@ const AppContent: React.FC<{
         status: 'new'
       }).select();
       if (data) {
-        setLeads(prev => [data[0], ...prev]);
+        setLeads(prev => [{
+            id: data[0].id,
+            name: data[0].name,
+            company: data[0].company,
+            email: data[0].email,
+            phone: data[0].phone,
+            status: data[0].status,
+            description: data[0].description,
+            valueMin: data[0].value_min || 0,
+            valueMax: data[0].value_max || 0,
+            createdAt: data[0].created_at
+        }, ...prev]);
         await supabase.from('clients').delete().eq('id', client.id);
         setClients(prev => prev.filter(c => String(c.id) !== String(client.id)));
         addNotification("CRM", "Client rétrogradé en prospect", "info");
@@ -287,7 +308,7 @@ const AppContent: React.FC<{
       <Suspense fallback={<PageSkeleton />}>
         <Routes>
           <Route path="/dashboard" element={<Dashboard currentUser={currentUser} tasks={tasks} notifications={notifications} onNavigate={(v) => navigate(`/${v}`)} />} />
-          <Route path="/leads" element={<Leads leads={leads} onAddLead={handleAddLead} onUpdateLead={handleUpdateLead} onDeleteLead={handleDeleteLead} onConvertToClient={handleConvertToClient} currentUser={currentUser} />} />
+          <Route path="/leads" element={<Leads leads={leads} onAddLead={handleAddLead} onUpdateLead={handleUpdateLead} onDeleteLead={handleDeleteLead} onConvertToClient={handleConvertToClient} currentUser={currentUser} addNotification={addNotification} />} />
           <Route path="/tasks" element={<Tasks tasks={tasks} users={users} clients={clients} currentUser={currentUser} onUpdateStatus={handleUpdateTaskStatus} onAddTask={handleAddTask} onUpdateTask={() => {}} onDeleteTask={handleDeleteTask} />} />
           <Route path="/settings" element={<Settings currentUser={currentUser} onUpdateProfile={async (data) => {
               setUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, ...data } : u));
@@ -379,7 +400,6 @@ const App: React.FC = () => {
           for (const lead of lRes.data) {
               const updatedAt = new Date(lead.updated_at || lead.created_at);
               if (lead.status === 'lost' && (now.getTime() - updatedAt.getTime()) > fiveDaysInMs) {
-                  // Suppression silencieuse en DB
                   supabase.from('leads').delete().eq('id', lead.id).then(() => console.debug(`Lead ${lead.id} auto-supprimé`));
               } else {
                   filteredLeads.push({
@@ -396,7 +416,15 @@ const App: React.FC = () => {
         id: m.id, userId: m.user_id, channelId: m.channel_id, content: m.content, timestamp: new Date(m.created_at).toLocaleTimeString(), fullTimestamp: m.created_at
       })));
       if (tRes.data) setTasks(tRes.data.map((t: any) => ({
-        id: t.id, title: t.title, description: t.description, assignee_id: t.assignee_id, status: t.status as TaskStatus, dueDate: t.due_date, priority: t.priority, client_id: t.client_id
+        id: t.id, 
+        title: t.title, 
+        description: t.description, 
+        assigneeId: t.assignee_id, 
+        status: t.status as TaskStatus, 
+        dueDate: t.due_date, 
+        priority: t.priority, 
+        clientId: t.client_id,
+        type: 'content'
       })));
       if (fRes.data) setFileLinks(fRes.data.map((f: any) => ({
         id: f.id, name: f.name, url: f.url, createdAt: new Date(f.created_at).toLocaleDateString()

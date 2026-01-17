@@ -74,7 +74,6 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, clients = [], currentUser, 
   const clientMap = useMemo(() => new Map(clients.map(c => [c.id, c])), [clients]);
   const userMap = useMemo(() => new Map(users.map(u => [u.id, u])), [users]);
 
-  // LOGIQUE DE FILTRAGE TEMPOREL CORRIGÉE (Locale)
   const filteredTasks = useMemo(() => {
       const todayStr = new Date().toLocaleDateString('en-CA');
       
@@ -140,8 +139,8 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, clients = [], currentUser, 
                 key={task.id} 
                 task={task} 
                 onClick={() => setSelectedTaskId(task.id)} 
-                clientName={clientMap.get(task.client_id || '')?.name || 'Projet Interne'} 
-                assignee={userMap.get(task.assignee_id)}
+                clientName={clientMap.get(task.clientId || '')?.name || 'Projet Interne'} 
+                assignee={userMap.get(task.assigneeId)}
               />
             ))
         )}
@@ -184,7 +183,7 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, clients = [], currentUser, 
           <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden modal-drawer">
             <header className="p-8 border-b border-slate-100 flex justify-between items-center">
               <div>
-                <p className="text-[10px] font-bold text-primary uppercase tracking-widest mb-1">{clientMap.get(currentTask.client_id || '')?.name || 'Projet Interne'}</p>
+                <p className="text-[10px] font-bold text-primary uppercase tracking-widest mb-1">{clientMap.get(currentTask.clientId || '')?.name || 'Projet Interne'}</p>
                 <h3 className="text-xl font-bold text-slate-900 tracking-tight uppercase leading-tight">{currentTask.title}</h3>
               </div>
               <button onClick={() => setSelectedTaskId(null)} className="p-2 text-slate-400 hover:bg-slate-50 rounded-lg"><X size={20}/></button>
@@ -195,8 +194,8 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, clients = [], currentUser, 
                  <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
                     <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Assigné à</span>
                     <div className="flex items-center space-x-2">
-                       <img src={userMap.get(currentTask.assignee_id)?.avatar} className="w-6 h-6 rounded-lg object-cover" alt="" />
-                       <span className="text-xs font-bold text-slate-800">{userMap.get(currentTask.assignee_id)?.name}</span>
+                       <img src={userMap.get(currentTask.assigneeId)?.avatar} className="w-6 h-6 rounded-lg object-cover" alt="" />
+                       <span className="text-xs font-bold text-slate-800">{userMap.get(currentTask.assigneeId)?.name}</span>
                     </div>
                  </div>
                  <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">

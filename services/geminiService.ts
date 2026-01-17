@@ -2,24 +2,27 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
 // Use process.env.API_KEY exclusively as per Gemini guidelines.
-// Assume process.env.API_KEY is pre-configured and valid.
 const getAIClient = () => {
   return new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+};
+
+/**
+ * Helper to sanitize AI JSON output (removes markdown code blocks if present)
+ */
+const sanitizeJson = (text: string): string => {
+  return text.replace(/```json/g, "").replace(/```/g, "").trim();
 };
 
 export const generateMarketingInsight = async (context: string): Promise<string> => {
   try {
     const ai = getAIClient();
-    // Use the recommended model for basic text/summarization tasks.
     const model = 'gemini-3-flash-preview';
     
-    // Always call generateContent directly on ai.models.
     const response = await ai.models.generateContent({
       model: model,
       contents: `Expert Marketing. Analyse ces KPIs iVISION et donne 3 conseils courts (max 50 mots total) : ${context}`,
     });
 
-    // Access the extracted string directly from the text property (getter).
     return response.text?.trim() || "Analyse indisponible.";
   } catch (error) {
     console.error("Gemini Error:", error);
@@ -44,8 +47,8 @@ export const brainstormTaskIdeas = async (topic: string): Promise<string[]> => {
       }
     });
 
-    // Directly access text property from GenerateContentResponse.
-    return JSON.parse(response.text || "[]");
+    const cleanText = sanitizeJson(response.text || "[]");
+    return JSON.parse(cleanText);
   } catch (error) {
     return ["Audit de campagne", "Optimisation SEO", "Rédaction contenu"];
   }
@@ -83,8 +86,8 @@ export const parseLeadFromText = async (text: string): Promise<any> => {
       }
     });
 
-    // Directly access text property from GenerateContentResponse.
-    return JSON.parse(response.text || "{}");
+    const cleanText = sanitizeJson(response.text || "{}");
+    return JSON.parse(cleanText);
   } catch (error) {
     console.error("Magic Tool Error:", error);
     throw error;

@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useCallback, memo } from 'react';
-import { Lead, User, UserRole } from '../types';
+import { Lead, User, UserRole, ToastNotification } from '../types';
 import { Search, Plus, Target, X, Mail, Phone, Trash2, Edit2, ChevronRight, Zap, TrendingUp, CheckCircle2, UserCheck, UserMinus, PhoneCall, Briefcase, Info, DollarSign, Calendar, Sparkles, Wand2, Loader2, FileText, Clock, AlertCircle } from 'lucide-react';
 import { parseLeadFromText } from '../services/geminiService';
 
@@ -58,9 +58,10 @@ interface LeadsProps {
   onDeleteLead: (id: string) => Promise<void>;
   onConvertToClient: (lead: Lead) => void;
   currentUser: User;
+  addNotification: (title: string, message: string, type: 'info' | 'success' | 'urgent') => void;
 }
 
-const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteLead, onConvertToClient, currentUser }) => {
+const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteLead, onConvertToClient, currentUser, addNotification }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'view' | 'edit' | 'add'>('list');
@@ -101,7 +102,7 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
     setIsExtracting(true);
     try {
       const extracted = await parseLeadFromText(magicText);
-      if (extracted) {
+      if (extracted && extracted.name) {
         setFormData({
           ...formData,
           name: extracted.name || '',
@@ -114,9 +115,13 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
           status: 'new'
         });
         setIsAiMode(false);
+        addNotification("Intelligence iV", "Prospect extrait avec succès", "success");
+      } else {
+        addNotification("Intelligence iV", "Impossible d'extraire les données. Vérifiez le texte.", "urgent");
       }
     } catch (err) {
       console.error("AI Extraction failed", err);
+      addNotification("Intelligence iV", "Erreur lors de l'analyse IA", "urgent");
     } finally {
       setIsExtracting(false);
     }
@@ -213,7 +218,6 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
             <div className="p-8 space-y-8 overflow-y-auto no-scrollbar">
                {selectedLead.status === 'lost' && (
                    <div className="bg-urgent/10 p-4 rounded-2xl border border-urgent/20 flex items-center space-x-3 text-urgent">
-                       {/* Correct reference to AlertCircle icon after adding it to imports */}
                        <AlertCircle size={18} />
                        <span className="text-[10px] font-black uppercase tracking-widest leading-none">Ce prospect est archivé et sera supprimé dans 5 jours.</span>
                    </div>
