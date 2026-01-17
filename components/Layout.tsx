@@ -33,14 +33,13 @@ const Layout: React.FC<LayoutProps> = ({
     setTimeout(() => navigate(`/${path}`), 10);
   };
 
-  // Utilitaire pour vérifier l'accès
+  // ADMIN a accès à TOUT sans exception
   const hasAccess = (permissionKey?: string) => {
     if (currentUser.role === UserRole.ADMIN) return true;
-    if (!permissionKey) return true; // Modules publics (Dashboard, Tâches perso, Settings)
+    if (!permissionKey) return true;
     return !!(currentUser.permissions as any)?.[permissionKey];
   };
 
-  // Définition filtrée des items de navigation principale
   const visibleNavItems = useMemo(() => {
     const items = [
       { id: 'dashboard', label: 'Accueil', icon: LayoutGrid, path: 'dashboard', color: 'text-vibrant-indigo' },
@@ -55,7 +54,6 @@ const Layout: React.FC<LayoutProps> = ({
     return items;
   }, [currentUser]);
 
-  // Définition filtrée du menu étendu
   const visibleMoreItems = useMemo(() => {
     const items = [];
 
@@ -79,7 +77,6 @@ const Layout: React.FC<LayoutProps> = ({
       items.push({ id: 'files', label: 'Documents', icon: FileText, color: 'text-vibrant-orange' });
     }
 
-    // Toujours accessible
     items.push({ id: 'settings', label: 'Paramètres', icon: Settings, color: 'text-slate-400' });
 
     return items;
@@ -97,7 +94,6 @@ const Layout: React.FC<LayoutProps> = ({
         fileLinks={fileLinks}
       />
       
-      {/* SIDEBAR PC - FILTRÉE */}
       <aside className="hidden lg:flex flex-col w-64 bg-slate-50 border-r border-slate-200 h-full flex-shrink-0">
         <div className="p-8 flex items-center space-x-4">
             <div className="w-10 h-10 bg-gradient-to-tr from-primary to-vibrant-indigo rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-lg shadow-primary/10">iV</div>
@@ -140,10 +136,7 @@ const Layout: React.FC<LayoutProps> = ({
         </div>
       </aside>
 
-      {/* ZONE PRINCIPALE - MOBILE & PC */}
       <div className="flex-1 flex flex-col h-full relative overflow-hidden bg-white">
-        
-        {/* MOBILE HEADER */}
         <header className="lg:hidden flex items-center justify-between px-6 h-[72px] flex-shrink-0 bg-white/80 backdrop-blur-xl border-b border-slate-200 z-[50]" style={{ paddingTop: 'var(--safe-top)' }}>
           <div className="flex items-center space-x-3">
             <div className="w-8 h-8 bg-gradient-to-tr from-primary to-vibrant-indigo rounded-xl flex items-center justify-center text-white font-bold text-xs shadow-md">iV</div>
@@ -157,14 +150,12 @@ const Layout: React.FC<LayoutProps> = ({
           </div>
         </header>
 
-        {/* CONTENU DÉFILANT */}
         <main className="flex-1 overflow-y-auto overflow-x-hidden no-scrollbar w-full relative">
           <div className="w-full max-w-screen-xl mx-auto px-6 py-8 lg:px-12 lg:py-16 pb-32">
             {children}
           </div>
         </main>
 
-        {/* MOBILE BOTTOM NAV - FILTRÉE */}
         <nav className="lg:hidden flex justify-around items-center bg-white/95 backdrop-blur-xl border-t border-slate-200 px-4 flex-shrink-0 z-[50] shadow-lg" style={{ height: 'calc(64px + var(--safe-bottom))', paddingBottom: 'var(--safe-bottom)' }}>
           {visibleNavItems.map(item => {
             const isActive = currentPath === item.id;
@@ -186,7 +177,6 @@ const Layout: React.FC<LayoutProps> = ({
         </nav>
       </div>
 
-      {/* MORE MENU DRAWER - FILTRÉ */}
       {isMoreMenuOpen && (
         <div className="fixed inset-0 z-[100] flex flex-col justify-end lg:hidden">
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setIsMoreMenuOpen(false)}></div>

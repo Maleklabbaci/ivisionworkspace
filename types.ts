@@ -64,6 +64,8 @@ export interface Lead {
 export interface ActivityLog {
   id: string;
   userId: string;
+  userName?: string;
+  userAvatar?: string;
   action: string;
   target: string;
   timestamp: string;

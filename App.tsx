@@ -5,7 +5,7 @@ import { createClient } from '@supabase/supabase-js';
 import { HashRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import ToastContainer from './components/Toast';
-import { User, UserRole, Task, TaskStatus, Channel, ToastNotification, Message, Client, FileLink, Lead } from './types';
+import { User, UserRole, Task, TaskStatus, Channel, ToastNotification, Message, Client, FileLink, Lead, ActivityLog } from './types';
 import { Mail, Lock, Loader2, User as UserIcon, Sparkles, Zap } from 'lucide-react';
 import { setGeminiApiKey } from './services/geminiService';
 
@@ -127,6 +127,7 @@ const AppContent: React.FC<{
   channels: Channel[];
   messages: Message[];
   fileLinks: FileLink[];
+  activities: ActivityLog[];
   addNotification: (title: string, message: string, type?: 'info' | 'success' | 'urgent') => void;
   onDismissNotification: (id: string) => void;
   notifications: ToastNotification[];
@@ -136,26 +137,29 @@ const AppContent: React.FC<{
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   setFileLinks: React.Dispatch<React.SetStateAction<FileLink[]>>;
   setUsers: React.Dispatch<React.SetStateAction<User[]>>;
+  setActivities: React.Dispatch<React.SetStateAction<ActivityLog[]>>;
   fetchInitialData: (userId?: string) => Promise<void>;
+  logActivity: (action: string, target: string) => Promise<void>;
 }> = ({ 
-  currentUser, users, tasks, clients, leads, channels, messages, fileLinks, 
+  currentUser, users, tasks, clients, leads, channels, messages, fileLinks, activities,
   addNotification, onDismissNotification, notifications, 
-  setLeads, setClients, setTasks, setMessages, setFileLinks, setUsers, fetchInitialData
+  setLeads, setClients, setTasks, setMessages, setFileLinks, setUsers, setActivities, fetchInitialData, logActivity
 }) => {
   const navigate = useNavigate();
 
-  // TASKS HANDLERS
   const handleUpdateTaskStatus = useCallback(async (taskId: string, newStatus: TaskStatus) => {
+    const task = tasks.find(t => t.id === taskId);
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
     try {
       const { error } = await supabase.from('tasks').update({ status: newStatus }).eq('id', taskId);
       if (error) throw error;
       addNotification("Missions", "Statut mis à jour", "success");
+      logActivity(`a mis à jour le statut (${newStatus})`, `Mission: ${task?.title || taskId}`);
     } catch (e: any) { 
       console.error(e);
-      addNotification("Erreur", "Impossible de mettre à jour le statut", "urgent");
+      addNotification("Erreur", e?.message || "Échec mise à jour statut", "urgent");
     }
-  }, [setTasks, addNotification]);
+  }, [setTasks, addNotification, tasks, logActivity]);
 
   const handleUpdateTask = useCallback(async (task: Task) => {
     setTasks(prev => prev.map(t => t.id === task.id ? { ...task } : t));
@@ -173,11 +177,12 @@ const AppContent: React.FC<{
       
       if (error) throw error;
       addNotification("Missions", "Mission mise à jour", "success");
+      logActivity("a modifié une mission", `Mission: ${task.title}`);
     } catch (e: any) {
       console.error(e);
-      addNotification("Erreur", "Impossible de mettre à jour la mission", "urgent");
+      addNotification("Erreur", e?.message || "Échec mise à jour mission", "urgent");
     }
-  }, [setTasks, addNotification]);
+  }, [setTasks, addNotification, logActivity]);
 
   const handleAddTask = useCallback(async (task: Task) => {
     try {
@@ -208,26 +213,28 @@ const AppContent: React.FC<{
             type: data[0].type || 'content'
         }, ...prev]);
         addNotification("Missions", "Nouvelle mission ajoutée", "success");
+        logActivity("a créé une mission", `Mission: ${task.title}`);
       }
     } catch (e: any) { 
       console.error("Task Creation Error:", e);
-      addNotification("Erreur", `Échec de la création : ${e.message}`, "urgent");
+      addNotification("Erreur", e?.message || "Échec création mission", "urgent");
     }
-  }, [setTasks, addNotification]);
+  }, [setTasks, addNotification, logActivity]);
 
   const handleDeleteTask = useCallback(async (taskId: string) => {
+    const task = tasks.find(t => t.id === taskId);
     try {
       const { error } = await supabase.from('tasks').delete().eq('id', taskId);
       if (error) throw error;
       setTasks(prev => prev.filter(t => t.id !== taskId));
       addNotification("Missions", "Mission révoquée", "info");
-    } catch (e) { 
+      logActivity("a révoqué une mission", `Mission: ${task?.title || taskId}`);
+    } catch (e: any) { 
       console.error(e);
-      addNotification("Erreur", "Impossible de supprimer la tâche", "urgent");
+      addNotification("Erreur", e?.message || "Suppression échouée", "urgent");
     }
-  }, [setTasks, addNotification]);
+  }, [setTasks, addNotification, tasks, logActivity]);
 
-  // CLIENTS HANDLERS
   const handleAddClient = useCallback(async (client: Client) => {
     try {
       const { data, error } = await supabase.from('clients').insert({
@@ -243,12 +250,13 @@ const AppContent: React.FC<{
       if (data) {
         setClients(prev => [...prev, data[0] as Client]);
         addNotification("CRM", "Nouveau compte partenaire ajouté", "success");
+        logActivity("a ajouté un client", `Client: ${client.name}`);
       }
     } catch (e: any) {
       console.error(e);
-      addNotification("Erreur", `Impossible d'ajouter le client : ${e.message}`, "urgent");
+      addNotification("Erreur", e?.message || "Échec ajout client", "urgent");
     }
-  }, [setClients, addNotification]);
+  }, [setClients, addNotification, logActivity]);
 
   const handleUpdateClient = useCallback(async (client: Client) => {
     setClients(prev => prev.map(c => c.id === client.id ? { ...client } : c));
@@ -263,13 +271,13 @@ const AppContent: React.FC<{
       }).eq('id', client.id);
       if (error) throw error;
       addNotification("CRM", "Compte mis à jour", "success");
+      logActivity("a mis à jour un profil client", `Client: ${client.name}`);
     } catch (e: any) {
       console.error(e);
-      addNotification("Erreur", `Mise à jour échouée : ${e.message}`, "urgent");
+      addNotification("Erreur", e?.message || "Mise à jour échouée", "urgent");
     }
-  }, [setClients, addNotification]);
+  }, [setClients, addNotification, logActivity]);
 
-  // LEADS HANDLERS
   const handleAddLead = useCallback(async (lead: Lead) => {
     try {
       const { data, error } = await supabase.from('leads').insert({
@@ -298,12 +306,13 @@ const AppContent: React.FC<{
           createdAt: data[0].created_at
         }, ...prev]);
         addNotification("Pipeline", "Prospect capturé", "success");
+        logActivity("a enregistré un nouveau prospect", `Lead: ${lead.name}`);
       }
-    } catch (any: any) { 
-      console.error(any); 
-      addNotification("Erreur", `Impossible d'ajouter le prospect : ${any.message}`, "urgent");
+    } catch (e: any) { 
+      console.error(e); 
+      addNotification("Erreur", e?.message || "Échec ajout prospect", "urgent");
     }
-  }, [setLeads, addNotification]);
+  }, [setLeads, addNotification, logActivity]);
 
   const handleUpdateLead = useCallback(async (lead: Lead) => {
     setLeads(prev => prev.map(l => String(l.id) === String(lead.id) ? { ...lead } : l));
@@ -320,23 +329,26 @@ const AppContent: React.FC<{
       }).eq('id', lead.id);
       if (error) throw error;
       addNotification("Pipeline", "Prospect mis à jour", "success");
-    } catch (e) { 
+      logActivity("a modifié un prospect", `Lead: ${lead.name}`);
+    } catch (e: any) { 
       console.error(e);
-      addNotification("Erreur", "Mise à jour échouée", "urgent");
+      addNotification("Erreur", e?.message || "Mise à jour échouée", "urgent");
     }
-  }, [setLeads, addNotification]);
+  }, [setLeads, addNotification, logActivity]);
 
   const handleDeleteLead = useCallback(async (id: string) => {
+    const lead = leads.find(l => String(l.id) === String(id));
     try {
       const { error } = await supabase.from('leads').delete().eq('id', id);
       if (error) throw error;
       setLeads(prev => prev.filter(l => String(l.id) !== String(id)));
       addNotification("Pipeline", "Prospect supprimé", "info");
-    } catch (e) { 
+      logActivity("a supprimé un prospect", `Lead: ${lead?.name || id}`);
+    } catch (e: any) { 
       console.error(e);
-      addNotification("Erreur", "Suppression échouée", "urgent");
+      addNotification("Erreur", e?.message || "Suppression échouée", "urgent");
     }
-  }, [setLeads, addNotification]);
+  }, [setLeads, addNotification, leads, logActivity]);
 
   const handleConvertToClient = useCallback(async (lead: Lead) => {
     try {
@@ -354,51 +366,54 @@ const AppContent: React.FC<{
         await supabase.from('leads').delete().eq('id', lead.id);
         setLeads(prev => prev.filter(l => String(l.id) !== String(lead.id)));
         addNotification("CRM", "Prospect converti en client !", "success");
+        logActivity("a converti un prospect en client", `Lead -> Client: ${lead.name}`);
         navigate('/clients');
       }
     } catch (e: any) { 
       console.error(e);
-      addNotification("Erreur", `Conversion échouée : ${e.message}`, "urgent");
+      addNotification("Erreur", e?.message || "Conversion échouée", "urgent");
     }
-  }, [setLeads, setClients, addNotification, navigate]);
+  }, [setLeads, setClients, addNotification, navigate, logActivity]);
 
   const handleMoveClientToLead = useCallback(async (client: Client) => {
     try {
       const { data, error } = await supabase.from('leads').insert({
         id: generateUUID(),
-        name: client.name,
-        company: client.company || null,
+        name: client.name, 
+        company: client.company || null, 
         email: client.email || null,
-        phone: client.phone || null,
-        description: client.description || null,
-        status: 'new'
+        phone: client.phone || null, 
+        status: 'new', 
+        value_min: 0,
+        value_max: 0, 
+        description: client.description || null
       }).select();
       if (error) throw error;
       if (data) {
         setLeads(prev => [{
-            id: data[0].id,
-            name: data[0].name,
-            company: data[0].company,
-            email: data[0].email,
-            phone: data[0].phone,
-            status: data[0].status,
-            description: data[0].description,
-            valueMin: data[0].value_min || 0,
-            valueMax: data[0].value_max || 0,
-            createdAt: data[0].created_at
+          id: data[0].id,
+          name: data[0].name,
+          company: data[0].company,
+          email: data[0].email,
+          phone: data[0].phone,
+          status: data[0].status,
+          valueMin: data[0].value_min,
+          valueMax: data[0].value_max,
+          description: data[0].description,
+          createdAt: data[0].created_at
         }, ...prev]);
         await supabase.from('clients').delete().eq('id', client.id);
         setClients(prev => prev.filter(c => String(c.id) !== String(client.id)));
-        addNotification("CRM", "Client rétrogradé en prospect", "info");
+        addNotification("Pipeline", "Client déplacé vers les prospects", "info");
+        logActivity("a déplacé un client vers le pipeline de prospects", `Client -> Lead: ${client.name}`);
         navigate('/leads');
       }
-    } catch (e) { 
+    } catch (e: any) { 
       console.error(e);
-      addNotification("Erreur", "Rétrogradation échouée", "urgent");
+      addNotification("Erreur", e?.message || "Échec transfert", "urgent");
     }
-  }, [setLeads, setClients, addNotification, navigate]);
+  }, [setLeads, setClients, addNotification, logActivity, navigate]);
 
-  // CHAT HANDLERS
   const handleSendMessage = useCallback(async (content: string, channelId: string) => {
     try {
       const { data, error } = await supabase.from('messages').insert({
@@ -413,10 +428,9 @@ const AppContent: React.FC<{
           fullTimestamp: data[0].created_at
         }]);
       }
-    } catch (e) { console.error(e); }
+    } catch (e: any) { console.error(e); }
   }, [currentUser, setMessages]);
 
-  // FILE LINKS
   const handleAddFileLink = useCallback(async (name: string, url: string) => {
     try {
       const { data, error } = await supabase.from('file_links').insert({
@@ -427,26 +441,21 @@ const AppContent: React.FC<{
       if (data) {
         setFileLinks(prev => [data[0], ...prev]);
         addNotification("Documents", "Nouveau lien ajouté", "success");
+        logActivity("a ajouté un lien de document", `Fichier: ${name}`);
       }
-    } catch (e) { console.error(e); }
-  }, [currentUser, setFileLinks, addNotification]);
+    } catch (e: any) { console.error(e); }
+  }, [currentUser, setFileLinks, addNotification, logActivity]);
 
-  // TEAM HANDLERS
   const handleAddUser = useCallback(async (payload: { name: string; email: string; password: string; role: UserRole }) => {
     try {
       const tempSupabase = createClient(supabaseUrl, supabaseAnonKey, { auth: { persistSession: false } });
-
-      // 1. Inscription Auth (Auto-confirmée par le trigger SQL)
       const { data: authData, error: authError } = await tempSupabase.auth.signUp({
         email: payload.email,
         password: payload.password,
         options: { data: { name: payload.name } }
       });
-      
       if (authError) throw authError;
-
       if (authData.user) {
-        // 2. Création record DB
         const newUser: User = {
           id: authData.user.id,
           name: payload.name,
@@ -457,28 +466,28 @@ const AppContent: React.FC<{
           notificationPref: 'all',
           permissions: {}
         };
-
         const { error: dbError } = await supabase.from('users').insert({
           id: newUser.id,
           name: newUser.name,
           email: newUser.email,
           role: newUser.role,
+          avatar: newUser.avatar,
           status: 'active'
         });
-        
         if (dbError) throw dbError;
-        
         setUsers(prev => [...prev, newUser]);
-        addNotification("Équipe", `Collaborateur ${payload.name} créé et activé immédiatement.`, "success");
+        addNotification("Équipe", `Collaborateur ${payload.name} créé avec succès.`, "success");
+        logActivity("a ajouté un nouveau collaborateur", `User: ${payload.name}`);
       }
     } catch (e: any) {
       console.error(e);
-      addNotification("Erreur", `Échec de création : ${e.message}`, "urgent");
+      addNotification("Erreur", e?.message || "Échec création collaborateur", "urgent");
       throw e;
     }
-  }, [setUsers, addNotification]);
+  }, [setUsers, addNotification, logActivity]);
 
   const handleUpdateMember = useCallback(async (userId: string, updates: Partial<User>) => {
+    const user = users.find(u => u.id === userId);
     setUsers(prev => prev.map(u => u.id === userId ? { ...u, ...updates } : u));
     try {
       const { error } = await supabase.from('users').update({
@@ -486,8 +495,26 @@ const AppContent: React.FC<{
       }).eq('id', userId);
       if (error) throw error;
       addNotification("Équipe", "Collaborateur mis à jour", "success");
-    } catch (e) { console.error(e); }
-  }, [setUsers, addNotification]);
+      logActivity("a modifié les paramètres d'un membre", `User: ${user?.name || userId}`);
+    } catch (e: any) { 
+      console.error(e);
+      addNotification("Erreur", e?.message || "Échec mise à jour membre", "urgent");
+    }
+  }, [setUsers, addNotification, users, logActivity]);
+
+  const handleRemoveUser = useCallback(async (userId: string) => {
+    const user = users.find(u => u.id === userId);
+    try {
+      const { error } = await supabase.from('users').delete().eq('id', userId);
+      if (error) throw error;
+      setUsers(prev => prev.filter(u => u.id !== userId));
+      addNotification("Équipe", "Collaborateur supprimé", "info");
+      logActivity("a révoqué un accès collaborateur", `User: ${user?.name || userId}`);
+    } catch (e: any) { 
+      console.error(e);
+      addNotification("Erreur", e?.message || "Suppression échouée", "urgent");
+    }
+  }, [setUsers, addNotification, users, logActivity]);
 
   return (
     <Layout 
@@ -499,42 +526,55 @@ const AppContent: React.FC<{
       <ToastContainer notifications={notifications} onDismiss={onDismissNotification} />
       <Suspense fallback={<PageSkeleton />}>
         <Routes>
-          <Route path="/dashboard" element={<Dashboard currentUser={currentUser} tasks={tasks} notifications={notifications} onNavigate={(v) => navigate(`/${v}`)} />} />
+          <Route path="/dashboard" element={<Dashboard currentUser={currentUser} tasks={tasks} activities={activities} notifications={notifications} onNavigate={(v) => navigate(`/${v}`)} />} />
           <Route path="/leads" element={<Leads leads={leads} onAddLead={handleAddLead} onUpdateLead={handleUpdateLead} onDeleteLead={handleDeleteLead} onConvertToClient={handleConvertToClient} currentUser={currentUser} addNotification={addNotification} />} />
           <Route path="/tasks" element={<Tasks tasks={tasks} users={users} clients={clients} currentUser={currentUser} onUpdateStatus={handleUpdateTaskStatus} onAddTask={handleAddTask} onUpdateTask={handleUpdateTask} onDeleteTask={handleDeleteTask} />} />
           <Route path="/settings" element={<Settings currentUser={currentUser} onUpdateProfile={async (data) => {
-              // Mise à jour profil utilisateur
-              setUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, ...data } : u));
               const { ai_api_key, ...userData } = data as any;
-              
-              // 1. Mise à jour de la table public.users (données de base)
+              setUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, ...userData } : u));
               const { error: userUpdateError } = await supabase.from('users').update(userData).eq('id', currentUser.id);
-              if (userUpdateError) throw userUpdateError;
-
-              // 2. Mise à jour de la clé API globale si l'utilisateur est Admin
-              if (ai_api_key !== undefined && currentUser.role === UserRole.ADMIN) {
-                const { error: configError } = await supabase.from('configs').upsert({ key: 'gemini_api_key', value: ai_api_key });
-                if (configError) throw configError;
-                setGeminiApiKey(ai_api_key);
+              if (userUpdateError) console.error("User Update Error:", userUpdateError);
+              if (ai_api_key !== undefined && (currentUser.role === UserRole.ADMIN || currentUser.email.includes('admin'))) {
+                try {
+                  const { error: configError } = await supabase.from('configs').upsert({ key: 'gemini_api_key', value: ai_api_key });
+                  if (configError) throw configError;
+                  setGeminiApiKey(ai_api_key);
+                  addNotification("Système", "Clé API Gemini sauvegardée.", "success");
+                } catch (e: any) {
+                  console.error("Config Save Error:", e);
+                  addNotification("Erreur Système", e?.message || "Échec sauvegarde clé API.", "urgent");
+                }
+              } else {
+                 addNotification("Paramètres", "Profil mis à jour.", "success");
               }
-              
-              addNotification("Paramètres", "Configuration mise à jour", "success");
+              logActivity("a mis à jour son profil", "Paramètres");
           }} />} />
           <Route path="/chat" element={<Chat currentUser={currentUser} users={users} channels={channels} currentChannelId={channels[0]?.id || "general"} messages={messages} onlineUserIds={new Set()} onChannelChange={() => {}} onSendMessage={handleSendMessage} onAddChannel={() => {}} onDeleteChannel={() => {}} />} />
           <Route path="/clients" element={<Clients clients={clients} tasks={tasks} fileLinks={fileLinks} currentUser={currentUser} onAddClient={handleAddClient} onUpdateClient={handleUpdateClient} onMoveToLead={handleMoveClientToLead} onDeleteClient={async (id) => {
-            await supabase.from('clients').delete().eq('id', id);
-            setClients(prev => prev.filter(c => String(c.id) !== String(id)));
-            addNotification("CRM", "Client supprimé", "info");
+            const client = clients.find(c => String(c.id) === String(id));
+            try {
+              const { error } = await supabase.from('clients').delete().eq('id', id);
+              if (error) throw error;
+              setClients(prev => prev.filter(c => String(c.id) !== String(id)));
+              addNotification("CRM", "Client supprimé", "info");
+              logActivity("a supprimé un client", `Client: ${client?.name || id}`);
+            } catch (e: any) {
+              addNotification("Erreur", e?.message || "Échec suppression client", "urgent");
+            }
           }} />} />
           <Route path="/calendar" element={<Calendar tasks={tasks} users={users} currentUser={currentUser} onAddTask={handleAddTask} onUpdateStatus={handleUpdateTaskStatus} />} />
           <Route path="/reports" element={<Reports currentUser={currentUser} tasks={tasks} users={users} leads={leads} />} />
-          <Route path="/team" element={<Team currentUser={currentUser} users={users} tasks={tasks} activities={[]} onlineUserIds={new Set()} onAddUser={handleAddUser} onRemoveUser={async (id) => {
-              await supabase.from('users').delete().eq('id', id);
-              setUsers(prev => prev.filter(u => u.id !== id));
-          }} onUpdateRole={() => {}} onApproveUser={() => {}} onUpdateMember={handleUpdateMember} />} />
+          <Route path="/team" element={<Team currentUser={currentUser} users={users} tasks={tasks} activities={activities} onlineUserIds={new Set()} onAddUser={handleAddUser} onRemoveUser={handleRemoveUser} onUpdateMember={handleUpdateMember} />} />
           <Route path="/files" element={<Files tasks={tasks} messages={messages} fileLinks={fileLinks} clients={clients} currentUser={currentUser} onAddFileLink={handleAddFileLink} onDeleteFileLink={async (id) => {
-              await supabase.from('file_links').delete().eq('id', id);
-              setFileLinks(prev => prev.filter(f => f.id !== id));
+              const file = fileLinks.find(f => f.id === id);
+              try {
+                const { error } = await supabase.from('file_links').delete().eq('id', id);
+                if (error) throw error;
+                setFileLinks(prev => prev.filter(f => f.id !== id));
+                logActivity("a supprimé un lien de document", `Fichier: ${file?.name || id}`);
+              } catch (e: any) {
+                console.error(e);
+              }
           }} />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
@@ -552,6 +592,7 @@ const App: React.FC = () => {
   const [clients, setClients] = useState<Client[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [fileLinks, setFileLinks] = useState<FileLink[]>([]);
+  const [activities, setActivities] = useState<ActivityLog[]>([]);
   const [notifications, setNotifications] = useState<ToastNotification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthProcessing, setIsAuthProcessing] = useState(false);
@@ -570,10 +611,56 @@ const App: React.FC = () => {
     setNotifications(prev => prev.filter(n => n.id !== id));
   }, []);
 
+  const logActivity = useCallback(async (action: string, target: string) => {
+    if (!currentUser) return;
+    try {
+        const logId = generateUUID();
+        const { error } = await supabase.from('activity_logs').insert({
+            id: logId,
+            user_id: currentUser.id,
+            action: action,
+            target: target
+        });
+        if (error) console.error("Logging failed", error);
+        
+        setActivities(prev => [{
+            id: logId,
+            userId: currentUser.id,
+            userName: currentUser.name,
+            userAvatar: currentUser.avatar,
+            action: action,
+            target: target,
+            timestamp: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+        }, ...prev]);
+    } catch (e: any) {
+        console.error("Activity tracking error", e);
+    }
+  }, [currentUser]);
+
   const fetchInitialData = useCallback(async (userId?: string) => {
     if (!isConfigured) return;
     try {
-      const [uRes, cRes, mRes, tRes, clRes, lRes, fRes, configRes] = await Promise.all([
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      
+      if (authUser && userId && !currentUser) {
+        const isAdmin = authUser.email?.toLowerCase().includes('admin');
+        setCurrentUser({
+          id: String(userId),
+          name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'Admin iVISION',
+          email: authUser.email || '',
+          avatar: `https://ui-avatars.com/api/?name=${authUser.email}&background=random`,
+          role: isAdmin ? UserRole.ADMIN : UserRole.MEMBER,
+          status: 'active',
+          notificationPref: 'all',
+          permissions: isAdmin ? { 
+            canManageTeam: true, canManageClients: true, canViewReports: true, 
+            canManageLeads: true, canCreateTasks: true, canManageChannels: true, 
+            canManageCampaigns: true, canViewFiles: true 
+          } : {}
+        });
+      }
+
+      const results = await Promise.allSettled([
         supabase.from('users').select('*'),
         supabase.from('channels').select('*'),
         supabase.from('messages').select('*').order('created_at', { ascending: true }),
@@ -582,51 +669,77 @@ const App: React.FC = () => {
         supabase.from('leads').select('*').order('created_at', { ascending: false }),
         supabase.from('file_links').select('*').order('created_at', { ascending: false }),
         supabase.from('configs').select('*').eq('key', 'gemini_api_key').maybeSingle(),
+        supabase.from('activity_logs').select('*').order('created_at', { ascending: false }).limit(20)
       ]);
 
-      // Chargement de la clé API Gemini globale
-      if (configRes.data?.value) {
+      const [uRes, cRes, mRes, tRes, clRes, lRes, fRes, configRes, actRes] = results.map(r => r.status === 'fulfilled' ? r.value : null);
+
+      if (configRes?.data?.value) {
         setGeminiApiKey(configRes.data.value);
       }
 
-      if (uRes.data) {
+      const fetchedUsers = uRes?.data || [];
+      const userMap = new Map<string, any>(fetchedUsers.map((u: any) => [String(u.id), u]));
+
+      if (uRes?.data) {
         const mappedUsers = uRes.data.map((u: any) => ({
-          id: u.id, name: u.name, email: u.email, role: u.role as UserRole, avatar: u.avatar || `https://ui-avatars.com/api/?name=${u.name}&background=random`,
-          status: u.status, permissions: u.permissions || {},
+          id: String(u.id), 
+          name: u.name, 
+          email: u.email, 
+          role: u.role as UserRole, 
+          avatar: u.avatar || `https://ui-avatars.com/api/?name=${u.name}&background=random`,
+          status: u.status, 
+          permissions: u.permissions || {},
         }));
         setUsers(mappedUsers);
         
-        if (userId) {
-          const matched = mappedUsers.find((u: any) => u.id === userId);
-          if (matched) setCurrentUser(matched);
-        }
+        const matched = mappedUsers.find((u: any) => String(u.id) === String(userId));
+        if (matched) setCurrentUser(matched);
       }
-      if (clRes.data) setClients(clRes.data as Client[]);
-      if (lRes.data) setLeads(lRes.data.map((lead: any) => ({
-        id: lead.id, name: lead.name, company: lead.company, email: lead.email, phone: lead.phone, status: lead.status,
+
+      if (clRes?.data) setClients(clRes.data as Client[]);
+      if (lRes?.data) setLeads(lRes.data.map((lead: any) => ({
+        id: String(lead.id), name: lead.name, company: lead.company, email: lead.email, phone: lead.phone, status: lead.status,
         valueMin: lead.value_min || 0, valueMax: lead.value_max || 0, description: lead.description, createdAt: lead.created_at
       })));
-      if (cRes.data) setChannels(cRes.data as Channel[]);
-      if (mRes.data) setMessages(mRes.data.map((m: any) => ({
-        id: m.id, userId: m.user_id, channelId: m.channel_id, content: m.content, timestamp: new Date(m.created_at).toLocaleTimeString(), fullTimestamp: m.created_at
+      if (cRes?.data) setChannels(cRes.data as Channel[]);
+      if (mRes?.data) setMessages(mRes.data.map((m: any) => ({
+        id: String(m.id), userId: String(m.user_id), channelId: String(m.channel_id), content: m.content, timestamp: new Date(m.created_at).toLocaleTimeString(), fullTimestamp: m.created_at
       })));
-      if (tRes.data) setTasks(tRes.data.map((t: any) => ({
-        id: t.id, title: t.title, description: t.description, assigneeId: t.assignee_id, status: t.status as TaskStatus, dueDate: t.due_date, priority: t.priority, clientId: t.client_id, type: t.type || 'content'
+      if (tRes?.data) setTasks(tRes.data.map((t: any) => ({
+        id: String(t.id), title: t.title, description: t.description, assigneeId: String(t.assignee_id), status: t.status as TaskStatus, dueDate: t.due_date, priority: t.priority, clientId: t.client_id, type: t.type || 'content'
       })));
-      if (fRes.data) setFileLinks(fRes.data.map((f: any) => ({
-        id: f.id, name: f.name, url: f.url, createdAt: new Date(f.created_at).toLocaleDateString()
+      if (fRes?.data) setFileLinks(fRes.data.map((f: any) => ({
+        id: String(f.id), name: f.name, url: f.url, createdAt: new Date(f.created_at).toLocaleDateString()
       })));
-    } catch (e) { console.error(e); }
-    finally { 
+      if (actRes?.data) {
+          setActivities(actRes.data.map((log: any) => {
+              const user = userMap.get(log.user_id);
+              return {
+                  id: String(log.id),
+                  userId: String(log.user_id),
+                  userName: user?.name || 'Inconnu',
+                  userAvatar: user?.avatar || `https://ui-avatars.com/api/?name=${user?.name || '?'}&background=random`,
+                  action: log.action,
+                  target: log.target,
+                  timestamp: new Date(log.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+              };
+          }));
+      }
+
+    } catch (e: any) { 
+      console.error("Erreur critique de login :", e);
+    } finally { 
       setIsLoading(false);
       setIsEntering(false);
     }
-  }, []);
+  }, [currentUser]);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
         if (!currentUser) fetchInitialData(session.user.id);
+        if (event === 'SIGNED_IN') logActivity("s'est connecté", "Plateforme iVISION");
       } else {
         setCurrentUser(null);
         setIsLoading(false);
@@ -634,7 +747,7 @@ const App: React.FC = () => {
       }
     });
     return () => subscription.unsubscribe();
-  }, [fetchInitialData, currentUser]);
+  }, [fetchInitialData, currentUser, logActivity]);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -644,7 +757,15 @@ const App: React.FC = () => {
         const { error, data } = await supabase.auth.signUp({ email, password, options: { data: { name: registerName } } });
         if (error) throw error;
         if (data.user) {
-            await supabase.from('users').insert({ id: data.user.id, name: registerName, email: email, role: UserRole.MEMBER, status: 'active' });
+            const { error: insertError } = await supabase.from('users').insert({ 
+              id: data.user.id, 
+              name: registerName, 
+              email: email, 
+              role: UserRole.MEMBER, 
+              status: 'active',
+              avatar: `https://ui-avatars.com/api/?name=${registerName.replace(/\s+/g, '+')}&background=random`
+            });
+            if (insertError) throw insertError;
         }
         addNotification("Compte créé", "Accès iVISION activé.", "success");
         setIsRegistering(false);
@@ -655,9 +776,12 @@ const App: React.FC = () => {
         if (data.user) await fetchInitialData(data.user.id);
       }
     } catch (err: any) {
-      addNotification("Erreur", err.message, "urgent");
+      addNotification("Erreur", err?.message || "Échec authentification", "urgent");
       setIsEntering(false);
-    } finally { setIsAuthProcessing(false); }
+      setIsLoading(false);
+    } finally { 
+      setIsAuthProcessing(false); 
+    }
   };
 
   if (isLoading && !currentUser) return (
@@ -684,8 +808,10 @@ const App: React.FC = () => {
             clients={clients} setClients={setClients} leads={leads} setLeads={setLeads}
             channels={channels} messages={messages} setMessages={setMessages}
             fileLinks={fileLinks} setFileLinks={setFileLinks}
+            activities={activities} setActivities={setActivities}
             setUsers={setUsers} notifications={notifications}
             addNotification={addNotification} onDismissNotification={onDismissNotification} fetchInitialData={fetchInitialData}
+            logActivity={logActivity}
           />
         </div>
       )}

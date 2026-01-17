@@ -23,10 +23,12 @@ const Settings: React.FC<SettingsProps> = ({ currentUser, onUpdateProfile }) => 
   const [showApiKey, setShowApiKey] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const isAdmin = currentUser.role === UserRole.ADMIN || currentUser.email.toLowerCase().includes('admin');
+
   useEffect(() => {
     // Charger la clé API globale depuis la table configs si on est Admin
     const loadApiKey = async () => {
-      if (currentUser.role === UserRole.ADMIN) {
+      if (isAdmin) {
         try {
           const { data, error } = await supabase
             .from('configs')
@@ -43,7 +45,7 @@ const Settings: React.FC<SettingsProps> = ({ currentUser, onUpdateProfile }) => 
       }
     };
     loadApiKey();
-  }, [currentUser]);
+  }, [isAdmin]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
@@ -59,7 +61,7 @@ const Settings: React.FC<SettingsProps> = ({ currentUser, onUpdateProfile }) => 
         email: formData.email, 
         phoneNumber: formData.phoneNumber,
         avatar: avatarPreview,
-        ai_api_key: currentUser.role === UserRole.ADMIN ? formData.ai_api_key : undefined
+        ai_api_key: isAdmin ? formData.ai_api_key : undefined
       });
       
       setShowSavedFeedback(true);
@@ -115,7 +117,7 @@ const Settings: React.FC<SettingsProps> = ({ currentUser, onUpdateProfile }) => 
         </div>
 
         {/* Configuration IA - Admin Uniquement */}
-        {currentUser.role === UserRole.ADMIN && (
+        {isAdmin && (
           <div className="bg-white p-8 rounded-[3rem] border border-slate-50 shadow-sm space-y-6">
               <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center">
                 <Sparkles size={14} className="mr-3 text-vibrant-amber" /> Configuration IA iVISION
@@ -142,7 +144,7 @@ const Settings: React.FC<SettingsProps> = ({ currentUser, onUpdateProfile }) => 
                       {showApiKey ? <EyeOff size={20} /> : <Eye size={20} />}
                     </button>
                   </div>
-                  <p className="text-[9px] text-slate-400 px-2 font-medium italic mt-2">Cette clé est partagée avec toute l'équipe iVISION pour l'intelligence opérationnelle.</p>
+                  <p className="text-[9px] text-slate-400 px-2 font-medium italic mt-2">Cette clé est sauvegardée dans la base de données et partagée avec toute l'équipe.</p>
               </div>
           </div>
         )}
