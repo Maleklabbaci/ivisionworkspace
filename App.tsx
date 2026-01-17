@@ -68,7 +68,7 @@ const AuthUI = ({ isRegistering, setIsRegistering, handleAuth, email, setEmail, 
             type="text" 
             required 
             value={registerName} 
-            onChange={setRegisterName} 
+            onChange={(e) => setRegisterName(e.target.value)} 
             placeholder="Nom complet" 
             className="w-full p-5 bg-slate-50 border border-transparent rounded-2xl font-semibold text-slate-900 pl-12 outline-none focus:bg-white focus:border-vibrant-indigo/30 focus:ring-4 focus:ring-vibrant-indigo/5 transition-all" 
           />
@@ -80,7 +80,7 @@ const AuthUI = ({ isRegistering, setIsRegistering, handleAuth, email, setEmail, 
           type="email" 
           required 
           value={email} 
-          onChange={setEmail} 
+          onChange={(e) => setEmail(e.target.value)} 
           placeholder="Email iVISION" 
           className="w-full p-5 bg-slate-50 border border-transparent rounded-2xl font-semibold text-slate-900 pl-12 outline-none focus:bg-white focus:border-vibrant-indigo/30 focus:ring-4 focus:ring-vibrant-indigo/5 transition-all" 
         />
@@ -91,7 +91,7 @@ const AuthUI = ({ isRegistering, setIsRegistering, handleAuth, email, setEmail, 
           type="password" 
           required 
           value={password} 
-          onChange={setPassword} 
+          onChange={(e) => setPassword(e.target.value)} 
           placeholder="Mot de passe" 
           className="w-full p-5 bg-slate-50 border border-transparent rounded-2xl font-semibold text-slate-900 pl-12 outline-none focus:bg-white focus:border-vibrant-indigo/30 focus:ring-4 focus:ring-vibrant-indigo/5 transition-all" 
         />
@@ -299,9 +299,9 @@ const AppContent: React.FC<{
         }, ...prev]);
         addNotification("Pipeline", "Prospect capturé", "success");
       }
-    } catch (e: any) { 
-      console.error(e); 
-      addNotification("Erreur", `Impossible d'ajouter le prospect : ${e.message}`, "urgent");
+    } catch (any: any) { 
+      console.error(any); 
+      addNotification("Erreur", `Impossible d'ajouter le prospect : ${any.message}`, "urgent");
     }
   }, [setLeads, addNotification]);
 
@@ -482,18 +482,12 @@ const AppContent: React.FC<{
     setUsers(prev => prev.map(u => u.id === userId ? { ...u, ...updates } : u));
     try {
       const { error } = await supabase.from('users').update({
-        role: updates.role, permissions: updates.permissions, name: updates.name,
-        ai_api_key: updates.ai_api_key
+        role: updates.role, permissions: updates.permissions, name: updates.name
       }).eq('id', userId);
       if (error) throw error;
-      
-      if (userId === currentUser.id && updates.ai_api_key) {
-        setGeminiApiKey(updates.ai_api_key);
-      }
-      
       addNotification("Équipe", "Collaborateur mis à jour", "success");
     } catch (e) { console.error(e); }
-  }, [currentUser, setUsers, addNotification]);
+  }, [setUsers, addNotification]);
 
   return (
     <Layout 
@@ -509,10 +503,22 @@ const AppContent: React.FC<{
           <Route path="/leads" element={<Leads leads={leads} onAddLead={handleAddLead} onUpdateLead={handleUpdateLead} onDeleteLead={handleDeleteLead} onConvertToClient={handleConvertToClient} currentUser={currentUser} addNotification={addNotification} />} />
           <Route path="/tasks" element={<Tasks tasks={tasks} users={users} clients={clients} currentUser={currentUser} onUpdateStatus={handleUpdateTaskStatus} onAddTask={handleAddTask} onUpdateTask={handleUpdateTask} onDeleteTask={handleDeleteTask} />} />
           <Route path="/settings" element={<Settings currentUser={currentUser} onUpdateProfile={async (data) => {
+              // Mise à jour profil utilisateur
               setUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, ...data } : u));
-              await supabase.from('users').update(data).eq('id', currentUser.id);
-              if (data.ai_api_key) setGeminiApiKey(data.ai_api_key);
-              addNotification("Paramètres", "Profil mis à jour", "success");
+              const { ai_api_key, ...userData } = data as any;
+              
+              // 1. Mise à jour de la table public.users (données de base)
+              const { error: userUpdateError } = await supabase.from('users').update(userData).eq('id', currentUser.id);
+              if (userUpdateError) throw userUpdateError;
+
+              // 2. Mise à jour de la clé API globale si l'utilisateur est Admin
+              if (ai_api_key !== undefined && currentUser.role === UserRole.ADMIN) {
+                const { error: configError } = await supabase.from('configs').upsert({ key: 'gemini_api_key', value: ai_api_key });
+                if (configError) throw configError;
+                setGeminiApiKey(ai_api_key);
+              }
+              
+              addNotification("Paramètres", "Configuration mise à jour", "success");
           }} />} />
           <Route path="/chat" element={<Chat currentUser={currentUser} users={users} channels={channels} currentChannelId={channels[0]?.id || "general"} messages={messages} onlineUserIds={new Set()} onChannelChange={() => {}} onSendMessage={handleSendMessage} onAddChannel={() => {}} onDeleteChannel={() => {}} />} />
           <Route path="/clients" element={<Clients clients={clients} tasks={tasks} fileLinks={fileLinks} currentUser={currentUser} onAddClient={handleAddClient} onUpdateClient={handleUpdateClient} onMoveToLead={handleMoveClientToLead} onDeleteClient={async (id) => {
@@ -567,7 +573,7 @@ const App: React.FC = () => {
   const fetchInitialData = useCallback(async (userId?: string) => {
     if (!isConfigured) return;
     try {
-      const [uRes, cRes, mRes, tRes, clRes, lRes, fRes] = await Promise.all([
+      const [uRes, cRes, mRes, tRes, clRes, lRes, fRes, configRes] = await Promise.all([
         supabase.from('users').select('*'),
         supabase.from('channels').select('*'),
         supabase.from('messages').select('*').order('created_at', { ascending: true }),
@@ -575,21 +581,21 @@ const App: React.FC = () => {
         supabase.from('clients').select('*'),
         supabase.from('leads').select('*').order('created_at', { ascending: false }),
         supabase.from('file_links').select('*').order('created_at', { ascending: false }),
+        supabase.from('configs').select('*').eq('key', 'gemini_api_key').maybeSingle(),
       ]);
+
+      // Chargement de la clé API Gemini globale
+      if (configRes.data?.value) {
+        setGeminiApiKey(configRes.data.value);
+      }
 
       if (uRes.data) {
         const mappedUsers = uRes.data.map((u: any) => ({
           id: u.id, name: u.name, email: u.email, role: u.role as UserRole, avatar: u.avatar || `https://ui-avatars.com/api/?name=${u.name}&background=random`,
           status: u.status, permissions: u.permissions || {},
-          ai_api_key: u.ai_api_key 
         }));
         setUsers(mappedUsers);
         
-        const adminUser = mappedUsers.find(u => u.role === UserRole.ADMIN && u.ai_api_key);
-        if (adminUser?.ai_api_key) {
-          setGeminiApiKey(adminUser.ai_api_key);
-        }
-
         if (userId) {
           const matched = mappedUsers.find((u: any) => u.id === userId);
           if (matched) setCurrentUser(matched);
@@ -669,7 +675,7 @@ const App: React.FC = () => {
       {!currentUser ? (
         <div className="h-screen w-screen auth-bg flex items-center justify-center p-6 overflow-hidden">
           <ToastContainer notifications={notifications} onDismiss={onDismissNotification} />
-          <AuthUI isRegistering={isRegistering} setIsRegistering={setIsRegistering} handleAuth={handleAuth} email={email} setEmail={(e: any) => setEmail(e.target.value)} password={password} setPassword={(e: any) => setPassword(e.target.value)} registerName={registerName} setRegisterName={(e: any) => setRegisterName(e.target.value)} isAuthProcessing={isAuthProcessing} isEntering={isEntering} />
+          <AuthUI isRegistering={isRegistering} setIsRegistering={setIsRegistering} handleAuth={handleAuth} email={email} setEmail={(val: any) => setEmail(val)} password={password} setPassword={(val: any) => setPassword(val)} registerName={registerName} setRegisterName={(val: any) => setRegisterName(val)} isAuthProcessing={isAuthProcessing} isEntering={isEntering} />
         </div>
       ) : (
         <div className={`transition-all duration-1000 ease-out ${isEntering ? 'opacity-0 scale-95 blur-xl' : 'opacity-100 scale-100'}`}>

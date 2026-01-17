@@ -1,11 +1,12 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { User, UserRole } from '../types';
-import { Camera, Mail, Phone, User as UserIcon, Loader2, Sparkles, ShieldCheck } from 'lucide-react';
+import { Camera, Mail, Phone, User as UserIcon, Loader2, Sparkles, ShieldCheck, Eye, EyeOff } from 'lucide-react';
+import { supabase } from '../services/supabaseClient';
 
 interface SettingsProps {
   currentUser: User;
-  onUpdateProfile: (updatedData: Partial<User> & { password?: string }) => Promise<void>;
+  onUpdateProfile: (updatedData: Partial<User> & { ai_api_key?: string }) => Promise<void>;
 }
 
 const Settings: React.FC<SettingsProps> = ({ currentUser, onUpdateProfile }) => {
@@ -13,13 +14,36 @@ const Settings: React.FC<SettingsProps> = ({ currentUser, onUpdateProfile }) => 
     name: currentUser.name,
     email: currentUser.email,
     phoneNumber: currentUser.phoneNumber || '',
-    ai_api_key: currentUser.ai_api_key || '',
+    ai_api_key: '', 
   });
   
   const [avatarPreview, setAvatarPreview] = useState(currentUser.avatar);
   const [isSaving, setIsSaving] = useState(false);
   const [showSavedFeedback, setShowSavedFeedback] = useState(false);
+  const [showApiKey, setShowApiKey] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    // Charger la clé API globale depuis la table configs si on est Admin
+    const loadApiKey = async () => {
+      if (currentUser.role === UserRole.ADMIN) {
+        try {
+          const { data, error } = await supabase
+            .from('configs')
+            .select('value')
+            .eq('key', 'gemini_api_key')
+            .maybeSingle();
+          
+          if (data) {
+            setFormData(prev => ({ ...prev, ai_api_key: data.value }));
+          }
+        } catch (e) {
+          console.error("Erreur de chargement de la clé globale:", e);
+        }
+      }
+    };
+    loadApiKey();
+  }, [currentUser]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
@@ -35,7 +59,7 @@ const Settings: React.FC<SettingsProps> = ({ currentUser, onUpdateProfile }) => 
         email: formData.email, 
         phoneNumber: formData.phoneNumber,
         avatar: avatarPreview,
-        ai_api_key: formData.ai_api_key
+        ai_api_key: currentUser.role === UserRole.ADMIN ? formData.ai_api_key : undefined
       });
       
       setShowSavedFeedback(true);
@@ -99,17 +123,26 @@ const Settings: React.FC<SettingsProps> = ({ currentUser, onUpdateProfile }) => 
               <div className="space-y-2">
                   <div className="flex items-center space-x-2 px-2 mb-2">
                     <ShieldCheck size={12} className="text-success" />
-                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest leading-none">Clé API Gemini (Propriété Admin)</label>
+                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest leading-none">Clé API Gemini Globale</label>
                   </div>
-                  <input 
-                    type="password" 
-                    name="ai_api_key" 
-                    value={formData.ai_api_key} 
-                    onChange={handleChange} 
-                    className={inputClasses} 
-                    placeholder="Saisissez la clé API Gemini..." 
-                  />
-                  <p className="text-[9px] text-slate-400 px-2 font-medium italic mt-2">Cette clé permet le fonctionnement des modules Magic IA, Insights et Analyses automatiques pour toute l'agence.</p>
+                  <div className="relative">
+                    <input 
+                      type={showApiKey ? "text" : "password"} 
+                      name="ai_api_key" 
+                      value={formData.ai_api_key} 
+                      onChange={handleChange} 
+                      className={`${inputClasses} pr-14`} 
+                      placeholder="Saisissez la clé API Gemini..." 
+                    />
+                    <button 
+                      type="button"
+                      onClick={() => setShowApiKey(!showApiKey)}
+                      className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-primary transition-colors"
+                    >
+                      {showApiKey ? <EyeOff size={20} /> : <Eye size={20} />}
+                    </button>
+                  </div>
+                  <p className="text-[9px] text-slate-400 px-2 font-medium italic mt-2">Cette clé est partagée avec toute l'équipe iVISION pour l'intelligence opérationnelle.</p>
               </div>
           </div>
         )}
