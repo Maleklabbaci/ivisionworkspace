@@ -32,9 +32,9 @@ const Clients: React.FC<ClientsProps> = ({ clients, tasks, fileLinks, onAddClien
   );
 
   const filteredClients = useMemo(() => {
-    return clients.filter(client => 
+    return (clients || []).filter(client => 
       client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.company?.toLowerCase().includes(searchTerm.toLowerCase())
+      (client.company && client.company.toLowerCase().includes(searchTerm.toLowerCase()))
     );
   }, [clients, searchTerm]);
 
@@ -50,18 +50,19 @@ const Clients: React.FC<ClientsProps> = ({ clients, tasks, fileLinks, onAddClien
     );
   }
 
-  const handleSubmit = (e: React.FormEvent | React.MouseEvent) => {
-    if (e && e.preventDefault) e.preventDefault();
-    if (!formData.name) return;
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.name?.trim()) return;
     
     if (editingClient && onUpdateClient) {
       onUpdateClient({ ...editingClient, ...formData } as Client);
     } else if (onAddClient) {
-      // On laisse App.tsx générer le vrai UUID
       onAddClient({ ...formData } as Client);
     }
+    
     setShowModal(false);
     setFormData({name: '', company: '', email: '', phone: '', address: '', description: ''});
+    setEditingClient(null);
   };
 
   const inputClasses = "w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-slate-900 placeholder-slate-300 focus:bg-white focus:border-primary/20 outline-none transition-all text-sm";
@@ -76,7 +77,7 @@ const Clients: React.FC<ClientsProps> = ({ clients, tasks, fileLinks, onAddClien
         <div className="flex flex-col lg:flex-row gap-3">
           <div className="relative lg:w-80">
             <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" />
-            <input type="text" placeholder="Rechercher..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-11 pr-4 py-3 bg-white border border-slate-100 rounded-2xl shadow-sm text-xs font-bold outline-none text-slate-900" />
+            <input type="text" placeholder="Rechercher..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-11 pr-4 py-3.5 bg-white border border-slate-100 rounded-2xl shadow-sm text-xs font-bold outline-none text-slate-900" />
           </div>
           <button onClick={() => { setEditingClient(null); setFormData({name: '', company: '', email: '', phone: '', address: '', description: ''}); setShowModal(true); }} className="bg-primary text-white p-3.5 px-6 rounded-2xl shadow-xl shadow-primary/20 active-scale flex items-center justify-center font-black text-[10px] tracking-widest uppercase border-4 border-white transition-all">
             <Plus size={18} className="mr-2" strokeWidth={3} /> AJOUTER UN COMPTE
@@ -86,12 +87,12 @@ const Clients: React.FC<ClientsProps> = ({ clients, tasks, fileLinks, onAddClien
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 px-1">
           {filteredClients.map(client => {
-              const clientTaskCount = tasks.filter(t => t.clientId === client.id).length;
+              const clientTaskCount = (tasks || []).filter(t => t.clientId === client.id).length;
               return (
                 <div 
                   key={client.id} 
                   onClick={() => setSelectedClient(client)} 
-                  className="bg-white p-5 rounded-[2.2rem] border border-slate-50 shadow-sm active-scale flex flex-col group cursor-pointer hover-effect transition-all"
+                  className="bg-white p-5 rounded-[2.2rem] border border-slate-50 shadow-sm active-scale flex flex-col group cursor-pointer hover:shadow-lg transition-all"
                 >
                     <div className="flex items-center space-x-4 mb-4">
                         <div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center text-primary font-black text-xl border border-slate-100 shadow-sm group-hover:bg-primary group-hover:text-white transition-all">
@@ -140,11 +141,11 @@ const Clients: React.FC<ClientsProps> = ({ clients, tasks, fileLinks, onAddClien
                   
                   <div className="flex-1 overflow-y-auto p-8 space-y-8 no-scrollbar">
                        <div className="grid grid-cols-2 gap-4">
-                            <a href={`mailto:${selectedClient.email}`} className="flex flex-col items-center justify-center p-6 bg-slate-50 rounded-[2rem] space-y-2 hover-effect transition-all">
+                            <a href={`mailto:${selectedClient.email}`} className="flex flex-col items-center justify-center p-6 bg-slate-50 rounded-[2rem] space-y-2 hover:bg-slate-100 transition-all">
                                 <Mail size={22} className="text-primary"/> 
                                 <span className="font-black text-slate-800 text-[10px] uppercase tracking-widest truncate w-full text-center">{selectedClient.email || 'Email non défini'}</span>
                             </a>
-                            <a href={`tel:${selectedClient.phone}`} className="flex flex-col items-center justify-center p-6 bg-slate-50 rounded-[2rem] space-y-2 hover-effect transition-all">
+                            <a href={`tel:${selectedClient.phone}`} className="flex flex-col items-center justify-center p-6 bg-slate-50 rounded-[2rem] space-y-2 hover:bg-slate-100 transition-all">
                                 <Phone size={22} className="text-primary"/>
                                 <span className="font-black text-slate-800 text-[10px] uppercase tracking-widest truncate w-full text-center">{selectedClient.phone || 'Tel non défini'}</span>
                             </a>
@@ -204,7 +205,7 @@ const Clients: React.FC<ClientsProps> = ({ clients, tasks, fileLinks, onAddClien
               <form onSubmit={handleSubmit} className="relative bg-white rounded-t-[2.5rem] lg:rounded-[3rem] w-full max-w-xl mx-auto flex flex-col modal-drawer shadow-2xl overflow-hidden">
                   <header className="px-8 py-6 border-b border-slate-50 flex items-center justify-between bg-white z-20">
                       <h3 className="text-sm font-black text-slate-900 tracking-tighter uppercase">{editingClient ? 'Modifier le partenaire' : 'Nouveau Partenaire'}</h3>
-                      <button type="button" onClick={() => setShowModal(false)} className="p-3 bg-slate-50 rounded-2xl text-slate-400 active-scale"><X size={24}/></button>
+                      <button type="button" onClick={() => setShowModal(false)} className="p-3 bg-slate-50 rounded-2xl text-slate-400 active-scale hover:bg-slate-100 transition-colors"><X size={24}/></button>
                   </header>
                   
                   <div className="p-8 space-y-6 flex-1 overflow-y-auto no-scrollbar">

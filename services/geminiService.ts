@@ -1,9 +1,24 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 
-// Utilisation exclusive de process.env.API_KEY pour la sécurité.
+// Variable locale pour stocker la clé API récupérée de la base de données
+let activeApiKey: string | null = null;
+
+/**
+ * Définit la clé API à utiliser pour les appels Gemini.
+ * Cette fonction est appelée par App.tsx lors du chargement des données Admin.
+ */
+export const setGeminiApiKey = (key: string) => {
+  activeApiKey = key;
+};
+
 const getAIClient = () => {
-  return new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+  // On utilise la clé dynamique si disponible, sinon on retombe sur l'env (sécurité)
+  const key = activeApiKey || process.env.API_KEY;
+  if (!key) {
+    throw new Error("Clé API Gemini non configurée.");
+  }
+  return new GoogleGenAI({ apiKey: key });
 };
 
 /**
@@ -11,7 +26,6 @@ const getAIClient = () => {
  */
 const sanitizeJson = (text: string): string => {
   try {
-    // Cherche un bloc JSON si l'IA a mis du markdown
     const match = text.match(/\{[\s\S]*\}/);
     return match ? match[0] : text.trim();
   } catch (e) {
@@ -29,10 +43,10 @@ export const generateMarketingInsight = async (context: string): Promise<string>
       contents: `Expert Marketing. Analyse ces KPIs iVISION et donne 3 conseils courts (max 50 mots total) : ${context}`,
     });
 
-    return response.text?.trim() || "Analyse indisponible.";
+    return response.text?.trim() || "Analyse IA indisponible.";
   } catch (error) {
     console.error("Gemini Error:", error);
-    return "Erreur lors de l'analyse IA.";
+    return "L'IA iVISION nécessite une clé API valide (configurée par l'Admin).";
   }
 };
 

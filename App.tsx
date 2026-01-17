@@ -6,6 +6,7 @@ import Layout from './components/Layout';
 import ToastContainer from './components/Toast';
 import { User, UserRole, Task, TaskStatus, Channel, ToastNotification, Message, Client, FileLink, Lead } from './types';
 import { Mail, Lock, Loader2, User as UserIcon, Sparkles, Zap } from 'lucide-react';
+import { setGeminiApiKey } from './services/geminiService';
 
 // Modules Lazy-Loaded
 const Dashboard = lazy(() => import('./components/Dashboard'));
@@ -23,7 +24,6 @@ const generateUUID = () => {
   try {
     return crypto.randomUUID();
   } catch (e) {
-    // Fallback pour les contextes non sécurisés (HTTP)
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
       var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
       return v.toString(16);
@@ -432,12 +432,19 @@ const AppContent: React.FC<{
     setUsers(prev => prev.map(u => u.id === userId ? { ...u, ...updates } : u));
     try {
       const { error } = await supabase.from('users').update({
-        role: updates.role, permissions: updates.permissions, name: updates.name
+        role: updates.role, permissions: updates.permissions, name: updates.name,
+        ai_api_key: updates.ai_api_key
       }).eq('id', userId);
       if (error) throw error;
+      
+      // Si on met à jour la clé de l'admin actuel, on l'applique immédiatement
+      if (userId === currentUser.id && updates.ai_api_key) {
+        setGeminiApiKey(updates.ai_api_key);
+      }
+      
       addNotification("Équipe", "Collaborateur mis à jour", "success");
     } catch (e) { console.error(e); }
-  }, [setUsers, addNotification]);
+  }, [currentUser, setUsers, addNotification]);
 
   return (
     <Layout 
@@ -455,6 +462,11 @@ const AppContent: React.FC<{
           <Route path="/settings" element={<Settings currentUser={currentUser} onUpdateProfile={async (data) => {
               setUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, ...data } : u));
               await supabase.from('users').update(data).eq('id', currentUser.id);
+              
+              if (data.ai_api_key) {
+                setGeminiApiKey(data.ai_api_key);
+              }
+              
               addNotification("Paramètres", "Profil mis à jour", "success");
           }} />} />
           <Route path="/chat" element={<Chat currentUser={currentUser} users={users} channels={channels} currentChannelId={channels[0]?.id || "general"} messages={messages} onlineUserIds={new Set()} onChannelChange={() => {}} onSendMessage={handleSendMessage} onAddChannel={() => {}} onDeleteChannel={() => {}} />} />
@@ -523,9 +535,17 @@ const App: React.FC = () => {
       if (uRes.data) {
         const mappedUsers = uRes.data.map((u: any) => ({
           id: u.id, name: u.name, email: u.email, role: u.role as UserRole, avatar: u.avatar || `https://ui-avatars.com/api/?name=${u.name}&background=random`,
-          status: u.status, permissions: u.permissions || {}
+          status: u.status, permissions: u.permissions || {},
+          ai_api_key: u.ai_api_key // On inclut la clé API dans le mapping
         }));
         setUsers(mappedUsers);
+        
+        // RECHERCHE DE LA CLÉ API GLOBALE (Configurée par l'Admin)
+        const adminUser = mappedUsers.find(u => u.role === UserRole.ADMIN && u.ai_api_key);
+        if (adminUser?.ai_api_key) {
+          setGeminiApiKey(adminUser.ai_api_key);
+        }
+
         if (userId) {
           const matched = mappedUsers.find((u: any) => u.id === userId);
           if (matched) setCurrentUser(matched);
@@ -533,7 +553,6 @@ const App: React.FC = () => {
       }
       if (clRes.data) setClients(clRes.data as Client[]);
 
-      // LOGIQUE DE NETTOYAGE LEADS "PERDU" (> 5 jours)
       if (lRes.data) {
           const now = new Date();
           const fiveDaysInMs = 5 * 24 * 60 * 60 * 1000;
