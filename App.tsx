@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
 import { supabase, isConfigured } from './services/supabaseClient';
+import { createClient } from '@supabase/supabase-js';
 import { HashRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import ToastContainer from './components/Toast';
@@ -19,6 +20,9 @@ const Reports = lazy(() => import('./components/Reports'));
 const Clients = lazy(() => import('./components/Clients'));
 const Calendar = lazy(() => import('./components/Calendar'));
 const Leads = lazy(() => import('./components/Leads'));
+
+const supabaseUrl = 'https://cfpyrdcybgnefaqdyumb.supabase.co';
+const supabaseAnonKey = 'sb_publishable_9_MVHdIusXmJ_awvZdAl_w_2sTgGqoE';
 
 const generateUUID = () => {
   try {
@@ -64,7 +68,7 @@ const AuthUI = ({ isRegistering, setIsRegistering, handleAuth, email, setEmail, 
             type="text" 
             required 
             value={registerName} 
-            onChange={e => setRegisterName(e.target.value)} 
+            onChange={setRegisterName} 
             placeholder="Nom complet" 
             className="w-full p-5 bg-slate-50 border border-transparent rounded-2xl font-semibold text-slate-900 pl-12 outline-none focus:bg-white focus:border-vibrant-indigo/30 focus:ring-4 focus:ring-vibrant-indigo/5 transition-all" 
           />
@@ -76,7 +80,7 @@ const AuthUI = ({ isRegistering, setIsRegistering, handleAuth, email, setEmail, 
           type="email" 
           required 
           value={email} 
-          onChange={e => setEmail(e.target.value)} 
+          onChange={setEmail} 
           placeholder="Email iVISION" 
           className="w-full p-5 bg-slate-50 border border-transparent rounded-2xl font-semibold text-slate-900 pl-12 outline-none focus:bg-white focus:border-vibrant-indigo/30 focus:ring-4 focus:ring-vibrant-indigo/5 transition-all" 
         />
@@ -87,7 +91,7 @@ const AuthUI = ({ isRegistering, setIsRegistering, handleAuth, email, setEmail, 
           type="password" 
           required 
           value={password} 
-          onChange={e => setPassword(e.target.value)} 
+          onChange={setPassword} 
           placeholder="Mot de passe" 
           className="w-full p-5 bg-slate-50 border border-transparent rounded-2xl font-semibold text-slate-900 pl-12 outline-none focus:bg-white focus:border-vibrant-indigo/30 focus:ring-4 focus:ring-vibrant-indigo/5 transition-all" 
         />
@@ -430,12 +434,15 @@ const AppContent: React.FC<{
   // TEAM HANDLERS
   const handleAddUser = useCallback(async (payload: { name: string; email: string; password: string; role: UserRole }) => {
     try {
-      // 1. Inscription Auth
-      const { data: authData, error: authError } = await supabase.auth.signUp({
+      const tempSupabase = createClient(supabaseUrl, supabaseAnonKey, { auth: { persistSession: false } });
+
+      // 1. Inscription Auth (Auto-confirmée par le trigger SQL)
+      const { data: authData, error: authError } = await tempSupabase.auth.signUp({
         email: payload.email,
         password: payload.password,
         options: { data: { name: payload.name } }
       });
+      
       if (authError) throw authError;
 
       if (authData.user) {
@@ -462,7 +469,7 @@ const AppContent: React.FC<{
         if (dbError) throw dbError;
         
         setUsers(prev => [...prev, newUser]);
-        addNotification("Équipe", `Collaborateur ${payload.name} créé avec succès.`, "success");
+        addNotification("Équipe", `Collaborateur ${payload.name} créé et activé immédiatement.`, "success");
       }
     } catch (e: any) {
       console.error(e);
@@ -662,7 +669,7 @@ const App: React.FC = () => {
       {!currentUser ? (
         <div className="h-screen w-screen auth-bg flex items-center justify-center p-6 overflow-hidden">
           <ToastContainer notifications={notifications} onDismiss={onDismissNotification} />
-          <AuthUI isRegistering={isRegistering} setIsRegistering={setIsRegistering} handleAuth={handleAuth} email={email} setEmail={setEmail} password={password} setPassword={setPassword} registerName={registerName} setRegisterName={setRegisterName} isAuthProcessing={isAuthProcessing} isEntering={isEntering} />
+          <AuthUI isRegistering={isRegistering} setIsRegistering={setIsRegistering} handleAuth={handleAuth} email={email} setEmail={(e: any) => setEmail(e.target.value)} password={password} setPassword={(e: any) => setPassword(e.target.value)} registerName={registerName} setRegisterName={(e: any) => setRegisterName(e.target.value)} isAuthProcessing={isAuthProcessing} isEntering={isEntering} />
         </div>
       ) : (
         <div className={`transition-all duration-1000 ease-out ${isEntering ? 'opacity-0 scale-95 blur-xl' : 'opacity-100 scale-100'}`}>
