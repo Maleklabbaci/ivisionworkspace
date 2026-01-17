@@ -19,7 +19,17 @@ const Clients = lazy(() => import('./components/Clients'));
 const Calendar = lazy(() => import('./components/Calendar'));
 const Leads = lazy(() => import('./components/Leads'));
 
-const generateUUID = () => crypto.randomUUID();
+const generateUUID = () => {
+  try {
+    return crypto.randomUUID();
+  } catch (e) {
+    // Fallback pour les contextes non sécurisés (HTTP)
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  }
+};
 
 const PageSkeleton = () => (
   <div className="w-full animate-in fade-in duration-500 space-y-10 px-4 pt-10">
@@ -134,22 +144,53 @@ const AppContent: React.FC<{
   const handleUpdateTaskStatus = useCallback(async (taskId: string, newStatus: TaskStatus) => {
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
     try {
-      await supabase.from('tasks').update({ status: newStatus }).eq('id', taskId);
+      const { error } = await supabase.from('tasks').update({ status: newStatus }).eq('id', taskId);
+      if (error) throw error;
       addNotification("Missions", "Statut mis à jour", "success");
-    } catch (e) { console.error(e); }
+    } catch (e: any) { 
+      console.error(e);
+      addNotification("Erreur", "Impossible de mettre à jour le statut", "urgent");
+    }
   }, [setTasks, addNotification]);
 
-  const handleAddTask = useCallback(async (task: Task) => {
+  const handleUpdateTask = useCallback(async (task: Task) => {
+    setTasks(prev => prev.map(t => t.id === task.id ? { ...task } : t));
     try {
-      const { data, error } = await supabase.from('tasks').insert({
+      const { error } = await supabase.from('tasks').update({
         title: task.title,
         description: task.description,
         assignee_id: task.assigneeId,
         status: task.status,
         due_date: task.dueDate,
         priority: task.priority,
-        client_id: task.clientId
+        client_id: task.clientId || null,
+        type: task.type
+      }).eq('id', task.id);
+      
+      if (error) throw error;
+      addNotification("Missions", "Mission mise à jour", "success");
+    } catch (e: any) {
+      console.error(e);
+      addNotification("Erreur", "Impossible de mettre à jour la mission", "urgent");
+    }
+  }, [setTasks, addNotification]);
+
+  const handleAddTask = useCallback(async (task: Task) => {
+    try {
+      const { data, error } = await supabase.from('tasks').insert({
+        id: generateUUID(),
+        title: task.title,
+        description: task.description,
+        assignee_id: task.assigneeId,
+        status: task.status,
+        due_date: task.dueDate,
+        priority: task.priority || 'medium',
+        client_id: task.clientId || null,
+        type: task.type || 'content'
       }).select();
+
+      if (error) throw error;
+
       if (data) {
         setTasks(prev => [{
             id: data[0].id,
@@ -160,62 +201,95 @@ const AppContent: React.FC<{
             dueDate: data[0].due_date,
             priority: data[0].priority,
             clientId: data[0].client_id,
-            type: 'content'
+            type: data[0].type || 'content'
         }, ...prev]);
         addNotification("Missions", "Nouvelle mission ajoutée", "success");
       }
-    } catch (e) { console.error(e); }
+    } catch (e: any) { 
+      console.error("Task Creation Error:", e);
+      addNotification("Erreur", `Échec de la création : ${e.message}`, "urgent");
+    }
   }, [setTasks, addNotification]);
 
   const handleDeleteTask = useCallback(async (taskId: string) => {
     try {
-      await supabase.from('tasks').delete().eq('id', taskId);
+      const { error } = await supabase.from('tasks').delete().eq('id', taskId);
+      if (error) throw error;
       setTasks(prev => prev.filter(t => t.id !== taskId));
       addNotification("Missions", "Mission révoquée", "info");
-    } catch (e) { console.error(e); }
+    } catch (e) { 
+      console.error(e);
+      addNotification("Erreur", "Impossible de supprimer la tâche", "urgent");
+    }
   }, [setTasks, addNotification]);
 
   // LEADS HANDLERS
   const handleAddLead = useCallback(async (lead: Lead) => {
     try {
       const { data, error } = await supabase.from('leads').insert({
+        id: generateUUID(),
         name: lead.name, company: lead.company, email: lead.email,
         phone: lead.phone, status: lead.status, value_min: lead.valueMin,
         value_max: lead.valueMax, description: lead.description
       }).select();
+      if (error) throw error;
       if (data) {
-        setLeads(prev => [data[0], ...prev]);
+        setLeads(prev => [{
+          id: data[0].id,
+          name: data[0].name,
+          company: data[0].company,
+          email: data[0].email,
+          phone: data[0].phone,
+          status: data[0].status,
+          valueMin: data[0].value_min,
+          valueMax: data[0].value_max,
+          description: data[0].description,
+          createdAt: data[0].created_at
+        }, ...prev]);
         addNotification("Pipeline", "Prospect capturé", "success");
       }
-    } catch (e) { console.error(e); }
+    } catch (e: any) { 
+      console.error(e); 
+      addNotification("Erreur", "Impossible d'ajouter le prospect", "urgent");
+    }
   }, [setLeads, addNotification]);
 
   const handleUpdateLead = useCallback(async (lead: Lead) => {
     setLeads(prev => prev.map(l => String(l.id) === String(lead.id) ? { ...lead } : l));
     try {
-      await supabase.from('leads').update({
+      const { error } = await supabase.from('leads').update({
         name: lead.name, company: lead.company, email: lead.email,
         phone: lead.phone, status: lead.status, value_min: lead.valueMin,
         value_max: lead.valueMax, description: lead.description
       }).eq('id', lead.id);
+      if (error) throw error;
       addNotification("Pipeline", "Prospect mis à jour", "success");
-    } catch (e) { console.error(e); }
+    } catch (e) { 
+      console.error(e);
+      addNotification("Erreur", "Mise à jour échouée", "urgent");
+    }
   }, [setLeads, addNotification]);
 
   const handleDeleteLead = useCallback(async (id: string) => {
     try {
-      await supabase.from('leads').delete().eq('id', id);
+      const { error } = await supabase.from('leads').delete().eq('id', id);
+      if (error) throw error;
       setLeads(prev => prev.filter(l => String(l.id) !== String(id)));
       addNotification("Pipeline", "Prospect supprimé", "info");
-    } catch (e) { console.error(e); }
+    } catch (e) { 
+      console.error(e);
+      addNotification("Erreur", "Suppression échouée", "urgent");
+    }
   }, [setLeads, addNotification]);
 
   const handleConvertToClient = useCallback(async (lead: Lead) => {
     try {
       const { data, error } = await supabase.from('clients').insert({
+        id: generateUUID(),
         name: lead.name, company: lead.company, email: lead.email,
         phone: lead.phone, description: lead.description
       }).select();
+      if (error) throw error;
       if (data) {
         setClients(prev => [...prev, data[0] as Client]);
         await supabase.from('leads').delete().eq('id', lead.id);
@@ -223,12 +297,16 @@ const AppContent: React.FC<{
         addNotification("CRM", "Prospect converti en client !", "success");
         navigate('/clients');
       }
-    } catch (e) { console.error(e); }
+    } catch (e) { 
+      console.error(e);
+      addNotification("Erreur", "Conversion échouée", "urgent");
+    }
   }, [setLeads, setClients, addNotification, navigate]);
 
   const handleMoveClientToLead = useCallback(async (client: Client) => {
     try {
       const { data, error } = await supabase.from('leads').insert({
+        id: generateUUID(),
         name: client.name,
         company: client.company,
         email: client.email,
@@ -236,6 +314,7 @@ const AppContent: React.FC<{
         description: client.description,
         status: 'new'
       }).select();
+      if (error) throw error;
       if (data) {
         setLeads(prev => [{
             id: data[0].id,
@@ -254,15 +333,20 @@ const AppContent: React.FC<{
         addNotification("CRM", "Client rétrogradé en prospect", "info");
         navigate('/leads');
       }
-    } catch (e) { console.error(e); }
+    } catch (e) { 
+      console.error(e);
+      addNotification("Erreur", "Rétrogradation échouée", "urgent");
+    }
   }, [setLeads, setClients, addNotification, navigate]);
 
   // CHAT HANDLERS
   const handleSendMessage = useCallback(async (content: string, channelId: string) => {
     try {
       const { data, error } = await supabase.from('messages').insert({
+        id: generateUUID(),
         content, channel_id: channelId, user_id: currentUser.id
       }).select();
+      if (error) throw error;
       if (data) {
         setMessages(prev => [...prev, {
           id: data[0].id, userId: data[0].user_id, channelId: data[0].channel_id,
@@ -277,8 +361,10 @@ const AppContent: React.FC<{
   const handleAddFileLink = useCallback(async (name: string, url: string) => {
     try {
       const { data, error } = await supabase.from('file_links').insert({
+        id: generateUUID(),
         name, url, created_by: currentUser.id
       }).select();
+      if (error) throw error;
       if (data) {
         setFileLinks(prev => [data[0], ...prev]);
         addNotification("Documents", "Nouveau lien ajouté", "success");
@@ -290,9 +376,10 @@ const AppContent: React.FC<{
   const handleUpdateMember = useCallback(async (userId: string, updates: Partial<User>) => {
     setUsers(prev => prev.map(u => u.id === userId ? { ...u, ...updates } : u));
     try {
-      await supabase.from('users').update({
+      const { error } = await supabase.from('users').update({
         role: updates.role, permissions: updates.permissions, name: updates.name
       }).eq('id', userId);
+      if (error) throw error;
       addNotification("Équipe", "Collaborateur mis à jour", "success");
     } catch (e) { console.error(e); }
   }, [setUsers, addNotification]);
@@ -309,7 +396,7 @@ const AppContent: React.FC<{
         <Routes>
           <Route path="/dashboard" element={<Dashboard currentUser={currentUser} tasks={tasks} notifications={notifications} onNavigate={(v) => navigate(`/${v}`)} />} />
           <Route path="/leads" element={<Leads leads={leads} onAddLead={handleAddLead} onUpdateLead={handleUpdateLead} onDeleteLead={handleDeleteLead} onConvertToClient={handleConvertToClient} currentUser={currentUser} addNotification={addNotification} />} />
-          <Route path="/tasks" element={<Tasks tasks={tasks} users={users} clients={clients} currentUser={currentUser} onUpdateStatus={handleUpdateTaskStatus} onAddTask={handleAddTask} onUpdateTask={() => {}} onDeleteTask={handleDeleteTask} />} />
+          <Route path="/tasks" element={<Tasks tasks={tasks} users={users} clients={clients} currentUser={currentUser} onUpdateStatus={handleUpdateTaskStatus} onAddTask={handleAddTask} onUpdateTask={handleUpdateTask} onDeleteTask={handleDeleteTask} />} />
           <Route path="/settings" element={<Settings currentUser={currentUser} onUpdateProfile={async (data) => {
               setUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, ...data } : u));
               await supabase.from('users').update(data).eq('id', currentUser.id);
@@ -424,7 +511,7 @@ const App: React.FC = () => {
         dueDate: t.due_date, 
         priority: t.priority, 
         clientId: t.client_id,
-        type: 'content'
+        type: t.type || 'content'
       })));
       if (fRes.data) setFileLinks(fRes.data.map((f: any) => ({
         id: f.id, name: f.name, url: f.url, createdAt: new Date(f.created_at).toLocaleDateString()

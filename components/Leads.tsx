@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useCallback, memo } from 'react';
-import { Lead, User, UserRole, ToastNotification } from '../types';
+import { Lead, User, UserRole } from '../types';
 import { Search, Plus, Target, X, Mail, Phone, Trash2, Edit2, ChevronRight, Zap, TrendingUp, CheckCircle2, UserCheck, UserMinus, PhoneCall, Briefcase, Info, DollarSign, Calendar, Sparkles, Wand2, Loader2, FileText, Clock, AlertCircle } from 'lucide-react';
 import { parseLeadFromText } from '../services/geminiService';
 
@@ -84,19 +84,6 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
 
   const selectedLead = useMemo(() => leads.find(l => String(l.id) === selectedLeadId), [leads, selectedLeadId]);
 
-  const handleOpenAdd = () => {
-    setFormData({ name: '', company: '', email: '', phone: '', status: 'new', valueMin: 0, valueMax: 0, description: '' });
-    setMagicText('');
-    setIsAiMode(false);
-    setViewMode('add');
-  };
-
-  const handleOpenEdit = (lead: Lead) => {
-    setFormData(lead);
-    setIsAiMode(false);
-    setViewMode('edit');
-  };
-
   const handleMagicExtract = async () => {
     if (!magicText.trim() || isExtracting) return;
     setIsExtracting(true);
@@ -117,11 +104,11 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
         setIsAiMode(false);
         addNotification("Intelligence iV", "Prospect extrait avec succès", "success");
       } else {
-        addNotification("Intelligence iV", "Impossible d'extraire les données. Vérifiez le texte.", "urgent");
+        addNotification("Intelligence iV", "Impossible d'identifier les données.", "urgent");
       }
     } catch (err) {
-      console.error("AI Extraction failed", err);
-      addNotification("Intelligence iV", "Erreur lors de l'analyse IA", "urgent");
+      console.error("Extraction failed", err);
+      addNotification("Intelligence iV", "Erreur réseau ou Clé API non configurée.", "urgent");
     } finally {
       setIsExtracting(false);
     }
@@ -164,7 +151,7 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
                 className="w-full sm:w-64 pl-11 pr-4 py-3.5 bg-white border border-slate-100 rounded-2xl shadow-sm text-xs font-bold outline-none" 
             />
           </div>
-          <button onClick={handleOpenAdd} className="px-8 py-4 bg-slate-900 text-white font-bold rounded-2xl shadow-xl active-scale text-[10px] tracking-widest uppercase border-4 border-white">
+          <button onClick={() => { setFormData({name: '', company: '', email: '', phone: '', status: 'new', valueMin: 0, valueMax: 0, description: ''}); setMagicText(''); setViewMode('add'); }} className="px-8 py-4 bg-slate-900 text-white font-bold rounded-2xl shadow-xl active-scale text-[10px] tracking-widest uppercase border-4 border-white">
             Nouveau Lead
           </button>
         </div>
@@ -197,7 +184,7 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
         ))}
       </div>
 
-      {/* MODAL - VUE DÉTAILLÉE */}
+      {/* MODAL VUE DÉTAILLÉE */}
       {viewMode === 'view' && selectedLead && (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setViewMode('list')}></div>
@@ -268,7 +255,7 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
                    <Zap size={18} /> <span>Convertir en Client iV</span>
                  </button>
                  <div className="flex space-x-3">
-                    <button onClick={() => handleOpenEdit(selectedLead)} className="flex-1 py-4 bg-slate-900 text-white font-bold rounded-[2rem] text-[10px] uppercase tracking-widest active-scale border-4 border-white shadow-xl">
+                    <button onClick={() => { setFormData(selectedLead); setViewMode('edit'); }} className="flex-1 py-4 bg-slate-900 text-white font-bold rounded-[2rem] text-[10px] uppercase tracking-widest active-scale border-4 border-white shadow-xl">
                       Modifier
                     </button>
                     <button onClick={() => { if(confirm('Révoquer ce lead ?')) { onDeleteLead(String(selectedLead.id)); setViewMode('list'); } }} className="w-16 h-16 bg-red-50 text-urgent flex items-center justify-center rounded-[2rem] active-scale border-4 border-white">
@@ -281,7 +268,7 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
         </div>
       )}
 
-      {/* MODAL - FORMULAIRE AJOUT/ÉDITION */}
+      {/* FORMULAIRE AJOUT/ÉDITION */}
       {(viewMode === 'add' || viewMode === 'edit') && (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setViewMode('list')}></div>
@@ -304,7 +291,7 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
             <div className="flex-1 overflow-y-auto no-scrollbar">
                 {isAiMode ? (
                     <div className="p-8 space-y-6">
-                        <textarea className="w-full h-48 p-6 bg-slate-50 border border-slate-100 rounded-[2.5rem] font-bold text-slate-900 placeholder-slate-300 focus:bg-white focus:border-vibrant-indigo/30 outline-none transition-all text-sm resize-none shadow-inner" value={magicText} onChange={e => setMagicText(e.target.value)} placeholder="Collez ici le contenu à extraire..." />
+                        <textarea className="w-full h-48 p-6 bg-slate-50 border border-slate-100 rounded-[2.5rem] font-bold text-slate-900 placeholder-slate-300 focus:bg-white focus:border-vibrant-indigo/30 outline-none transition-all text-sm resize-none shadow-inner" value={magicText} onChange={e => setMagicText(e.target.value)} placeholder="Collez ici le contenu à extraire (mail, chat, notes...)" />
                         <button type="button" disabled={!magicText.trim() || isExtracting} onClick={handleMagicExtract} className="w-full py-6 bg-gradient-to-r from-vibrant-indigo to-primary text-white font-black rounded-[2rem] text-[10px] uppercase tracking-[0.2em] shadow-2xl shadow-primary/20 border-4 border-white active-scale transition-all flex items-center justify-center space-x-3 disabled:opacity-50">
                             {isExtracting ? <Loader2 size={18} className="animate-spin" /> : <><Wand2 size={18} /><span>Extraire les Données IA</span></>}
                         </button>

@@ -1,16 +1,22 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 
-// Use process.env.API_KEY exclusively as per Gemini guidelines.
+// Utilisation exclusive de process.env.API_KEY pour la sécurité.
 const getAIClient = () => {
   return new GoogleGenAI({ apiKey: process.env.API_KEY as string });
 };
 
 /**
- * Helper to sanitize AI JSON output (removes markdown code blocks if present)
+ * Nettoie la sortie de l'IA pour ne garder que le JSON pur.
  */
 const sanitizeJson = (text: string): string => {
-  return text.replace(/```json/g, "").replace(/```/g, "").trim();
+  try {
+    // Cherche un bloc JSON si l'IA a mis du markdown
+    const match = text.match(/\{[\s\S]*\}/);
+    return match ? match[0] : text.trim();
+  } catch (e) {
+    return text.trim();
+  }
 };
 
 export const generateMarketingInsight = async (context: string): Promise<string> => {
@@ -26,31 +32,7 @@ export const generateMarketingInsight = async (context: string): Promise<string>
     return response.text?.trim() || "Analyse indisponible.";
   } catch (error) {
     console.error("Gemini Error:", error);
-    return "Erreur lors de l'analyse IA. Vérifiez la configuration de la clé API.";
-  }
-};
-
-export const brainstormTaskIdeas = async (topic: string): Promise<string[]> => {
-  try {
-    const ai = getAIClient();
-    const model = 'gemini-3-flash-preview';
-    
-    const response = await ai.models.generateContent({
-      model: model,
-      contents: `Génère 5 idées de tâches marketing pour : "${topic}". Format JSON [string, string...]`,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.ARRAY,
-          items: { type: Type.STRING }
-        }
-      }
-    });
-
-    const cleanText = sanitizeJson(response.text || "[]");
-    return JSON.parse(cleanText);
-  } catch (error) {
-    return ["Audit de campagne", "Optimisation SEO", "Rédaction contenu"];
+    return "Erreur lors de l'analyse IA.";
   }
 };
 
@@ -61,25 +43,22 @@ export const parseLeadFromText = async (text: string): Promise<any> => {
     
     const response = await ai.models.generateContent({
       model: model,
-      contents: `Analyse ce texte et extrait les informations du prospect iVISION.
-      Texte : "${text}"
-      
-      Règles pour le budget :
-      - Si un seul montant est donné, valueMin = montant, valueMax = montant.
-      - Si une plage est donnée (ex: 50k-100k), valueMin = 50000, valueMax = 100000.
-      - Retourne des nombres purs pour les montants.`,
+      contents: `Tu es un assistant iVISION spécialisé en extraction de données. 
+      Extrais les infos suivantes du texte : "${text}"
+      Renvoie UNIQUEMENT un objet JSON avec les clés : name, company, email, phone, valueMin (nombre), valueMax (nombre), description.
+      Si un budget est "50k", écris 50000.`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            name: { type: Type.STRING, description: "Nom complet du prospect" },
-            company: { type: Type.STRING, description: "Nom de l'entreprise" },
-            email: { type: Type.STRING, description: "Adresse email" },
-            phone: { type: Type.STRING, description: "Numéro de téléphone" },
-            valueMin: { type: Type.NUMBER, description: "Budget minimum en DZD" },
-            valueMax: { type: Type.NUMBER, description: "Budget maximum en DZD" },
-            description: { type: Type.STRING, description: "Résumé ou détails additionnels" }
+            name: { type: Type.STRING },
+            company: { type: Type.STRING },
+            email: { type: Type.STRING },
+            phone: { type: Type.STRING },
+            valueMin: { type: Type.NUMBER },
+            valueMax: { type: Type.NUMBER },
+            description: { type: Type.STRING }
           },
           required: ["name"]
         }
@@ -89,7 +68,7 @@ export const parseLeadFromText = async (text: string): Promise<any> => {
     const cleanText = sanitizeJson(response.text || "{}");
     return JSON.parse(cleanText);
   } catch (error) {
-    console.error("Magic Tool Error:", error);
+    console.error("Extraction Error:", error);
     throw error;
   }
 };

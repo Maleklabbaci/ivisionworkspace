@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useCallback, memo } from 'react';
-import { Plus, CheckCircle, X, ChevronRight, Clock, CheckSquare, PlayCircle, PauseCircle, Calendar as CalendarIcon, Trash2, CalendarDays, CalendarRange, User as UserIcon } from 'lucide-react';
+import { Plus, CheckCircle, X, ChevronRight, Clock, CheckSquare, PlayCircle, PauseCircle, Calendar as CalendarIcon, Trash2, CalendarDays, CalendarRange, User as UserIcon, Briefcase, LayoutGrid, Edit2 } from 'lucide-react';
 import { Task, TaskStatus, User, Client } from '../types';
 
 interface TaskCardProps {
@@ -68,8 +68,16 @@ interface TasksProps {
 const Tasks: React.FC<TasksProps> = ({ tasks, users, clients = [], currentUser, onUpdateStatus, onAddTask, onUpdateTask, onDeleteTask }) => {
   const [activeFilter, setActiveFilter] = useState<'all' | 'today' | 'week'>('all');
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const [showFormModal, setShowFormModal] = useState(false);
-  const [formData, setFormData] = useState<Partial<Task>>({ title: '', description: '', dueDate: new Date().toLocaleDateString('en-CA'), priority: 'medium', assigneeId: currentUser.id });
+  const [viewMode, setViewMode] = useState<'list' | 'add' | 'edit'>('list');
+  const [formData, setFormData] = useState<Partial<Task>>({ 
+    title: '', 
+    description: '', 
+    dueDate: new Date().toLocaleDateString('en-CA'), 
+    priority: 'medium', 
+    assigneeId: currentUser.id,
+    type: 'content',
+    clientId: ''
+  });
   
   const clientMap = useMemo(() => new Map(clients.map(c => [c.id, c])), [clients]);
   const userMap = useMemo(() => new Map(users.map(u => [u.id, u])), [users]);
@@ -93,12 +101,37 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, clients = [], currentUser, 
 
   const currentTask = useMemo(() => tasks.find(t => t.id === selectedTaskId), [tasks, selectedTaskId]);
 
-  const handleCreateTask = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.title) return;
-    onAddTask({ ...formData, status: TaskStatus.TODO } as Task);
-    setShowFormModal(false);
-    setFormData({ title: '', description: '', dueDate: new Date().toLocaleDateString('en-CA'), priority: 'medium', assigneeId: currentUser.id });
+
+    if (viewMode === 'edit' && formData.id) {
+        onUpdateTask(formData as Task);
+    } else {
+        onAddTask({ 
+            ...formData, 
+            status: TaskStatus.TODO,
+            type: formData.type || 'content'
+        } as Task);
+    }
+    
+    setViewMode('list');
+    setFormData({ 
+      title: '', 
+      description: '', 
+      dueDate: new Date().toLocaleDateString('en-CA'), 
+      priority: 'medium', 
+      assigneeId: currentUser.id,
+      type: 'content',
+      clientId: ''
+    });
+  };
+
+  const handleOpenEdit = () => {
+      if (currentTask) {
+          setFormData({ ...currentTask });
+          setViewMode('edit');
+      }
   };
 
   const FilterButton = ({ id, label, icon: Icon }: { id: 'all' | 'today' | 'week', label: string, icon: any }) => (
@@ -146,38 +179,99 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, clients = [], currentUser, 
         )}
       </div>
 
-      <button onClick={() => setShowFormModal(true)} className="fixed bottom-24 right-8 w-14 h-14 bg-primary text-white rounded-2xl shadow-xl flex items-center justify-center z-40 active-scale border border-white/20">
+      <button onClick={() => { 
+          setFormData({ 
+              title: '', description: '', dueDate: new Date().toLocaleDateString('en-CA'), 
+              priority: 'medium', assigneeId: currentUser.id, type: 'content', clientId: '' 
+          });
+          setViewMode('add'); 
+      }} className="fixed bottom-24 right-8 w-14 h-14 bg-primary text-white rounded-2xl shadow-xl flex items-center justify-center z-40 active-scale border border-white/20">
         <Plus size={28} strokeWidth={2.5} />
       </button>
 
-      {/* MODAL - AJOUT TACHE */}
-      {showFormModal && (
+      {/* MODAL - AJOUT / ÉDITION TACHE */}
+      {(viewMode === 'add' || viewMode === 'edit') && (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowFormModal(false)}></div>
-          <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden modal-drawer">
-             <header className="p-8 border-b border-slate-100 flex justify-between items-center">
-               <h3 className="text-xl font-bold uppercase tracking-tight">Nouvelle Mission</h3>
-               <button onClick={() => setShowFormModal(false)} className="p-2 text-slate-400"><X size={20}/></button>
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setViewMode('list')}></div>
+          <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden modal-drawer flex flex-col max-h-[90vh]">
+             <header className="p-8 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
+               <h3 className="text-xl font-bold uppercase tracking-tight">
+                   {viewMode === 'edit' ? 'Modifier la Mission' : 'Nouvelle Mission'}
+               </h3>
+               <button onClick={() => setViewMode('list')} className="p-2 text-slate-400 hover:bg-slate-50 rounded-lg transition-colors"><X size={20}/></button>
              </header>
-             <form onSubmit={handleCreateTask} className="p-8 space-y-6">
-                <input required type="text" className="w-full p-4 bg-slate-50 border border-slate-100 rounded-xl font-bold text-sm outline-none" placeholder="Titre de la mission" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
-                <textarea className="w-full h-32 p-4 bg-slate-50 border border-slate-100 rounded-xl font-bold text-sm outline-none resize-none" placeholder="Briefing..." value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})}></textarea>
-                <div className="grid grid-cols-2 gap-4">
-                    <input type="date" className="w-full p-4 bg-slate-50 border border-slate-100 rounded-xl font-bold text-sm outline-none" value={formData.dueDate} onChange={e => setFormData({...formData, dueDate: e.target.value})} />
-                    <select className="w-full p-4 bg-slate-50 border border-slate-100 rounded-xl font-bold text-sm outline-none" value={formData.priority} onChange={e => setFormData({...formData, priority: e.target.value as any})}>
-                        <option value="low">Priorité Basse</option>
-                        <option value="medium">Moyenne</option>
-                        <option value="high">Haute / Urgente</option>
-                    </select>
+             <form onSubmit={handleSubmit} className="p-8 space-y-6 overflow-y-auto no-scrollbar">
+                <div className="space-y-1.5">
+                  <label className="text-[9px] font-black uppercase text-slate-400 px-1 tracking-widest">Titre de la mission *</label>
+                  <input required type="text" className="w-full p-4 bg-slate-50 border border-slate-100 rounded-xl font-bold text-sm outline-none focus:bg-white focus:border-primary/20 transition-all" placeholder="Ex: Rédaction Newsletter" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
                 </div>
-                <button type="submit" className="w-full py-5 bg-primary text-white font-bold rounded-2xl text-[10px] uppercase tracking-widest active-scale shadow-xl shadow-primary/20">CRÉER LA MISSION</button>
+
+                <div className="space-y-1.5">
+                  <label className="text-[9px] font-black uppercase text-slate-400 px-1 tracking-widest">Briefing / Description</label>
+                  <textarea className="w-full h-24 p-4 bg-slate-50 border border-slate-100 rounded-xl font-bold text-sm outline-none resize-none focus:bg-white focus:border-primary/20 transition-all" placeholder="Instructions pour l'équipe..." value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})}></textarea>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[9px] font-black uppercase text-slate-400 px-1 tracking-widest">Date d'échéance</label>
+                      <input type="date" className="w-full p-4 bg-slate-50 border border-slate-100 rounded-xl font-bold text-sm outline-none focus:bg-white transition-all" value={formData.dueDate} onChange={e => setFormData({...formData, dueDate: e.target.value})} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[9px] font-black uppercase text-slate-400 px-1 tracking-widest">Priorité</label>
+                      <select className="w-full p-4 bg-slate-50 border border-slate-100 rounded-xl font-bold text-sm outline-none focus:bg-white transition-all" value={formData.priority} onChange={e => setFormData({...formData, priority: e.target.value as any})}>
+                          <option value="low">Basse</option>
+                          <option value="medium">Moyenne</option>
+                          <option value="high">Haute</option>
+                      </select>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-black uppercase text-slate-400 px-1 tracking-widest">Assigné à</label>
+                    <div className="relative">
+                      <UserIcon size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" />
+                      <select required className="w-full pl-10 p-4 bg-slate-50 border border-slate-100 rounded-xl font-bold text-sm outline-none appearance-none focus:bg-white transition-all" value={formData.assigneeId} onChange={e => setFormData({...formData, assigneeId: e.target.value})}>
+                          {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-black uppercase text-slate-400 px-1 tracking-widest">Type</label>
+                    <div className="relative">
+                      <LayoutGrid size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" />
+                      <select required className="w-full pl-10 p-4 bg-slate-50 border border-slate-100 rounded-xl font-bold text-sm outline-none appearance-none focus:bg-white transition-all" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value as any})}>
+                          <option value="content">Contenu</option>
+                          <option value="ads">Publicité</option>
+                          <option value="social">Social</option>
+                          <option value="seo">SEO</option>
+                          <option value="admin">Admin</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[9px] font-black uppercase text-slate-400 px-1 tracking-widest">Client / Partenaire</label>
+                  <div className="relative">
+                    <Briefcase size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" />
+                    <select className="w-full pl-10 p-4 bg-slate-50 border border-slate-100 rounded-xl font-bold text-sm outline-none appearance-none focus:bg-white transition-all" value={formData.clientId} onChange={e => setFormData({...formData, clientId: e.target.value})}>
+                        <option value="">Projet Interne (Aucun client)</option>
+                        {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                <button type="submit" className="w-full py-5 bg-primary text-white font-bold rounded-2xl text-[10px] uppercase tracking-widest active-scale shadow-xl shadow-primary/20 border-4 border-white mt-4">
+                    {viewMode === 'edit' ? 'METTRE À JOUR' : 'CRÉER LA MISSION'}
+                </button>
              </form>
           </div>
         </div>
       )}
 
       {/* MODAL - VUE DÉTAILLÉE */}
-      {selectedTaskId && currentTask && (
+      {selectedTaskId && currentTask && viewMode === 'list' && (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setSelectedTaskId(null)}></div>
           <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden modal-drawer">
@@ -208,18 +302,23 @@ const Tasks: React.FC<TasksProps> = ({ tasks, users, clients = [], currentUser, 
                 <p className="text-sm font-medium text-slate-600 leading-relaxed whitespace-pre-wrap">{currentTask.description || 'Aucun briefing spécifique.'}</p>
               </div>
               
-              <div className="flex space-x-3 pt-4">
-                {currentTask.status !== TaskStatus.DONE ? (
-                    <button onClick={() => { onUpdateStatus(currentTask.id, TaskStatus.DONE); setSelectedTaskId(null); }} className="flex-1 py-4 bg-success text-white font-bold rounded-xl text-xs uppercase tracking-widest active-scale flex items-center justify-center space-x-2">
-                        <CheckCircle size={18} /> <span>TERMINER</span>
+              <div className="flex flex-col space-y-3 pt-4">
+                <div className="flex space-x-3">
+                    {currentTask.status !== TaskStatus.DONE ? (
+                        <button onClick={() => { onUpdateStatus(currentTask.id, TaskStatus.DONE); setSelectedTaskId(null); }} className="flex-1 py-4 bg-success text-white font-bold rounded-xl text-xs uppercase tracking-widest active-scale flex items-center justify-center space-x-2">
+                            <CheckCircle size={18} /> <span>TERMINER</span>
+                        </button>
+                    ) : (
+                        <button onClick={() => { onUpdateStatus(currentTask.id, TaskStatus.IN_PROGRESS); setSelectedTaskId(null); }} className="flex-1 py-4 bg-slate-200 text-slate-600 font-bold rounded-xl text-xs uppercase tracking-widest active-scale">
+                            RELANCER
+                        </button>
+                    )}
+                    <button onClick={handleOpenEdit} className="flex-1 py-4 bg-slate-900 text-white font-bold rounded-xl text-xs uppercase tracking-widest active-scale flex items-center justify-center space-x-2">
+                        <Edit2 size={16} /> <span>MODIFIER</span>
                     </button>
-                ) : (
-                    <button onClick={() => { onUpdateStatus(currentTask.id, TaskStatus.IN_PROGRESS); setSelectedTaskId(null); }} className="flex-1 py-4 bg-slate-200 text-slate-600 font-bold rounded-xl text-xs uppercase tracking-widest active-scale">
-                        RELANCER
-                    </button>
-                )}
-                <button onClick={() => { if(confirm('Révoquer définitivement cette mission ?')) { onDeleteTask(currentTask.id); setSelectedTaskId(null); } }} className="w-14 h-14 bg-red-50 text-urgent flex items-center justify-center rounded-xl border border-red-100 active-scale">
-                  <Trash2 size={20} />
+                </div>
+                <button onClick={() => { if(confirm('Révoquer définitivement cette mission ?')) { onDeleteTask(currentTask.id); setSelectedTaskId(null); } }} className="w-full py-4 bg-red-50 text-urgent font-bold rounded-xl text-[10px] uppercase tracking-widest active-scale flex items-center justify-center space-x-2 border border-red-100">
+                  <Trash2 size={16} /> <span>RÉVOQUER LA MISSION</span>
                 </button>
               </div>
             </div>

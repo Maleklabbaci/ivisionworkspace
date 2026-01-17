@@ -1,7 +1,7 @@
 
 import React, { useState, useRef } from 'react';
-import { User } from '../types';
-import { Camera, Mail, Phone, User as UserIcon, Loader2 } from 'lucide-react';
+import { User, UserRole } from '../types';
+import { Camera, Mail, Phone, User as UserIcon, Loader2, Sparkles, ShieldCheck } from 'lucide-react';
 
 interface SettingsProps {
   currentUser: User;
@@ -13,8 +13,7 @@ const Settings: React.FC<SettingsProps> = ({ currentUser, onUpdateProfile }) => 
     name: currentUser.name,
     email: currentUser.email,
     phoneNumber: currentUser.phoneNumber || '',
-    newPassword: '',
-    confirmPassword: '',
+    ai_api_key: currentUser.ai_api_key || '',
   });
   
   const [avatarPreview, setAvatarPreview] = useState(currentUser.avatar);
@@ -31,12 +30,12 @@ const Settings: React.FC<SettingsProps> = ({ currentUser, onUpdateProfile }) => 
     setIsSaving(true);
     
     try {
-      // API Key management removed as it must be strictly handled via environment variables.
       await onUpdateProfile({
         name: formData.name, 
         email: formData.email, 
         phoneNumber: formData.phoneNumber,
-        avatar: avatarPreview
+        avatar: avatarPreview,
+        ai_api_key: formData.ai_api_key
       });
       
       setShowSavedFeedback(true);
@@ -91,7 +90,29 @@ const Settings: React.FC<SettingsProps> = ({ currentUser, onUpdateProfile }) => 
             </div>
         </div>
 
-        {/* Gemini API key configuration UI removed as per SDK guidelines: MUST exclusively use environment variables. */}
+        {/* Configuration IA - Admin Uniquement */}
+        {currentUser.role === UserRole.ADMIN && (
+          <div className="bg-white p-8 rounded-[3rem] border border-slate-50 shadow-sm space-y-6">
+              <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center">
+                <Sparkles size={14} className="mr-3 text-vibrant-amber" /> Configuration IA iVISION
+              </h3>
+              <div className="space-y-2">
+                  <div className="flex items-center space-x-2 px-2 mb-2">
+                    <ShieldCheck size={12} className="text-success" />
+                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest leading-none">Clé API Gemini (Propriété Admin)</label>
+                  </div>
+                  <input 
+                    type="password" 
+                    name="ai_api_key" 
+                    value={formData.ai_api_key} 
+                    onChange={handleChange} 
+                    className={inputClasses} 
+                    placeholder="Saisissez la clé API Gemini..." 
+                  />
+                  <p className="text-[9px] text-slate-400 px-2 font-medium italic mt-2">Cette clé permet le fonctionnement des modules Magic IA, Insights et Analyses automatiques pour toute l'agence.</p>
+              </div>
+          </div>
+        )}
 
         <button 
           type="submit" 

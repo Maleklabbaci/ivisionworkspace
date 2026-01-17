@@ -34,6 +34,7 @@ export interface User {
   status: 'active' | 'pending';
   permissions?: UserPermissions;
   lastSeen?: string;
+  ai_api_key?: string;
 }
 
 export interface Client {
