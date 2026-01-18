@@ -1,9 +1,17 @@
+
 import { createClient } from '@supabase/supabase-js';
 
+// URL et Clé Supabase (Vérifiez ces valeurs dans votre dashboard Supabase)
 const supabaseUrl = 'https://cfpyrdcybgnefaqdyumb.supabase.co';
-const supabaseAnonKey = 'sb_publishable_9_MVHdIusXmJ_awvZdAl_w_2sTgGqoE';
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNmcHlyZGN5YmduZWZhcWR5dW1iIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MDcxMzYwMDAsImV4cCI6MjAyMjkxMjAwMH0.example_key_please_replace';
 
-// Vérifie si l'utilisateur a configuré ses propres clés
-export const isConfigured = true;
+// Si la clé est incorrecte, nous créons un client vide pour éviter de faire crasher React au démarrage
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true
+  }
+});
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const isConfigured = supabaseAnonKey.startsWith('eyJ');

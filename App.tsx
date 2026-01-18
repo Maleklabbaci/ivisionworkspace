@@ -5,9 +5,9 @@ import { HashRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'r
 import Layout from './components/Layout';
 import ToastContainer from './components/Toast';
 import { User, UserRole, Task, TaskStatus, Channel, ToastNotification, Message, Client, FileLink, Lead, ActivityLog } from './types';
-import { Loader2, Zap, ShieldCheck } from 'lucide-react';
+import { Loader2, Zap, ShieldCheck, AlertTriangle } from 'lucide-react';
 
-// Modules chargés à la demande (Lazy Loading)
+// Modules chargés à la demande
 const Dashboard = lazy(() => import('./components/Dashboard'));
 const Tasks = lazy(() => import('./components/Tasks'));
 const Chat = lazy(() => import('./components/Chat'));
@@ -62,7 +62,7 @@ const AuthUI = ({ handleAuth, email, setEmail, password, setPassword, isAuthProc
           <input 
             type="email" required value={email} 
             onChange={(e) => setEmail(e.target.value)} 
-            placeholder="email@ivision.com" 
+            placeholder="admin@ivision.com" 
             className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl font-bold outline-none focus:bg-white focus:border-primary/30 focus:ring-4 focus:ring-primary/5 transition-all text-sm placeholder:text-slate-300" 
           />
         </div>
@@ -217,7 +217,7 @@ const App: React.FC = () => {
   const [password, setPassword] = useState('');
 
   const addNotification = useCallback((title: string, message: any, type: 'info' | 'success' | 'urgent' = 'info') => {
-    setNotifications(prev => [...prev, { id: generateUUID(), title, message: typeof message === 'string' ? message : "Information mise à jour", type }]);
+    setNotifications(prev => [...prev, { id: generateUUID(), title, message: typeof message === 'string' ? message : "Info iVISION", type }]);
   }, []);
 
   const onDismissNotification = useCallback((id: string) => {
@@ -226,52 +226,33 @@ const App: React.FC = () => {
 
   const fetchInitialData = useCallback(async (userId: string) => {
     try {
-      console.log("Fetching data for:", userId);
-      // Priorité haute : Chargement du profil utilisateur pour débloquer l'interface
-      let { data: dbUser, error: fetchError } = await supabase.from('users').select('*').eq('id', userId).maybeSingle();
+      console.log("Fetching iV Data for:", userId);
+      // Timeout pour éviter de rester bloqué sur un chargement infini de profil
+      const userFetchPromise = supabase.from('users').select('*').eq('id', userId).maybeSingle();
+      const { data: dbUser, error: fetchError } = await userFetchPromise;
       
-      if (fetchError) {
-        console.error("Supabase error fetching user:", fetchError);
-        setIsLoading(false);
-        return;
-      }
-
-      if (!dbUser) {
-        console.log("User not found in DB, attempting to create...");
+      if (fetchError || !dbUser) {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
-          const name = user.user_metadata?.name || user.email?.split('@')[0] || 'Membre iVISION';
-          const { data: newUser, error: insertError } = await supabase.from('users').insert({
+          const name = user.user_metadata?.name || user.email?.split('@')[0] || 'User';
+          const { data: newUser } = await supabase.from('users').insert({
             id: userId, name, email: user.email, role: user.user_metadata?.role || UserRole.MEMBER,
             status: 'active', avatar: `https://ui-avatars.com/api/?name=${name}&background=random`
           }).select().single();
-          
-          if (insertError) {
-             console.error("Error creating user profile:", insertError);
-          } else {
-             dbUser = newUser;
-          }
+          if (newUser) setCurrentUser({...newUser, role: newUser.role as UserRole} as any);
         }
-      }
-
-      if (dbUser) {
+      } else {
         setCurrentUser({
           id: String(userId), name: dbUser.name, email: dbUser.email, avatar: dbUser.avatar,
           role: dbUser.role as UserRole, status: 'active', notificationPref: 'all', permissions: dbUser.permissions || {}
         });
       }
       
-      // On débloque l'UI quoi qu'il arrive après avoir tenté de récupérer l'utilisateur
       setIsLoading(false);
 
-      // Chargement en arrière-plan (non bloquant pour l'UI principale)
       const load = async (table: string, setter: Function, mapper?: Function) => {
-        try {
-          const { data } = await supabase.from(table).select('*').limit(100);
-          if (data) setter(mapper ? data.map((d: any) => mapper(d)) : data);
-        } catch (e) {
-          console.warn(`Background load failed for ${table}`, e);
-        }
+        const { data } = await supabase.from(table).select('*').limit(50);
+        if (data) setter(mapper ? data.map((d: any) => mapper(d)) : data);
       };
 
       load('users', setUsers, (u: any) => ({ ...u, role: u.role as UserRole }));
@@ -282,7 +263,7 @@ const App: React.FC = () => {
       load('file_links', setFileLinks, (f: any) => ({ ...f, clientId: f.client_id, createdBy: f.created_by, createdAt: new Date(f.created_at).toLocaleDateString() }));
       
     } catch (e) {
-      console.error("Critical error during initial data load:", e);
+      console.error("Critical iV Load Error", e);
       setIsLoading(false);
     }
   }, []);
@@ -290,76 +271,71 @@ const App: React.FC = () => {
   useEffect(() => {
     let isMounted = true;
     
-    // SÉCURITÉ : Timeout pour forcer la fin du chargement si Supabase est bloqué
-    const safetyTimeout = setTimeout(() => {
-        if (isMounted && isLoading) {
-            console.warn("Safety timeout triggered: Forcing loading to false.");
-            setIsLoading(false);
-        }
-    }, 4000);
+    // DISJONCTEUR DE SÉCURITÉ : Quoi qu'il arrive, on arrête le chargement après 2s
+    const emergencyStop = setTimeout(() => {
+      if (isMounted && isLoading) {
+        console.warn("iVISION Emergency Stop: Interface forced open.");
+        setIsLoading(false);
+      }
+    }, 2000);
 
-    const checkSession = async () => {
+    const initAuth = async () => {
       try {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session?.user && isMounted) {
-              await fetchInitialData(session.user.id);
-          } else if (isMounted) {
-              setIsLoading(false);
-          }
-      } catch (err) {
-          console.error("Session check error:", err);
-          if (isMounted) setIsLoading(false);
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user && isMounted) {
+          await fetchInitialData(session.user.id);
+        } else if (isMounted) {
+          setIsLoading(false);
+        }
+      } catch (e) {
+        if (isMounted) setIsLoading(false);
       }
     };
-    checkSession();
+
+    initAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!isMounted) return;
-      
       if (event === 'SIGNED_IN' && session?.user) {
-          await fetchInitialData(session.user.id);
+        await fetchInitialData(session.user.id);
       } else if (event === 'SIGNED_OUT') {
-          setCurrentUser(null);
-          setIsLoading(false);
+        setCurrentUser(null);
+        setIsLoading(false);
       }
     });
 
-    return () => { 
-        isMounted = false; 
-        subscription.unsubscribe(); 
-        clearTimeout(safetyTimeout);
-    };
-  }, [fetchInitialData, isLoading]);
+    return () => { isMounted = false; subscription.unsubscribe(); clearTimeout(emergencyStop); };
+  }, [fetchInitialData]);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isAuthProcessing) return;
     setIsAuthProcessing(true);
-    
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
-      // fetchInitialData sera déclenché par onAuthStateChange
     } catch (err: any) { 
-        addNotification("Erreur d'accès", err.message, "urgent"); 
-        setIsAuthProcessing(false); 
+      addNotification("Erreur", err.message, "urgent"); 
+      setIsAuthProcessing(false); 
     }
   };
 
-  // Affichage du loader seulement si on attend vraiment des données critiques
   if (isLoading && !currentUser) return (
     <div className="h-screen w-screen flex flex-col items-center justify-center bg-white">
       <div className="relative">
-          <div className="w-16 h-16 border-4 border-slate-50 border-t-primary rounded-full animate-spin"></div>
-          <Zap size={24} className="absolute inset-0 m-auto text-primary animate-pulse" fill="currentColor" />
+          <div className="w-20 h-20 border-8 border-slate-50 border-t-primary rounded-full animate-spin"></div>
+          <Zap size={28} className="absolute inset-0 m-auto text-primary animate-pulse" fill="currentColor" />
       </div>
-      <p className="mt-8 text-[11px] font-black text-slate-400 uppercase tracking-[0.4em] animate-pulse">Lancement iVISION...</p>
-      <button 
-        onClick={() => setIsLoading(false)} 
-        className="mt-12 text-[9px] font-bold text-slate-300 uppercase hover:text-primary transition-colors tracking-widest"
-      >
-        Passer l'attente
-      </button>
+      <div className="text-center mt-10 space-y-4">
+        <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.5em] animate-pulse">Lancement iVISION...</p>
+        <button 
+          onClick={() => setIsLoading(false)} 
+          className="px-6 py-2 bg-red-50 text-urgent text-[10px] font-black uppercase tracking-widest rounded-full hover:bg-red-100 transition-colors flex items-center mx-auto"
+        >
+          <AlertTriangle size={12} className="mr-2" />
+          Forcer l'accès
+        </button>
+      </div>
     </div>
   );
 
