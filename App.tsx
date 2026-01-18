@@ -31,21 +31,21 @@ const generateUUID = () => {
 };
 
 const PageSkeleton = () => (
-  <div className="w-full h-full p-10 space-y-8 animate-pulse">
-    <div className="h-12 w-48 bg-slate-100 rounded-2xl"></div>
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-      {[1, 2, 3, 4].map(i => <div key={i} className="h-32 bg-slate-50 rounded-3xl"></div>)}
+  <div className="w-full h-full p-6 lg:p-10 space-y-8 animate-pulse">
+    <div className="h-10 w-40 bg-slate-100 rounded-2xl"></div>
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {[1, 2, 3, 4].map(i => <div key={i} className="h-24 bg-slate-50 rounded-2xl"></div>)}
     </div>
-    <div className="h-96 bg-slate-50 rounded-[3rem]"></div>
+    <div className="h-64 bg-slate-50 rounded-3xl"></div>
   </div>
 );
 
 const AuthUI = ({ isRegistering, setIsRegistering, handleAuth, email, setEmail, password, setPassword, registerName, setRegisterName, isAuthProcessing }: any) => (
-  <div className="w-full max-w-[420px] animate-in fade-in zoom-in-95 duration-500 ease-out">
-    <div className="bg-white rounded-[3.5rem] p-12 shadow-2xl border border-slate-100">
-      <div className="text-center mb-12">
-        <div className="w-20 h-20 bg-slate-900 rounded-[2rem] flex items-center justify-center text-white font-bold text-2xl mx-auto mb-6 shadow-xl">iV</div>
-        <h1 className="text-4xl font-black tracking-tighter text-slate-900 uppercase leading-none">iVISION</h1>
+  <div className="w-full max-w-[420px] animate-in fade-in zoom-in-95 duration-500 ease-out p-4">
+    <div className="bg-white rounded-[2.5rem] md:rounded-[3.5rem] p-8 md:p-12 shadow-2xl border border-slate-100">
+      <div className="text-center mb-8 md:mb-12">
+        <div className="w-16 h-16 md:w-20 md:h-20 bg-slate-900 rounded-2xl md:rounded-[2rem] flex items-center justify-center text-white font-bold text-xl md:text-2xl mx-auto mb-6 shadow-xl">iV</div>
+        <h1 className="text-3xl md:text-4xl font-black tracking-tighter text-slate-900 uppercase leading-none">iVISION</h1>
         <p className="text-primary font-bold text-[10px] uppercase tracking-[0.5em] mt-3">Enterprise Access</p>
       </div>
       
@@ -56,7 +56,7 @@ const AuthUI = ({ isRegistering, setIsRegistering, handleAuth, email, setEmail, 
               type="text" required value={registerName} 
               onChange={(e) => setRegisterName(e.target.value)} 
               placeholder="Nom complet" 
-              className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl font-bold outline-none focus:bg-white focus:border-primary/20 transition-all text-sm" 
+              className="w-full p-4 md:p-5 bg-slate-50 border border-slate-100 rounded-2xl font-bold outline-none focus:bg-white focus:border-primary/20 transition-all text-sm" 
             />
           </div>
         )}
@@ -65,7 +65,7 @@ const AuthUI = ({ isRegistering, setIsRegistering, handleAuth, email, setEmail, 
             type="email" required value={email} 
             onChange={(e) => setEmail(e.target.value)} 
             placeholder="Email iVISION" 
-            className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl font-bold outline-none focus:bg-white focus:border-primary/20 transition-all text-sm" 
+            className="w-full p-4 md:p-5 bg-slate-50 border border-slate-100 rounded-2xl font-bold outline-none focus:bg-white focus:border-primary/20 transition-all text-sm" 
           />
         </div>
         <div className="space-y-1">
@@ -73,14 +73,14 @@ const AuthUI = ({ isRegistering, setIsRegistering, handleAuth, email, setEmail, 
             type="password" required value={password} 
             onChange={(e) => setPassword(e.target.value)} 
             placeholder="Mot de passe" 
-            className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl font-bold outline-none focus:bg-white focus:border-primary/20 transition-all text-sm" 
+            className="w-full p-4 md:p-5 bg-slate-50 border border-slate-100 rounded-2xl font-bold outline-none focus:bg-white focus:border-primary/20 transition-all text-sm" 
           />
         </div>
         
         <button 
           type="submit"
           disabled={isAuthProcessing} 
-          className="w-full py-6 bg-slate-900 text-white font-bold rounded-2xl shadow-xl active-scale disabled:opacity-50 uppercase text-[11px] tracking-widest mt-6 flex items-center justify-center space-x-2"
+          className="w-full py-5 md:py-6 bg-slate-900 text-white font-bold rounded-2xl shadow-xl active-scale disabled:opacity-50 uppercase text-[11px] tracking-widest mt-4 flex items-center justify-center space-x-2"
         >
           {isAuthProcessing ? <Loader2 className="animate-spin" size={18} /> : <span>{isRegistering ? "CRÉER UN ACCÈS" : "DÉVERROUILLER"}</span>}
         </button>
@@ -89,7 +89,7 @@ const AuthUI = ({ isRegistering, setIsRegistering, handleAuth, email, setEmail, 
       <button 
         type="button"
         onClick={() => setIsRegistering(!isRegistering)} 
-        className="w-full mt-10 text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-primary transition-colors flex items-center justify-center space-x-2"
+        className="w-full mt-8 md:mt-10 text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-primary transition-colors flex items-center justify-center space-x-2"
       >
         <Zap size={14} className="text-vibrant-amber" />
         <span>{isRegistering ? "Déjà un compte ? Connexion" : "Nouvel accès iVISION"}</span>
@@ -127,7 +127,6 @@ const AppContent: React.FC<{
 }) => {
   const navigate = useNavigate();
 
-  // --- TASKS ---
   const handleUpdateTaskStatus = useCallback(async (taskId: string, newStatus: TaskStatus) => {
     const task = tasks.find(t => t.id === taskId);
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
@@ -183,7 +182,6 @@ const AppContent: React.FC<{
     }
   }, [tasks, setTasks, addNotification, logActivity]);
 
-  // --- LEADS ---
   const handleAddLead = useCallback(async (lead: Lead) => {
     try {
       const { data, error } = await supabase.from('leads').insert({
@@ -235,7 +233,6 @@ const AppContent: React.FC<{
     }
   }, [leads, setLeads, addNotification, logActivity]);
 
-  // --- CLIENTS ---
   const handleAddClient = useCallback(async (client: Client) => {
     try {
       const { data, error } = await supabase.from('clients').insert({
@@ -271,7 +268,6 @@ const AppContent: React.FC<{
     }
   }, [clients, setClients, addNotification, logActivity]);
 
-  // --- TEAM ---
   const handleRemoveUser = useCallback(async (userId: string) => {
     try {
       const user = users.find(u => u.id === userId);
@@ -287,7 +283,6 @@ const AppContent: React.FC<{
 
   const handleAddUser = useCallback(async (data: { name: string; email: string; password: string; role: UserRole }) => {
     try {
-      // 1. Créer le compte Auth Supabase pour permettre le Login
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
@@ -295,12 +290,9 @@ const AppContent: React.FC<{
           data: { name: data.name, role: data.role }
         }
       });
-
       if (authError) throw authError;
-
       if (authData.user) {
-        // 2. Créer le profil public associé
-        const { error: profileError } = await supabase.from('users').insert({
+        await supabase.from('users').insert({
           id: authData.user.id,
           name: data.name,
           email: data.email,
@@ -308,10 +300,7 @@ const AppContent: React.FC<{
           status: 'active',
           avatar: `https://ui-avatars.com/api/?name=${data.name}&background=random`
         });
-
-        if (profileError) console.error("Profile creation error:", profileError);
-
-        fetchInitialData(currentUser.id); // Rafraîchir la liste
+        fetchInitialData(currentUser.id);
         addNotification("Équipe", "Compte collaborateur créé et activé", "success");
         logActivity("a ajouté un collaborateur", data.name);
       }
@@ -320,7 +309,6 @@ const AppContent: React.FC<{
     }
   }, [currentUser, fetchInitialData, addNotification, logActivity]);
 
-  // --- FILES ---
   const handleAddFileLink = useCallback(async (name: string, url: string, clientId?: string) => {
     try {
         const { data, error } = await supabase.from('file_links').insert({
@@ -367,7 +355,6 @@ const AppContent: React.FC<{
                if (data) setMessages(prev => [...prev, { ...data[0], userId: data[0].user_id, channelId: data[0].channel_id, timestamp: new Date().toLocaleTimeString() }]);
             }} onAddChannel={() => {}} onDeleteChannel={() => {}} />} />
             <Route path="/clients" element={<Clients clients={clients} tasks={tasks} fileLinks={fileLinks} currentUser={currentUser} onAddClient={handleAddClient} onUpdateClient={() => {}} onMoveToLead={() => {}} onDeleteClient={handleDeleteClient} />} />
-            {/* Fix: use handleUpdateTaskStatus instead of non-existent handleUpdateStatus */}
             <Route path="/calendar" element={<Calendar tasks={tasks} users={users} currentUser={currentUser} onAddTask={handleAddTask} onUpdateStatus={handleUpdateTaskStatus} />} />
             <Route path="/team" element={<Team currentUser={currentUser} users={users} tasks={tasks} activities={activities} onlineUserIds={new Set()} onAddUser={handleAddUser} onRemoveUser={handleRemoveUser} onUpdateRole={() => {}} onApproveUser={() => {}} onUpdateMember={() => {}} />} />
             <Route path="/files" element={<Files tasks={tasks} messages={messages} fileLinks={fileLinks} clients={clients} currentUser={currentUser} onAddFileLink={handleAddFileLink} onDeleteFileLink={handleDeleteFileLink} />} />
@@ -418,9 +405,12 @@ const App: React.FC = () => {
 
   const fetchInitialData = useCallback(async (userId: string) => {
     try {
-      const { data: dbUser } = await supabase.from('users').select('*').eq('id', userId).maybeSingle();
+      const { data: dbUser, error: userError } = await supabase.from('users').select('*').eq('id', userId).maybeSingle();
+      if (userError) throw userError;
+
       if (dbUser) {
-        setCurrentUser({
+        // Fix: Explicitly typing the profile object as User to resolve status property incompatibility (string vs 'active' | 'pending')
+        const profile: User = {
           id: String(userId),
           name: dbUser.name,
           email: dbUser.email,
@@ -429,64 +419,107 @@ const App: React.FC = () => {
           status: 'active',
           notificationPref: 'all',
           permissions: dbUser.permissions || {}
-        });
+        };
+        setCurrentUser(profile);
+      } else {
+        setIsLoading(false);
+        return;
       }
 
-      const [u, c, m, t, cl, l, f, act] = await Promise.all([
-        supabase.from('users').select('*'),
-        supabase.from('channels').select('*'),
-        supabase.from('messages').select('*').order('created_at', { ascending: true }),
-        supabase.from('tasks').select('*').order('created_at', { ascending: false }),
-        supabase.from('clients').select('*'),
-        supabase.from('leads').select('*').order('created_at', { ascending: false }),
-        supabase.from('file_links').select('*').order('created_at', { ascending: false }),
-        supabase.from('activity_logs').select('*').order('created_at', { ascending: false }).limit(10)
-      ]);
+      // Secondary data fetch with nested try/catch to avoid complete blocking
+      try {
+        const [u, c, m, t, cl, l, f, act] = await Promise.all([
+          supabase.from('users').select('*'),
+          supabase.from('channels').select('*'),
+          supabase.from('messages').select('*').order('created_at', { ascending: true }),
+          supabase.from('tasks').select('*').order('created_at', { ascending: false }),
+          supabase.from('clients').select('*'),
+          supabase.from('leads').select('*').order('created_at', { ascending: false }),
+          supabase.from('file_links').select('*').order('created_at', { ascending: false }),
+          supabase.from('activity_logs').select('*').order('created_at', { ascending: false }).limit(10)
+        ]);
 
-      let fetchedUsers: User[] = [];
-      if (u.data) {
-        fetchedUsers = u.data.map(user => ({ ...user, id: String(user.id), role: user.role as UserRole }));
-        setUsers(fetchedUsers);
-      }
-      if (c.data) setChannels(c.data);
-      if (m.data) setMessages(m.data.map(msg => ({ ...msg, userId: String(msg.user_id), channelId: String(msg.channel_id), timestamp: new Date(msg.created_at).toLocaleTimeString() })));
-      if (t.data) setTasks(t.data.map(task => ({ ...task, assigneeId: String(task.assignee_id), status: task.status as TaskStatus, dueDate: task.due_date })));
-      if (cl.data) setClients(cl.data);
-      if (l.data) setLeads(l.data.map(lead => ({
-        id: lead.id,
-        name: lead.name,
-        company: lead.company,
-        email: lead.email,
-        phone: lead.phone,
-        status: lead.status,
-        valueMin: lead.value_min,
-        valueMax: lead.value_max,
-        description: lead.description,
-        createdAt: lead.created_at
-      })));
-      if (f.data) setFileLinks(f.data.map(file => ({ ...file, id: String(file.id), clientId: file.client_id, createdBy: file.created_by, createdAt: new Date(file.created_at).toLocaleDateString() })));
-      
-      if (act.data) {
-          setActivities(act.data.map(log => {
-              const logUser = fetchedUsers.find(fu => fu.id === String(log.user_id));
-              return {
-                id: String(log.id), 
-                userId: String(log.user_id), 
-                userName: logUser?.name || 'Inconnu',
-                userAvatar: logUser?.avatar || 'https://ui-avatars.com/api/?name=?',
-                action: log.action, 
-                target: log.target,
-                timestamp: new Date(log.created_at).toLocaleTimeString()
-              };
+        let fetchedUsers: User[] = [];
+        if (u.data) {
+          // Fix: Ensure status is correctly cast to the literal union type for the fetched users list
+          fetchedUsers = u.data.map(user => ({ 
+            ...user, 
+            id: String(user.id), 
+            role: user.role as UserRole,
+            status: user.status as 'active' | 'pending'
           }));
+          setUsers(fetchedUsers);
+        }
+        if (c.data) setChannels(c.data);
+        if (m.data) setMessages(m.data.map(msg => ({ ...msg, userId: String(msg.user_id), channelId: String(msg.channel_id), timestamp: new Date(msg.created_at).toLocaleTimeString() })));
+        if (t.data) setTasks(t.data.map(task => ({ ...task, assigneeId: String(task.assignee_id), status: task.status as TaskStatus, dueDate: task.due_date })));
+        if (cl.data) setClients(cl.data);
+        if (l.data) setLeads(l.data.map(lead => ({
+          id: lead.id,
+          name: lead.name,
+          company: lead.company,
+          email: lead.email,
+          phone: lead.phone,
+          status: lead.status as any,
+          valueMin: lead.value_min,
+          valueMax: lead.value_max,
+          description: lead.description,
+          createdAt: lead.created_at
+        })));
+        if (f.data) setFileLinks(f.data.map(file => ({ ...file, id: String(file.id), clientId: file.client_id, createdBy: file.created_by, createdAt: new Date(file.created_at).toLocaleDateString() })));
+        
+        if (act.data) {
+            setActivities(act.data.map(log => {
+                const logUser = fetchedUsers.find(fu => fu.id === String(log.user_id));
+                return {
+                  id: String(log.id), 
+                  userId: String(log.user_id), 
+                  userName: logUser?.name || 'Inconnu',
+                  userAvatar: logUser?.avatar || 'https://ui-avatars.com/api/?name=?',
+                  action: log.action, 
+                  target: log.target,
+                  timestamp: new Date(log.created_at).toLocaleTimeString()
+                };
+            }));
+        }
+      } catch (dataError) {
+        console.warn("Secondary data load warning:", dataError);
       }
-    } catch (e) { console.error(e); } finally {
+    } catch (e) { 
+      console.error("Critical app load error:", e);
+    } finally {
       setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    supabase.auth.onAuthStateChange(async (event, session) => {
+    let isMounted = true;
+    
+    // Safety timeout to prevent infinite loading screen
+    const safetyTimeout = setTimeout(() => {
+      if (isMounted && isLoading) {
+        console.warn("Loading timeout reached. Forcing finish.");
+        setIsLoading(false);
+      }
+    }, 12000);
+
+    const checkInitialSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user && isMounted) {
+          await fetchInitialData(session.user.id);
+        } else if (isMounted) {
+          setIsLoading(false);
+        }
+      } catch (e) {
+        if (isMounted) setIsLoading(false);
+      }
+    };
+    
+    checkInitialSession();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!isMounted) return;
       if (session?.user) {
         await fetchInitialData(session.user.id);
       } else {
@@ -494,6 +527,12 @@ const App: React.FC = () => {
         setIsLoading(false);
       }
     });
+
+    return () => {
+      isMounted = false;
+      clearTimeout(safetyTimeout);
+      subscription.unsubscribe();
+    };
   }, [fetchInitialData]);
 
   const handleAuth = async (e: React.FormEvent) => {
@@ -516,15 +555,19 @@ const App: React.FC = () => {
   };
 
   if (isLoading && !currentUser) return (
-    <div className="h-screen w-screen flex flex-col items-center justify-center bg-white">
-      <div className="w-12 h-12 border-4 border-slate-100 border-t-primary rounded-full animate-spin"></div>
+    <div className="h-screen w-screen flex flex-col items-center justify-center bg-white p-6">
+      <div className="relative">
+        <div className="w-16 h-16 border-4 border-slate-100 border-t-primary rounded-full animate-spin"></div>
+        <div className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-primary animate-pulse">iV</div>
+      </div>
+      <p className="mt-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] animate-pulse">Initialisation iVISION...</p>
     </div>
   );
 
   return (
     <HashRouter>
       {!currentUser ? (
-        <div className="h-screen w-screen bg-slate-50 flex items-center justify-center p-6 overflow-hidden">
+        <div className="h-full min-h-screen w-screen bg-slate-50 flex items-center justify-center p-4 md:p-6 overflow-x-hidden overflow-y-auto">
           <ToastContainer notifications={notifications} onDismiss={onDismissNotification} />
           <AuthUI isRegistering={isRegistering} setIsRegistering={setIsRegistering} handleAuth={handleAuth} email={email} setEmail={setEmail} password={password} setPassword={setPassword} registerName={registerName} setRegisterName={setRegisterName} isAuthProcessing={isAuthProcessing} />
         </div>
