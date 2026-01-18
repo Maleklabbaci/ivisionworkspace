@@ -72,6 +72,7 @@ const AuthUI = ({ handleAuth, email, setEmail, password, setPassword, isAuthProc
           {isAuthProcessing ? <Loader2 className="animate-spin mx-auto" size={24} /> : "ACTIVER SESSION"}
         </button>
       </form>
+      <p className="text-center text-[9px] text-slate-600 font-black uppercase mt-12 tracking-[0.4em]">Enterprise iV Engine v2.5</p>
     </div>
   </div>
 );
@@ -85,8 +86,15 @@ const AppContent: React.FC<any> = ({
   const location = useLocation();
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    window.location.reload();
+    try {
+      await supabase.auth.signOut();
+      setCurrentUser(null);
+      addNotification("Système", "Déconnexion réussie. Session révoquée.", "info");
+      // Force reload to clear all states and re-render AuthUI via HashRouter
+      setTimeout(() => window.location.reload(), 100);
+    } catch (error) {
+      addNotification("Erreur", "Problème lors de la déconnexion.", "urgent");
+    }
   };
 
   const hasAccess = (permissionKey?: keyof UserPermissions) => {
@@ -114,7 +122,33 @@ const AppContent: React.FC<any> = ({
     if (data) {
       setTasks((prev: any) => [mapFromDB('tasks', data), ...prev]);
       addNotification("Système iV", "Mission initialisée.", "success");
+    } else {
+      addNotification("Erreur Task", error.message, "urgent");
     }
+  };
+
+  const handleUpdateTaskStatus = async (id: string, s: TaskStatus) => {
+    if(!hasAccess('canCreateTasks') && !hasAccess('canEditAllTasks')) return;
+    setTasks((prev: Task[]) => prev.map(t => t.id === id ? {...t, status: s} : t)); 
+    await supabase.from('tasks').update({status: s}).eq('id', id);
+  };
+
+  const handleUpdateTask = async (t: Task) => {
+    if(!hasAccess('canEditAllTasks')) return;
+    setTasks((prev: Task[]) => prev.map(item => item.id === t.id ? t : item)); 
+    await supabase.from('tasks').update({
+      title: t.title, 
+      status: t.status, 
+      description: t.description, 
+      priority: t.priority, 
+      type: t.type
+    }).eq('id', t.id);
+  };
+
+  const handleDeleteTask = async (id: string) => {
+    if(!hasAccess('canDeleteTasks')) return;
+    setTasks((prev: Task[]) => prev.filter(t => t.id !== id)); 
+    await supabase.from('tasks').delete().eq('id', id);
   };
 
   const handleAddFileLink = async (name: string, url: string) => {
@@ -126,15 +160,22 @@ const AppContent: React.FC<any> = ({
     if (data) {
       setFileLinks((prev: any) => [mapFromDB('file_links', data), ...prev]);
       addNotification("Documents", "Actif archivé avec succès.", "success");
+    } else {
+      addNotification("Erreur Document", error.message, "urgent");
     }
   };
 
   const handleDeleteFileLink = async (id: string) => {
-    if (!hasAccess('canDeleteFiles')) return;
+    if (!hasAccess('canDeleteFiles')) {
+      addNotification("Accès Refusé", "Vous n'avez pas la permission de supprimer des documents.", "urgent");
+      return;
+    }
     const { error } = await supabase.from('file_links').delete().eq('id', id);
     if (!error) {
       setFileLinks((prev: any) => prev.filter((f: any) => f.id !== id));
-      addNotification("Documents", "Actif révoqué du cloud.", "info");
+      addNotification("Documents", "Actif révoqué du cloud iVISION.", "info");
+    } else {
+      addNotification("Erreur Suppression", error.message, "urgent");
     }
   };
 
@@ -152,6 +193,30 @@ const AppContent: React.FC<any> = ({
     if (data) {
       setUsers((prev: any) => [...prev, mapFromDB('users', data)]);
       addNotification("Équipe", `Accès activé pour ${user.name}.`, "success");
+    } else {
+      addNotification("Erreur Team", error.message, "urgent");
+    }
+  };
+
+  const handleUpdateMember = async (id: string, u: any) => {
+    if (!hasAccess('canManageTeam')) return;
+    const { data, error } = await supabase.from('users').update({
+      name: u.name,
+      role: u.role,
+      permissions: u.permissions
+    }).eq('id', id).select().single();
+    if (data) {
+      setUsers((prev: any) => prev.map((i: any) => i.id === id ? mapFromDB('users', data) : i));
+      addNotification("Équipe", "Membre mis à jour.", "success");
+    }
+  };
+
+  const handleRemoveUser = async (id: string) => {
+    if (!hasAccess('canManageTeam')) return;
+    const { error } = await supabase.from('users').delete().eq('id', id);
+    if (!error) {
+      setUsers((prev: any) => prev.filter((u: any) => u.id !== id));
+      addNotification("Équipe", "Accès révoqué.", "info");
     }
   };
 
@@ -161,15 +226,15 @@ const AppContent: React.FC<any> = ({
       <Suspense fallback={<div className="h-full w-full flex items-center justify-center"><Loader2 className="animate-spin text-white opacity-20" size={60} /></div>}>
         <Routes>
           <Route path="/dashboard" element={<Dashboard currentUser={currentUser} tasks={tasks} onNavigate={(v: any) => navigate(`/${v}`)} />} />
-          <Route path="/tasks" element={<Tasks tasks={tasks} users={users} clients={clients} currentUser={currentUser} onAddTask={handleAddTask} onUpdateStatus={async (id, s) => { setTasks(prev => prev.map(t => t.id === id ? {...t, status:s} : t)); await supabase.from('tasks').update({status:s}).eq('id', id); }} onUpdateTask={async t => { setTasks(prev => prev.map(item => item.id === t.id ? t : item)); await supabase.from('tasks').update({title:t.title, status:t.status, description: t.description, priority: t.priority, type: t.type}).eq('id', t.id); }} onDeleteTask={async id => { setTasks(prev => prev.filter(t => t.id !== id)); await supabase.from('tasks').delete().eq('id', id); }} />} />
-          <Route path="/chat" element={<Chat currentUser={currentUser} users={users} channels={channels} currentChannelId={channels[0]?.id || ""} messages={messages} onSendMessage={async (c, cid) => { const { data } = await supabase.from('messages').insert({content:c, channel_id:cid, user_id:currentUser.id}).select().single(); if(data) setMessages((p:any) => [...p, mapFromDB('messages', data)]); }} onAddChannel={async ch => { const { data } = await supabase.from('channels').insert({name:ch.name, type:ch.type}).select().single(); if(data) setChannels((p:any) => [...p, data]); }} onChannelChange={()=>{}} />} />
-          <Route path="/leads" element={<Leads leads={leads} onAddLead={async l => { const { data } = await supabase.from('leads').insert({name:l.name, company:l.company, status:l.status}).select().single(); if(data) setLeads((p:any) => [mapFromDB('leads', data), ...p]); }} onUpdateLead={async l => { await supabase.from('leads').update({status:l.status}).eq('id', l.id); setLeads((p:any) => p.map((i:any) => i.id === l.id ? l : i)); }} onDeleteLead={async id => { await supabase.from('leads').delete().eq('id', id); setLeads((p:any) => p.filter((i:any) => i.id !== id)); }} currentUser={currentUser} />} />
-          <Route path="/clients" element={<Clients clients={clients} tasks={tasks} onAddClient={async c => { const { data } = await supabase.from('clients').insert({name:c.name, company:c.company}).select().single(); if(data) setClients((p:any) => [data, ...p]); }} onDeleteClient={async id => { await supabase.from('clients').delete().eq('id', id); setClients((p:any) => p.filter((c:any) => c.id !== id)); }} currentUser={currentUser} />} />
-          <Route path="/calendar" element={<Calendar tasks={tasks} users={users} clients={clients} currentUser={currentUser} onAddTask={handleAddTask} onUpdateStatus={async (id, s) => { setTasks(prev => prev.map(t => t.id === id ? {...t, status:s} : t)); await supabase.from('tasks').update({status:s}).eq('id', id); }} />} />
-          <Route path="/team" element={<Team currentUser={currentUser} users={users} onAddUser={handleAddUser} onRemoveUser={async id => { await supabase.from('users').delete().eq('id', id); setUsers((p:any) => p.filter((u:any) => u.id !== id)); }} onUpdateMember={async (id, u) => { await supabase.from('users').update({name:u.name, role:u.role, permissions:u.permissions}).eq('id', id); setUsers((p:any) => p.map((i:any) => i.id === id ? {...i, ...u} : i)); }} />} />
+          <Route path="/tasks" element={<Tasks tasks={tasks} users={users} clients={clients} currentUser={currentUser} onAddTask={handleAddTask} onUpdateStatus={handleUpdateTaskStatus} onUpdateTask={handleUpdateTask} onDeleteTask={handleDeleteTask} />} />
+          <Route path="/chat" element={<Chat currentUser={currentUser} users={users} channels={channels} currentChannelId={channels[0]?.id || ""} messages={messages} onSendMessage={async (c:string, cid:string) => { if(!hasAccess('canManageChat')) return; const { data } = await supabase.from('messages').insert({content:c, channel_id:cid, user_id:currentUser.id}).select().single(); if(data) setMessages((p:any) => [...p, mapFromDB('messages', data)]); }} onAddChannel={async (ch:any) => { if(!hasAccess('canManageChannels')) return; const { data } = await supabase.from('channels').insert({name:ch.name, type:ch.type}).select().single(); if(data) setChannels((p:any) => [...p, data]); }} onChannelChange={()=>{}} />} />
+          <Route path="/leads" element={<Leads leads={leads} onAddLead={async (l:any) => { if(!hasAccess('canManageLeads')) return; const { data } = await supabase.from('leads').insert({name:l.name, company:l.company, status:l.status}).select().single(); if(data) setLeads((p:any) => [mapFromDB('leads', data), ...p]); }} onUpdateLead={async (l:any) => { await supabase.from('leads').update({status:l.status}).eq('id', l.id); setLeads((p:any) => p.map((i:any) => i.id === l.id ? l : i)); }} onDeleteLead={async (id:string) => { if(!hasAccess('canManageLeads')) return; await supabase.from('leads').delete().eq('id', id); setLeads((p:any) => p.filter((i:any) => i.id !== id)); }} currentUser={currentUser} />} />
+          <Route path="/clients" element={<Clients clients={clients} tasks={tasks} onAddClient={async (c:any) => { if(!hasAccess('canManageClients')) return; const { data } = await supabase.from('clients').insert({name:c.name, company:c.company}).select().single(); if(data) setClients((p:any) => [data, ...p]); }} onDeleteClient={async (id:string) => { if(!hasAccess('canManageClients')) return; await supabase.from('clients').delete().eq('id', id); setClients((p:any) => p.filter((c:any) => c.id !== id)); }} currentUser={currentUser} />} />
+          <Route path="/calendar" element={<Calendar tasks={tasks} users={users} clients={clients} currentUser={currentUser} onAddTask={handleAddTask} onUpdateStatus={handleUpdateTaskStatus} />} />
+          <Route path="/team" element={<Team currentUser={currentUser} users={users} onAddUser={handleAddUser} onRemoveUser={handleRemoveUser} onUpdateMember={handleUpdateMember} />} />
           <Route path="/files" element={<Files fileLinks={fileLinks} onAddFileLink={handleAddFileLink} onDeleteFileLink={handleDeleteFileLink} currentUser={currentUser} />} />
           <Route path="/reports" element={<Reports currentUser={currentUser} tasks={tasks} leads={leads} />} />
-          <Route path="/settings" element={<Settings currentUser={currentUser} onUpdateProfile={async d => { setCurrentUser(prev => ({...prev!, ...d})); await supabase.from('users').update(d).eq('id', currentUser.id); }} />} />
+          <Route path="/settings" element={<Settings currentUser={currentUser} onUpdateProfile={async (d:any) => { setCurrentUser((prev:any) => ({...prev!, ...d})); await supabase.from('users').update(d).eq('id', currentUser.id); addNotification("Profil", "Mise à jour réussie.", "success"); }} />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </Suspense>
@@ -186,7 +251,6 @@ const App: React.FC = () => {
   const [clients, setClients] = useState<Client[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [fileLinks, setFileLinks] = useState<FileLink[]>([]);
-  const [activities, setActivities] = useState<ActivityLog[]>([]);
   const [notifications, setNotifications] = useState<ToastNotification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthProcessing, setIsAuthProcessing] = useState(false);
@@ -194,16 +258,22 @@ const App: React.FC = () => {
   const [password, setPassword] = useState('');
 
   const addNotification = useCallback((title: string, message: any, type: any = 'info') => {
-    setNotifications(prev => [...prev, { id: generateUUID(), title, message: typeof message === 'string' ? message : "Système iVISION", type }]);
+    setNotifications(prev => [...prev, { id: generateUUID(), title, message: typeof message === 'string' ? message : "Système iVISION Intelligence", type }]);
   }, []);
 
   const fetchInitialData = useCallback(async (userId: string, userEmail?: string) => {
     try {
       const { data: userData } = await supabase.from('users').select('*').eq('id', userId).single();
-      let profile = userData ? mapFromDB('users', userData) : { id: userId, name: userEmail?.split('@')[0] || 'Opérateur', email: userEmail || '', role: UserRole.ADMIN, avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(userEmail?.split('@')[0] || 'U')}&background=1e293b&color=fff&bold=true` };
+      let profile = userData ? mapFromDB('users', userData) : { 
+        id: userId, 
+        name: userEmail?.split('@')[0] || 'Opérateur', 
+        email: userEmail || '', 
+        role: UserRole.ADMIN, 
+        avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(userEmail?.split('@')[0] || 'U')}&background=0EA5E9&color=fff&bold=true` 
+      };
       setCurrentUser(profile);
       const load = async (table: string, setter: Function) => {
-        const { data } = await supabase.from(table).select('*').limit(100);
+        const { data } = await supabase.from(table).select('*').order('created_at', { ascending: false }).limit(100);
         if (data) setter(data.map(item => mapFromDB(table, item)));
       };
       await Promise.all([load('tasks', setTasks), load('users', setUsers), load('clients', setClients), load('leads', setLeads), load('channels', setChannels), load('file_links', setFileLinks), load('messages', setMessages)]);
@@ -224,13 +294,24 @@ const App: React.FC = () => {
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isAuthProcessing) return;
     setIsAuthProcessing(true);
     const { error, data } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
-    if (error) { addNotification("Connexion", error.message, "urgent"); setIsAuthProcessing(false); }
-    else if(data.user) fetchInitialData(data.user.id, data.user.email);
+    if (error) { 
+      addNotification("Accès Refusé", error.message, "urgent"); 
+      setIsAuthProcessing(false); 
+    }
+    else if(data.user) {
+      fetchInitialData(data.user.id, data.user.email);
+    }
   };
 
-  if (isLoading && !currentUser) return <div className="h-screen w-screen flex flex-col items-center justify-center bg-[#020617] space-y-8"><Zap size={60} className="text-white animate-bounce" /><p className="text-[10px] uppercase tracking-[0.6em] text-white opacity-40">Initialisation iV Core</p></div>;
+  if (isLoading && !currentUser) return (
+    <div className="h-screen w-screen flex flex-col items-center justify-center bg-[#020617] space-y-8">
+      <Zap size={60} className="text-white animate-bounce" />
+      <p className="text-[10px] uppercase tracking-[0.6em] text-white opacity-40">Initialisation iV Core Engine</p>
+    </div>
+  );
 
   return (
     <HashRouter>
@@ -240,9 +321,13 @@ const App: React.FC = () => {
         </div>
       ) : (
         <AppContent 
-          currentUser={currentUser} users={users} tasks={tasks} setTasks={setTasks} clients={clients} setClients={setClients} leads={leads} setLeads={setLeads}
-          channels={channels} setChannels={setChannels} messages={messages} setMessages={setMessages} fileLinks={fileLinks} setFileLinks={setFileLinks}
-          setUsers={setUsers} notifications={notifications} addNotification={addNotification} onDismissNotification={(id:string)=>setNotifications(p=>p.filter(n=>n.id!==id))} setCurrentUser={setCurrentUser}
+          currentUser={currentUser} users={users} tasks={tasks} setTasks={setTasks} 
+          clients={clients} setClients={setClients} leads={leads} setLeads={setLeads}
+          channels={channels} setChannels={setChannels} messages={messages} setMessages={setMessages} 
+          fileLinks={fileLinks} setFileLinks={setFileLinks}
+          setUsers={setUsers} notifications={notifications} 
+          addNotification={addNotification} onDismissNotification={(id:string)=>setNotifications(p=>p.filter(n=>n.id!==id))} 
+          setCurrentUser={setCurrentUser}
         />
       )}
     </HashRouter>
