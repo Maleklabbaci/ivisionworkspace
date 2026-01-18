@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { Lead, User } from '../types';
-import { Search, Plus, Target, X, Mail, Phone, Trash2, ChevronRight, Zap, Target as TargetIcon, UserCheck, PhoneCall, Sparkles, Wand2, Loader2, ArrowUpRight, DollarSign, Info } from 'lucide-react';
+import { Search, Plus, Target, X, Mail, Phone, Trash2, ChevronRight, Zap, Target as TargetIcon, UserCheck, PhoneCall, Sparkles, Wand2, Loader2, ArrowUpRight, DollarSign, Info, TrendingDown, TrendingUp } from 'lucide-react';
 import { parseLeadFromText } from '../services/geminiService';
 
 const Leads: React.FC<any> = ({ leads = [], onAddLead, onUpdateLead, onDeleteLead, onConvertToClient, currentUser, addNotification }) => {
@@ -77,8 +77,10 @@ const Leads: React.FC<any> = ({ leads = [], onAddLead, onUpdateLead, onDeleteLea
                 
                 <div className="mt-10 pt-5 border-t border-white/5 flex items-center justify-between">
                   <div className="flex flex-col">
-                    <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Valeur Potentielle</span>
-                    <span className="text-xs font-extrabold text-white tracking-tighter mt-0.5">{lead.valueMin?.toLocaleString()} DZD</span>
+                    <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Valeur Estimée</span>
+                    <span className="text-[11px] font-extrabold text-white tracking-tighter mt-0.5">
+                      {lead.valueMin?.toLocaleString()} - {lead.valueMax?.toLocaleString()} DZD
+                    </span>
                   </div>
                   <div className="w-9 h-9 rounded-xl glass flex items-center justify-center text-slate-600 group-hover:text-orange-400 group-hover:bg-orange-400/10 transition-all">
                     <ArrowUpRight size={18} />
@@ -141,6 +143,19 @@ const Leads: React.FC<any> = ({ leads = [], onAddLead, onUpdateLead, onDeleteLea
                          <input type="tel" className="w-full p-4 md:p-5 bg-white/5 border border-white/10 rounded-xl md:rounded-2xl text-white font-bold outline-none focus:border-orange-400 text-xs md:text-sm transition-all" placeholder="+213..." value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
                       </div>
                    </div>
+
+                   {/* Champs Budget Min/Max */}
+                   <div className="grid grid-cols-2 gap-4 md:gap-5 pt-2">
+                      <div className="space-y-1.5 md:space-y-2">
+                         <label className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center"><TrendingDown size={12} className="mr-2 text-orange-400"/> Budget Min (DZD)</label>
+                         <input type="number" className="w-full p-4 md:p-5 bg-white/5 border border-white/10 rounded-xl md:rounded-2xl text-white font-bold outline-none focus:border-orange-400 text-xs md:text-sm transition-all" placeholder="0" value={formData.valueMin} onChange={e => setFormData({...formData, valueMin: Number(e.target.value)})} />
+                      </div>
+                      <div className="space-y-1.5 md:space-y-2">
+                         <label className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center"><TrendingUp size={12} className="mr-2 text-orange-400"/> Budget Max (DZD)</label>
+                         <input type="number" className="w-full p-4 md:p-5 bg-white/5 border border-white/10 rounded-xl md:rounded-2xl text-white font-bold outline-none focus:border-orange-400 text-xs md:text-sm transition-all" placeholder="0" value={formData.valueMax} onChange={e => setFormData({...formData, valueMax: Number(e.target.value)})} />
+                      </div>
+                   </div>
+
                    <button className="w-full py-5 md:py-6 bg-orange-400 text-slate-950 font-black rounded-2xl md:rounded-3xl shadow-xl active-scale uppercase text-[10px] md:text-[11px] tracking-[0.3em] mt-2 md:mt-4 hover:bg-orange-300 transition-all shadow-orange-500/30">Valider l'Acquisition</button>
                  </form>
                )}
@@ -174,12 +189,12 @@ const Leads: React.FC<any> = ({ leads = [], onAddLead, onUpdateLead, onDeleteLea
                   
                   <div className="grid grid-cols-2 gap-4 md:gap-6">
                      <div className="p-5 md:p-8 glass-card rounded-[1.5rem] md:rounded-[2.2rem] border border-white/5 text-center flex flex-col justify-center">
-                        <p className="text-[8px] md:text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5 md:mb-2">Valeur Estimée</p>
+                        <p className="text-[8px] md:text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5 md:mb-2 text-left px-2 flex items-center"><TrendingDown size={10} className="mr-2"/> Budget Min</p>
                         <p className="text-sm md:text-lg font-black text-white">{selectedLead.valueMin?.toLocaleString()} DZD</p>
                      </div>
                      <div className="p-5 md:p-8 glass-card rounded-[1.5rem] md:rounded-[2.2rem] border border-white/5 text-center flex flex-col justify-center">
-                        <p className="text-[8px] md:text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5 md:mb-2">Status iV</p>
-                        <p className="text-sm md:text-lg font-black text-orange-400 uppercase tracking-tight">{selectedLead.status}</p>
+                        <p className="text-[8px] md:text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5 md:mb-2 text-left px-2 flex items-center"><TrendingUp size={10} className="mr-2"/> Budget Max</p>
+                        <p className="text-sm md:text-lg font-black text-orange-400 uppercase tracking-tight">{selectedLead.valueMax?.toLocaleString()} DZD</p>
                      </div>
                   </div>
 
