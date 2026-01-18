@@ -12,115 +12,105 @@ const Files: React.FC<any> = ({ fileLinks = [], onAddFileLink, onDeleteFileLink,
     f.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const closeModals = () => {
-    setShowAddModal(false);
-  };
-
   return (
-    <div className="relative">
-      <div className="space-y-10 animate-fade-in">
-        {/* Header Section - Fixed Alignment & Style */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 px-2">
+    <div className="relative animate-fade-in">
+      {/* Dynamic Background Effect */}
+      <div className="fixed top-0 left-0 w-full h-full pointer-events-none overflow-hidden -z-10">
+         <div className="absolute top-1/4 -right-1/4 w-[500px] h-[500px] bg-sky-500/10 blur-[120px] rounded-full"></div>
+         <div className="absolute bottom-1/4 -left-1/4 w-[500px] h-[500px] bg-violet-500/10 blur-[120px] rounded-full"></div>
+      </div>
+
+      <div className="space-y-12 pb-20">
+        {/* Header - Identique au screenshot utilisateur */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-8 px-2">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.4em] text-sky-400 mb-2">ASSET STORAGE SYSTEM</p>
-            <h2 className="text-4xl md:text-5xl font-extrabold text-white tracking-tighter uppercase leading-none">Documents</h2>
+            <p className="text-[10px] md:text-[12px] font-black uppercase tracking-[0.5em] text-sky-400 mb-2">ASSET STORAGE SYSTEM</p>
+            <h2 className="text-5xl md:text-7xl font-extrabold text-white tracking-tighter uppercase leading-none">Documents</h2>
           </div>
           
-          <div className="flex items-center space-x-3 w-full lg:w-auto">
-             <div className="relative flex-1 lg:w-80 group">
-               <Search size={18} className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-sky-400 transition-colors" />
+          <div className="flex items-center space-x-4">
+             <div className="relative group">
+               <Search size={20} className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-sky-400 transition-colors" />
                <input 
                  type="text" 
-                 placeholder="RECHERCHER DANS LE CLOUD..." 
+                 placeholder="RECHERCHER..." 
                  value={searchTerm} 
                  onChange={e => setSearchTerm(e.target.value)} 
-                 className="w-full pl-14 pr-6 py-4 bg-white/5 border border-white/10 rounded-full text-[11px] font-black uppercase tracking-widest text-white outline-none focus:border-sky-400/50 focus:bg-white/10 transition-all placeholder-slate-700" 
+                 className="w-full md:w-80 pl-16 pr-8 py-5 bg-white/5 border border-white/10 rounded-full text-[12px] font-black uppercase tracking-widest text-white outline-none focus:border-sky-400/50 focus:bg-white/10 transition-all placeholder-slate-700" 
                />
              </div>
              <button 
                onClick={() => { setFormData({name: '', url: ''}); setShowAddModal(true); }} 
-               className="w-14 h-14 bg-sky-500 text-white rounded-2xl shadow-[0_0_30px_rgba(14,165,233,0.3)] active-scale flex items-center justify-center transition-all hover:scale-105 hover:bg-sky-400 group"
+               className="w-16 h-16 bg-sky-400 text-white rounded-3xl shadow-[0_0_40px_rgba(56,189,248,0.4)] active-scale flex items-center justify-center transition-all hover:scale-110 hover:shadow-[0_0_60px_rgba(56,189,248,0.6)]"
              >
-               <Plus size={32} strokeWidth={3} className="group-hover:rotate-90 transition-transform duration-300" />
+               <Plus size={40} strokeWidth={3} />
              </button>
           </div>
         </div>
 
-        {/* Files Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        {/* Files Grid - Row Style Optimized */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 px-1">
           {filteredFiles.map((file: FileLink) => (
-            <div key={file.id} className="glass-card p-6 rounded-[2.5rem] border border-white/5 group hover:border-sky-500/30 transition-all duration-500 relative overflow-hidden flex flex-col justify-between">
-              {/* Decorative Glow */}
-              <div className="absolute top-0 right-0 w-32 h-32 bg-sky-500/5 blur-[50px] rounded-full translate-x-10 -translate-y-10 group-hover:bg-sky-500/10 transition-colors"></div>
-              
-              <div className="flex items-center space-x-5 relative z-10 mb-8">
-                 <div className="w-16 h-16 bg-gradient-to-br from-sky-400/20 to-sky-600/30 rounded-2xl flex items-center justify-center text-sky-400 shadow-inner border border-sky-400/20 group-hover:scale-110 transition-transform duration-500">
-                    <FileText size={30} />
+            <div key={file.id} className="glass group rounded-[2.5rem] border border-white/5 p-4 md:p-6 transition-all duration-500 hover:border-sky-400/30 hover:bg-white/[0.04] flex items-center justify-between">
+              <div className="flex items-center space-x-6 min-w-0">
+                 <div className="w-14 h-14 md:w-20 md:h-20 bg-sky-400/10 rounded-[1.5rem] md:rounded-[2rem] flex items-center justify-center text-sky-400 shadow-inner border border-sky-400/20 group-hover:bg-sky-400/20 transition-all duration-500 flex-shrink-0">
+                    <FileText size={28} className="md:w-[32px] md:h-[32px]" />
                  </div>
-                 <div className="truncate flex-1">
-                    <h3 className="font-extrabold text-white text-[15px] truncate uppercase tracking-tight group-hover:text-sky-400 transition-colors">{file.name}</h3>
-                    <div className="flex items-center space-x-2 mt-2">
-                      <Cloud size={12} className="text-sky-500/60" />
-                      <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest">{file.createdAt}</p>
+                 <div className="truncate pr-2">
+                    <h3 className="font-black text-white text-base md:text-xl truncate uppercase tracking-tight group-hover:text-sky-400 transition-colors">{file.name}</h3>
+                    <div className="flex items-center space-x-3 mt-1.5 opacity-40">
+                      <Cloud size={14} />
+                      <p className="text-[10px] font-black uppercase tracking-widest">{file.createdAt}</p>
                     </div>
                  </div>
               </div>
 
-              <div className="flex items-center justify-between pt-5 border-t border-white/5 relative z-10">
-                 <div className="flex items-center space-x-2">
-                   <div className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]"></div>
-                   <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Disponible</span>
-                 </div>
-                 <div className="flex space-x-2">
-                    <button 
-                      onClick={() => window.open(file.url, '_blank')} 
-                      className="w-10 h-10 glass text-slate-500 hover:text-white hover:bg-sky-500/20 rounded-xl transition-all flex items-center justify-center active-scale"
-                    >
-                      <ArrowUpRight size={18}/>
-                    </button>
-                    <button 
-                      onClick={() => { if(confirm('Révoquer cet actif ?')) onDeleteFileLink(file.id); }} 
-                      className="w-10 h-10 glass text-slate-500 hover:text-rose-400 hover:bg-rose-400/10 rounded-xl transition-all flex items-center justify-center active-scale"
-                    >
-                      <Trash2 size={18}/>
-                    </button>
-                 </div>
+              <div className="flex space-x-2 md:space-x-3 flex-shrink-0">
+                  <button 
+                    onClick={() => window.open(file.url, '_blank')} 
+                    className="w-12 h-12 md:w-16 md:h-16 glass text-slate-500 hover:text-white hover:bg-sky-400/20 rounded-2xl md:rounded-[1.5rem] transition-all flex items-center justify-center active-scale border border-white/5 shadow-lg"
+                  >
+                    <ArrowUpRight size={22}/>
+                  </button>
+                  <button 
+                    onClick={() => { if(confirm('Révoquer cet actif ?')) onDeleteFileLink(file.id); }} 
+                    className="w-12 h-12 md:w-16 md:h-16 glass text-slate-500 hover:text-rose-400 hover:bg-rose-400/10 rounded-2xl md:rounded-[1.5rem] transition-all flex items-center justify-center active-scale border border-white/5 shadow-lg"
+                  >
+                    <Trash2 size={22}/>
+                  </button>
               </div>
             </div>
           ))}
 
           {filteredFiles.length === 0 && (
-            <div className="col-span-full py-24 glass rounded-[3rem] border-dashed border-2 border-white/5 flex flex-col items-center justify-center text-slate-700">
-               <Cloud size={60} strokeWidth={1} className="mb-4 opacity-20" />
-               <p className="text-[10px] font-black uppercase tracking-[0.4em]">Coffre-fort vide</p>
+            <div className="col-span-full py-40 glass rounded-[4rem] border-dashed border-2 border-white/5 flex flex-col items-center justify-center text-slate-800">
+               <Cloud size={80} strokeWidth={1} className="mb-6 opacity-20" />
+               <p className="text-[12px] font-black uppercase tracking-[0.5em]">Coffre-fort vide</p>
             </div>
           )}
         </div>
       </div>
 
-      {/* MODAL INDEXATION */}
+      {/* MODAL AJOUT */}
       {showAddModal && (
         <div className="modal-overlay">
-          <div className="fixed inset-0 cursor-pointer" onClick={closeModals}></div>
+          <div className="fixed inset-0 cursor-pointer" onClick={() => setShowAddModal(false)}></div>
           <div className="modal-container max-w-lg">
-            <div className="relative glass w-full transform rounded-[3rem] p-8 md:p-14 border border-white/10 shadow-[0_0_120px_rgba(0,0,0,0.9)] animate-fade-in transition-all">
+            <div className="relative glass w-full transform rounded-[3.5rem] p-10 md:p-14 border border-white/10 shadow-[0_0_150px_rgba(0,0,0,0.9)] animate-fade-in">
                <div className="flex justify-between items-start mb-10">
-                 <div>
-                   <h3 className="text-2xl md:text-3xl font-extrabold text-white uppercase tracking-tight leading-none">Indexation Actif</h3>
-                   <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-3">Centralisation de ressources iVISION</p>
-                 </div>
-                 <button onClick={closeModals} className="w-12 h-12 glass text-slate-500 hover:text-white rounded-2xl flex items-center justify-center transition-all flex-shrink-0 active-scale"><X size={24}/></button>
+                 <h3 className="text-3xl font-extrabold text-white uppercase tracking-tight">Indexation iV</h3>
+                 <button onClick={() => setShowAddModal(false)} className="w-12 h-12 glass text-slate-500 hover:text-white rounded-2xl flex items-center justify-center transition-all"><X size={24}/></button>
                </div>
-               <form onSubmit={(e) => { e.preventDefault(); onAddFileLink(formData.name, formData.url); closeModals(); setFormData({name:'', url:''}); }} className="space-y-6">
+               <form onSubmit={(e) => { e.preventDefault(); onAddFileLink(formData.name, formData.url); setShowAddModal(false); }} className="space-y-6">
                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2">Désignation</label>
-                    <input required className="w-full p-5 bg-white/5 border border-white/10 rounded-2xl text-white font-bold outline-none focus:border-sky-400 text-sm transition-all" placeholder="Nom de la ressource" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                    <label className="text-[11px] font-black uppercase tracking-widest text-slate-500 px-2">Désignation</label>
+                    <input required className="w-full p-6 bg-white/5 border border-white/10 rounded-3xl text-white font-bold outline-none focus:border-sky-400 text-sm transition-all" placeholder="Nom de l'actif" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
                  </div>
                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2">Lien Externe (Cloud)</label>
-                    <input required className="w-full p-5 bg-white/5 border border-white/10 rounded-2xl text-white font-bold outline-none focus:border-sky-400 text-sm transition-all" placeholder="https://drive.google.com/..." value={formData.url} onChange={e => setFormData({...formData, url: e.target.value})} />
+                    <label className="text-[11px] font-black uppercase tracking-widest text-slate-500 px-2">Lien Cloud</label>
+                    <input required className="w-full p-6 bg-white/5 border border-white/10 rounded-3xl text-white font-bold outline-none focus:border-sky-400 text-sm transition-all" placeholder="URL" value={formData.url} onChange={e => setFormData({...formData, url: e.target.value})} />
                  </div>
-                 <button className="w-full py-6 bg-sky-500 text-white font-black rounded-3xl shadow-2xl shadow-sky-500/30 active-scale uppercase text-[11px] tracking-[0.3em] mt-4 hover:bg-sky-400 transition-all">Archiver dans le Vault</button>
+                 <button className="w-full py-7 bg-sky-400 text-white font-black rounded-[2.5rem] shadow-2xl shadow-sky-400/30 active-scale uppercase text-[12px] tracking-[0.4em] mt-4">Confirmer Indexation</button>
                </form>
             </div>
           </div>
