@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
-import { LayoutGrid, CheckSquare, MessageSquare, Briefcase, Settings, LogOut, Menu, Users, Target, FileText, Calendar as CalendarIcon, BarChart3, Search, Plus, X } from 'lucide-react';
-import { User } from '../types';
+import { LayoutGrid, CheckSquare, MessageSquare, Briefcase, Settings, LogOut, Menu, Users, Target, FileText, Calendar as CalendarIcon, BarChart3, Search, Plus, X, Lock } from 'lucide-react';
+import { User, UserRole, UserPermissions } from '../types';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 interface LayoutProps {
@@ -16,21 +16,93 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, onLogout }) => {
   const currentPath = location.pathname.replace('/', '') || 'dashboard';
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
 
+  const hasAccess = (permissionKey?: keyof UserPermissions) => {
+    if (currentUser.role === UserRole.ADMIN) return true;
+    if (!permissionKey) return true;
+    return !!(currentUser.permissions as any)?.[permissionKey];
+  };
+
   const navItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutGrid, color: 'text-sky-400', bg: 'bg-sky-400', shadow: 'shadow-sky-500/20' },
-    { id: 'tasks', label: 'Missions', icon: CheckSquare, color: 'text-violet-400', bg: 'bg-violet-400', shadow: 'shadow-violet-500/20' },
-    { id: 'chat', label: 'Messages', icon: MessageSquare, color: 'text-indigo-400', bg: 'bg-indigo-400', shadow: 'shadow-indigo-500/20' },
-    { id: 'clients', label: 'CRM', icon: Briefcase, color: 'text-emerald-400', bg: 'bg-emerald-400', shadow: 'shadow-emerald-500/20' },
-    { id: 'leads', label: 'Leads', icon: Target, color: 'text-orange-400', bg: 'bg-orange-400', shadow: 'shadow-orange-500/20' },
-    { id: 'files', label: 'Documents', icon: FileText, color: 'text-blue-400', bg: 'bg-blue-400', shadow: 'shadow-blue-500/20' },
-    { id: 'calendar', label: 'Planning', icon: CalendarIcon, color: 'text-rose-400', bg: 'bg-rose-400', shadow: 'shadow-rose-500/20' },
-    { id: 'reports', label: 'Rapports', icon: BarChart3, color: 'text-pink-400', bg: 'bg-pink-400', shadow: 'shadow-pink-500/20' },
-    { id: 'team', label: 'Équipe', icon: Users, color: 'text-slate-400', bg: 'bg-slate-400', shadow: 'shadow-slate-500/20' },
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutGrid, color: 'text-sky-400', bg: 'bg-sky-400', shadow: 'shadow-sky-500/20', permission: null },
+    { 
+      id: 'tasks', 
+      label: 'Missions', 
+      icon: CheckSquare, 
+      color: 'text-violet-400', 
+      bg: 'bg-violet-400', 
+      shadow: 'shadow-violet-500/20', 
+      permission: (hasAccess('canCreateTasks') || hasAccess('canEditAllTasks') || hasAccess('canDeleteTasks'))
+    },
+    { 
+      id: 'chat', 
+      label: 'Messages', 
+      icon: MessageSquare, 
+      color: 'text-indigo-400', 
+      bg: 'bg-indigo-400', 
+      shadow: 'shadow-indigo-500/20', 
+      permission: hasAccess('canManageChat') 
+    },
+    { 
+      id: 'clients', 
+      label: 'CRM', 
+      icon: Briefcase, 
+      color: 'text-emerald-400', 
+      bg: 'bg-emerald-400', 
+      shadow: 'shadow-emerald-500/20', 
+      permission: hasAccess('canManageClients') 
+    },
+    { 
+      id: 'leads', 
+      label: 'Leads', 
+      icon: Target, 
+      color: 'text-orange-400', 
+      bg: 'bg-orange-400', 
+      shadow: 'shadow-orange-500/20', 
+      permission: hasAccess('canManageLeads') 
+    },
+    { 
+      id: 'files', 
+      label: 'Documents', 
+      icon: FileText, 
+      color: 'text-blue-400', 
+      bg: 'bg-blue-400', 
+      shadow: 'shadow-blue-500/20', 
+      permission: hasAccess('canViewFiles') 
+    },
+    { 
+      id: 'calendar', 
+      label: 'Planning', 
+      icon: CalendarIcon, 
+      color: 'text-rose-400', 
+      bg: 'bg-rose-400', 
+      shadow: 'shadow-rose-500/20', 
+      permission: hasAccess('canCreateTasks') 
+    },
+    { 
+      id: 'reports', 
+      label: 'Rapports', 
+      icon: BarChart3, 
+      color: 'text-pink-400', 
+      bg: 'bg-pink-400', 
+      shadow: 'shadow-pink-500/20', 
+      permission: hasAccess('canViewReports') 
+    },
+    { 
+      id: 'team', 
+      label: 'Équipe', 
+      icon: Users, 
+      color: 'text-slate-400', 
+      bg: 'bg-slate-400', 
+      shadow: 'shadow-slate-500/20', 
+      permission: hasAccess('canManageTeam') 
+    },
   ];
 
-  // Les 4 onglets principaux pour mobile
-  const mobileMainItems = navItems.slice(0, 4);
-  const mobileOverflowItems = navItems.slice(4);
+  const visibleNavItems = navItems.filter(item => item.permission !== false);
+
+  // Les onglets principaux pour mobile (dynamique selon les permissions)
+  const mobileMainItems = visibleNavItems.slice(0, 4);
+  const mobileOverflowItems = visibleNavItems.slice(4);
 
   const currentItem = navItems.find(i => i.id === currentPath) || navItems[0];
 
@@ -41,7 +113,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, onLogout }) => {
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-slate-950">
-      {/* Sidebar Desktop - Inchangé */}
+      {/* Sidebar Desktop */}
       <aside className="hidden lg:flex flex-col w-64 glass border-r border-white/5 relative z-20">
         <div className="p-8 flex items-center space-x-3 mb-4">
           <div className="w-10 h-10 bg-gradient-to-br from-sky-400 to-sky-600 rounded-xl flex items-center justify-center text-white font-extrabold shadow-lg shadow-sky-500/20">iV</div>
@@ -49,7 +121,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, onLogout }) => {
         </div>
         
         <nav className="flex-1 px-4 space-y-1.5 overflow-y-auto no-scrollbar pb-6">
-          {navItems.map(item => {
+          {visibleNavItems.map(item => {
             const isActive = currentPath === item.id;
             return (
               <button

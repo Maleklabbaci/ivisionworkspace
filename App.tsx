@@ -5,7 +5,7 @@ import { HashRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'r
 import Layout from './components/Layout';
 import ToastContainer from './components/Toast';
 import { User, UserRole, Task, TaskStatus, Channel, ToastNotification, Message, Client, FileLink, Lead, ActivityLog, UserPermissions } from './types';
-import { Loader2, Zap, ShieldCheck } from 'lucide-react';
+import { Loader2, Zap, ShieldCheck, Lock } from 'lucide-react';
 
 const Dashboard = lazy(() => import('./components/Dashboard'));
 const Tasks = lazy(() => import('./components/Tasks'));
@@ -52,6 +52,19 @@ const mapFromDB = (table: string, item: any) => {
   return mapped;
 };
 
+const AccessDenied = () => (
+  <div className="h-full w-full flex flex-col items-center justify-center p-10 text-center animate-fade-in">
+    <div className="w-24 h-24 bg-urgent/10 rounded-[2.5rem] flex items-center justify-center text-urgent mb-8">
+      <Lock size={40} />
+    </div>
+    <h2 className="text-3xl font-black text-white uppercase tracking-tight">Accès Restreint</h2>
+    <p className="text-slate-500 mt-4 max-w-md font-medium leading-relaxed">
+      Votre profil iVISION ne dispose pas des permissions nécessaires pour accéder à ce module stratégique. 
+      Veuillez contacter votre administrateur pour réviser vos privilèges.
+    </p>
+  </div>
+);
+
 const AuthUI = ({ handleAuth, email, setEmail, password, setPassword, isAuthProcessing }: any) => (
   <div className="w-full max-w-[480px] animate-in fade-in zoom-in-95 duration-1000 p-6">
     <div className="glass rounded-[4rem] p-12 md:p-16 shadow-[0_64px_128px_-32px_rgba(0,0,0,0.8)] border border-white/10 relative overflow-hidden">
@@ -90,7 +103,6 @@ const AppContent: React.FC<any> = ({
       await supabase.auth.signOut();
       setCurrentUser(null);
       addNotification("Système", "Déconnexion réussie. Session révoquée.", "info");
-      // Force reload to clean all states and ensure redirection to login
       setTimeout(() => window.location.reload(), 100);
     } catch (error) {
       addNotification("Erreur", "Problème lors de la déconnexion.", "urgent");
@@ -283,14 +295,22 @@ const AppContent: React.FC<any> = ({
       <Suspense fallback={<div className="h-full w-full flex items-center justify-center"><Loader2 className="animate-spin text-white opacity-20" size={60} /></div>}>
         <Routes>
           <Route path="/dashboard" element={<Dashboard currentUser={currentUser} tasks={tasks} onNavigate={(v: any) => navigate(`/${v}`)} />} />
-          <Route path="/tasks" element={<Tasks tasks={tasks} users={users} clients={clients} currentUser={currentUser} onAddTask={handleAddTask} onUpdateStatus={handleUpdateTaskStatus} onUpdateTask={handleUpdateTask} onDeleteTask={handleDeleteTask} />} />
-          <Route path="/chat" element={<Chat currentUser={currentUser} users={users} channels={channels} currentChannelId={channels[0]?.id || ""} messages={messages} onSendMessage={async (c:string, cid:string) => { if(!hasAccess('canManageChat')) return; const { data } = await supabase.from('messages').insert({content:c, channel_id:cid, user_id:currentUser.id}).select().single(); if(data) setMessages((p:any) => [...p, mapFromDB('messages', data)]); }} onAddChannel={async (ch:any) => { if(!hasAccess('canManageChannels')) return; const { data } = await supabase.from('channels').insert({name:ch.name, type:ch.type}).select().single(); if(data) setChannels((p:any) => [...p, data]); }} onChannelChange={()=>{}} />} />
-          <Route path="/leads" element={<Leads leads={leads} onAddLead={handleAddLead} onUpdateLead={handleUpdateLead} onDeleteLead={handleDeleteLead} currentUser={currentUser} />} />
-          <Route path="/clients" element={<Clients clients={clients} tasks={tasks} onAddClient={handleAddClient} onDeleteClient={handleDeleteClient} currentUser={currentUser} />} />
-          <Route path="/calendar" element={<Calendar tasks={tasks} users={users} clients={clients} currentUser={currentUser} onAddTask={handleAddTask} onUpdateStatus={handleUpdateTaskStatus} />} />
-          <Route path="/team" element={<Team currentUser={currentUser} users={users} onAddUser={handleAddUser} onRemoveUser={handleRemoveUser} onUpdateMember={handleUpdateMember} />} />
-          <Route path="/files" element={<Files fileLinks={fileLinks} onAddFileLink={handleAddFileLink} onDeleteFileLink={handleDeleteFileLink} currentUser={currentUser} />} />
-          <Route path="/reports" element={<Reports currentUser={currentUser} tasks={tasks} leads={leads} />} />
+          <Route path="/tasks" element={
+            (hasAccess('canCreateTasks') || hasAccess('canEditAllTasks') || hasAccess('canDeleteTasks')) 
+            ? <Tasks tasks={tasks} users={users} clients={clients} currentUser={currentUser} onAddTask={handleAddTask} onUpdateStatus={handleUpdateTaskStatus} onUpdateTask={handleUpdateTask} onDeleteTask={handleDeleteTask} />
+            : <AccessDenied />
+          } />
+          <Route path="/chat" element={
+            hasAccess('canManageChat') 
+            ? <Chat currentUser={currentUser} users={users} channels={channels} currentChannelId={channels[0]?.id || ""} messages={messages} onSendMessage={async (c:string, cid:string) => { if(!hasAccess('canManageChat')) return; const { data } = await supabase.from('messages').insert({content:c, channel_id:cid, user_id:currentUser.id}).select().single(); if(data) setMessages((p:any) => [...p, mapFromDB('messages', data)]); }} onAddChannel={async (ch:any) => { if(!hasAccess('canManageChannels')) return; const { data } = await supabase.from('channels').insert({name:ch.name, type:ch.type}).select().single(); if(data) setChannels((p:any) => [...p, data]); }} onChannelChange={()=>{}} />
+            : <AccessDenied />
+          } />
+          <Route path="/leads" element={hasAccess('canManageLeads') ? <Leads leads={leads} onAddLead={handleAddLead} onUpdateLead={handleUpdateLead} onDeleteLead={handleDeleteLead} currentUser={currentUser} /> : <AccessDenied />} />
+          <Route path="/clients" element={hasAccess('canManageClients') ? <Clients clients={clients} tasks={tasks} onAddClient={handleAddClient} onDeleteClient={handleDeleteClient} currentUser={currentUser} /> : <AccessDenied />} />
+          <Route path="/calendar" element={hasAccess('canCreateTasks') ? <Calendar tasks={tasks} users={users} clients={clients} currentUser={currentUser} onAddTask={handleAddTask} onUpdateStatus={handleUpdateTaskStatus} /> : <AccessDenied />} />
+          <Route path="/team" element={hasAccess('canManageTeam') ? <Team currentUser={currentUser} users={users} onAddUser={handleAddUser} onRemoveUser={handleRemoveUser} onUpdateMember={handleUpdateMember} /> : <AccessDenied />} />
+          <Route path="/files" element={hasAccess('canViewFiles') ? <Files fileLinks={fileLinks} onAddFileLink={handleAddFileLink} onDeleteFileLink={handleDeleteFileLink} currentUser={currentUser} /> : <AccessDenied />} />
+          <Route path="/reports" element={hasAccess('canViewReports') ? <Reports currentUser={currentUser} tasks={tasks} leads={leads} /> : <AccessDenied />} />
           <Route path="/settings" element={<Settings currentUser={currentUser} onUpdateProfile={async (d:any) => { setCurrentUser((prev:any) => ({...prev!, ...d})); await supabase.from('users').update(d).eq('id', currentUser.id); addNotification("Profil", "Mise à jour réussie.", "success"); }} />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
