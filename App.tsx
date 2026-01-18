@@ -226,18 +226,31 @@ const App: React.FC = () => {
 
   const fetchInitialData = useCallback(async (userId: string) => {
     try {
+      console.log("Fetching data for:", userId);
       // Priorité haute : Chargement du profil utilisateur pour débloquer l'interface
-      let { data: dbUser } = await supabase.from('users').select('*').eq('id', userId).maybeSingle();
+      let { data: dbUser, error: fetchError } = await supabase.from('users').select('*').eq('id', userId).maybeSingle();
       
+      if (fetchError) {
+        console.error("Supabase error fetching user:", fetchError);
+        setIsLoading(false);
+        return;
+      }
+
       if (!dbUser) {
+        console.log("User not found in DB, attempting to create...");
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
           const name = user.user_metadata?.name || user.email?.split('@')[0] || 'Membre iVISION';
-          const { data: newUser } = await supabase.from('users').insert({
+          const { data: newUser, error: insertError } = await supabase.from('users').insert({
             id: userId, name, email: user.email, role: user.user_metadata?.role || UserRole.MEMBER,
             status: 'active', avatar: `https://ui-avatars.com/api/?name=${name}&background=random`
           }).select().single();
-          dbUser = newUser;
+          
+          if (insertError) {
+             console.error("Error creating user profile:", insertError);
+          } else {
+             dbUser = newUser;
+          }
         }
       }
 
@@ -246,16 +259,19 @@ const App: React.FC = () => {
           id: String(userId), name: dbUser.name, email: dbUser.email, avatar: dbUser.avatar,
           role: dbUser.role as UserRole, status: 'active', notificationPref: 'all', permissions: dbUser.permissions || {}
         });
-        // On marque le chargement principal comme terminé dès qu'on a l'utilisateur
-        setIsLoading(false);
       }
+      
+      // On débloque l'UI quoi qu'il arrive après avoir tenté de récupérer l'utilisateur
+      setIsLoading(false);
 
       // Chargement en arrière-plan (non bloquant pour l'UI principale)
       const load = async (table: string, setter: Function, mapper?: Function) => {
         try {
           const { data } = await supabase.from(table).select('*').limit(100);
           if (data) setter(mapper ? data.map((d: any) => mapper(d)) : data);
-        } catch (e) {}
+        } catch (e) {
+          console.warn(`Background load failed for ${table}`, e);
+        }
       };
 
       load('users', setUsers, (u: any) => ({ ...u, role: u.role as UserRole }));
@@ -266,7 +282,7 @@ const App: React.FC = () => {
       load('file_links', setFileLinks, (f: any) => ({ ...f, clientId: f.client_id, createdBy: f.created_by, createdAt: new Date(f.created_at).toLocaleDateString() }));
       
     } catch (e) {
-      console.error("Initial data load error", e);
+      console.error("Critical error during initial data load:", e);
       setIsLoading(false);
     }
   }, []);
@@ -274,29 +290,46 @@ const App: React.FC = () => {
   useEffect(() => {
     let isMounted = true;
     
-    // Vérification instantanée de la session
+    // SÉCURITÉ : Timeout pour forcer la fin du chargement si Supabase est bloqué
+    const safetyTimeout = setTimeout(() => {
+        if (isMounted && isLoading) {
+            console.warn("Safety timeout triggered: Forcing loading to false.");
+            setIsLoading(false);
+        }
+    }, 4000);
+
     const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user && isMounted) {
-          await fetchInitialData(session.user.id);
-      } else if (isMounted) {
-          setIsLoading(false);
+      try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.user && isMounted) {
+              await fetchInitialData(session.user.id);
+          } else if (isMounted) {
+              setIsLoading(false);
+          }
+      } catch (err) {
+          console.error("Session check error:", err);
+          if (isMounted) setIsLoading(false);
       }
     };
     checkSession();
 
-    // Listener sur les changements d'auth pour transition instantanée
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session?.user && isMounted) {
+      if (!isMounted) return;
+      
+      if (event === 'SIGNED_IN' && session?.user) {
           await fetchInitialData(session.user.id);
-      } else if (event === 'SIGNED_OUT' && isMounted) {
+      } else if (event === 'SIGNED_OUT') {
           setCurrentUser(null);
           setIsLoading(false);
       }
     });
 
-    return () => { isMounted = false; subscription.unsubscribe(); };
-  }, [fetchInitialData]);
+    return () => { 
+        isMounted = false; 
+        subscription.unsubscribe(); 
+        clearTimeout(safetyTimeout);
+    };
+  }, [fetchInitialData, isLoading]);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -305,14 +338,7 @@ const App: React.FC = () => {
     
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) {
-          if (error.message.includes('Email not confirmed')) {
-              // On peut loger l'utilisateur quand même si le backend le permet ou afficher un message spécifique
-              // Mais ici on traite ça comme un accès accordé pour la fluidité si possible
-          } else {
-              throw error;
-          }
-      }
+      if (error) throw error;
       // fetchInitialData sera déclenché par onAuthStateChange
     } catch (err: any) { 
         addNotification("Erreur d'accès", err.message, "urgent"); 
@@ -320,6 +346,7 @@ const App: React.FC = () => {
     }
   };
 
+  // Affichage du loader seulement si on attend vraiment des données critiques
   if (isLoading && !currentUser) return (
     <div className="h-screen w-screen flex flex-col items-center justify-center bg-white">
       <div className="relative">
@@ -327,6 +354,12 @@ const App: React.FC = () => {
           <Zap size={24} className="absolute inset-0 m-auto text-primary animate-pulse" fill="currentColor" />
       </div>
       <p className="mt-8 text-[11px] font-black text-slate-400 uppercase tracking-[0.4em] animate-pulse">Lancement iVISION...</p>
+      <button 
+        onClick={() => setIsLoading(false)} 
+        className="mt-12 text-[9px] font-bold text-slate-300 uppercase hover:text-primary transition-colors tracking-widest"
+      >
+        Passer l'attente
+      </button>
     </div>
   );
 
