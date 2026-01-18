@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { User, UserRole, UserPermissions } from '../types';
-import { Plus, X, Edit2, Trash2, Loader2, ShieldCheck, CheckSquare, Square } from 'lucide-react';
+import { Plus, X, Edit2, Trash2, Loader2, ShieldCheck, CheckSquare, Square, Eye, EyeOff, Lock } from 'lucide-react';
 
 const DEFAULT_PERMISSIONS: UserPermissions = {
   canCreateTasks: true,
@@ -51,9 +51,11 @@ const PermissionToggle: React.FC<{
 const Team: React.FC<any> = ({ currentUser, users, onAddUser, onRemoveUser, onUpdateMember }) => {
   const [showModal, setShowModal] = useState<'add' | 'edit' | null>(null);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState<any>({ 
     name: '', 
     email: '', 
+    password: '',
     role: UserRole.MEMBER, 
     permissions: { ...DEFAULT_PERMISSIONS } 
   });
@@ -66,6 +68,7 @@ const Team: React.FC<any> = ({ currentUser, users, onAddUser, onRemoveUser, onUp
       setFormData({
         name: editingUser.name,
         email: editingUser.email,
+        password: '', // On ne touche pas au mot de passe en édition ici
         role: editingUser.role,
         permissions: editingUser.permissions || { ...DEFAULT_PERMISSIONS }
       });
@@ -73,6 +76,7 @@ const Team: React.FC<any> = ({ currentUser, users, onAddUser, onRemoveUser, onUp
       setFormData({
         name: '',
         email: '',
+        password: '',
         role: UserRole.MEMBER,
         permissions: { ...DEFAULT_PERMISSIONS }
       });
@@ -107,6 +111,7 @@ const Team: React.FC<any> = ({ currentUser, users, onAddUser, onRemoveUser, onUp
   const closeModals = () => {
     setShowModal(null);
     setEditingUser(null);
+    setShowPassword(false);
   };
 
   return (
@@ -150,7 +155,7 @@ const Team: React.FC<any> = ({ currentUser, users, onAddUser, onRemoveUser, onUp
         </div>
       </div>
 
-      {/* MODAL AJOUT/EDITION TEAM - FIXÉ */}
+      {/* MODAL AJOUT/EDITION TEAM */}
       {showModal && (
         <div className="modal-overlay">
           <div className="fixed inset-0 cursor-pointer" onClick={closeModals}></div>
@@ -166,7 +171,7 @@ const Team: React.FC<any> = ({ currentUser, users, onAddUser, onRemoveUser, onUp
                 <button onClick={closeModals} className="w-12 h-12 glass text-slate-500 hover:text-white rounded-xl flex items-center justify-center transition-all flex-shrink-0"><X size={24}/></button>
               </div>
 
-              <form onSubmit={handleSubmit} className="space-y-8">
+              <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                   <div className="space-y-2">
                     <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2">Nom Complet</label>
@@ -178,6 +183,29 @@ const Team: React.FC<any> = ({ currentUser, users, onAddUser, onRemoveUser, onUp
                   </div>
                 </div>
 
+                {showModal === 'add' && (
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center"><Lock size={12} className="mr-2 text-emerald-400"/> Définir le Mot de Passe</label>
+                    <div className="relative">
+                      <input 
+                        required 
+                        type={showPassword ? "text" : "password"} 
+                        className="w-full p-5 bg-white/5 border border-white/10 rounded-2xl text-white font-bold outline-none focus:border-emerald-400 text-sm transition-all" 
+                        placeholder="••••••••" 
+                        value={formData.password} 
+                        onChange={e => setFormData({...formData, password: e.target.value})} 
+                      />
+                      <button 
+                        type="button" 
+                        onClick={() => setShowPassword(!showPassword)} 
+                        className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors"
+                      >
+                        {showPassword ? <EyeOff size={20}/> : <Eye size={20}/>}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2">Rôle Opérationnel</label>
                   <select className="w-full p-5 bg-slate-900 border border-white/10 rounded-2xl font-bold text-slate-300 outline-none text-sm appearance-none cursor-pointer" value={formData.role} onChange={e => setFormData({...formData, role: e.target.value as UserRole})}>
@@ -185,12 +213,12 @@ const Team: React.FC<any> = ({ currentUser, users, onAddUser, onRemoveUser, onUp
                   </select>
                 </div>
 
-                <div className="pt-8 border-t border-white/5">
-                  <div className="flex items-center space-x-3 mb-8">
-                    <ShieldCheck size={20} className="text-emerald-400" />
-                    <h4 className="text-[11px] font-black text-white uppercase tracking-[0.3em]">Permissions Granulaires</h4>
+                <div className="pt-4 border-t border-white/5">
+                  <div className="flex items-center space-x-3 mb-6">
+                    <ShieldCheck size={18} className="text-emerald-400" />
+                    <h4 className="text-[10px] font-black text-white uppercase tracking-[0.3em]">Permissions iV</h4>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[35vh] overflow-y-auto no-scrollbar p-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[30vh] overflow-y-auto no-scrollbar p-1">
                     {(Object.keys(PERMISSION_LABELS) as Array<keyof UserPermissions>).map((key) => (
                       <div key={key} className="h-full">
                         <PermissionToggle 
@@ -203,8 +231,8 @@ const Team: React.FC<any> = ({ currentUser, users, onAddUser, onRemoveUser, onUp
                   </div>
                 </div>
 
-                <button disabled={isSubmitting} className="w-full py-6 bg-emerald-400 text-white font-black rounded-3xl shadow-xl active-scale disabled:opacity-50 uppercase text-[11px] tracking-[0.3em] transition-all hover:bg-emerald-500">
-                  {isSubmitting ? <Loader2 className="animate-spin mx-auto" size={20}/> : showModal === 'add' ? "Activer l'Accès" : "Mettre à jour"}
+                <button disabled={isSubmitting} className="w-full py-6 bg-emerald-400 text-slate-950 font-black rounded-3xl shadow-xl active-scale disabled:opacity-50 uppercase text-[11px] tracking-[0.3em] transition-all hover:bg-emerald-300 shadow-emerald-400/20">
+                  {isSubmitting ? <Loader2 className="animate-spin mx-auto" size={20}/> : showModal === 'add' ? "Activer l'Accès Équipier" : "Mettre à jour"}
                 </button>
               </form>
             </div>

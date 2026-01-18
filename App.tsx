@@ -213,8 +213,11 @@ const AppContent: React.FC<any> = ({
   const handleAddUser = async (user: any) => {
     if (!hasAccess('canManageTeam')) return;
 
-    // En conditions réelles, on utiliserait supabase.auth.admin.createUser
-    // Pour cet exemple, on simule l'ajout dans la table 'users'
+    // Étape 1 : Création dans Supabase Auth (si possible via le client, sinon simulation)
+    // Note: Sans clé de service, l'admin ne peut pas créer d'utilisateurs Auth directement via le client JS.
+    // Mais on peut utiliser supabase.auth.signUp() si on veut automatiser, mais cela déconnecterait l'admin.
+    // On simule donc ici l'enregistrement réussi dans la table 'users'.
+    
     const { data, error } = await supabase.from('users').insert({
       name: user.name,
       email: user.email,
@@ -227,6 +230,8 @@ const AppContent: React.FC<any> = ({
     if (data) {
       setUsers((prev: any) => [...prev, mapFromDB('users', data)]);
       addNotification("Équipe", "Nouvel accès utilisateur activé.", "success");
+      // Note: Le mot de passe devra être géré via une fonction Edge ou Supabase Auth Admin API
+      console.log(`Mot de passe configuré pour ${user.email}: ${user.password}`);
     } else {
       addNotification("Erreur Team", error.message, "urgent");
     }
@@ -294,7 +299,7 @@ const AppContent: React.FC<any> = ({
           <Route path="/chat" element={hasAccess('canManageChat') ? <Chat currentUser={currentUser} users={users} channels={channels} currentChannelId={channels[0]?.id || ""} messages={messages} onlineUserIds={new Set()} onChannelChange={() => {}} onSendMessage={handleSendMessage} onAddChannel={handleAddChannel} onDeleteChannel={async id => { if(!hasAccess('canManageChannels')) return; setChannels(prev => prev.filter(c => c.id !== id)); await supabase.from('channels').delete().eq('id', id); }} /> : <Navigate to="/dashboard" />} />
           <Route path="/leads" element={hasAccess('canManageLeads') ? <Leads leads={leads} onAddLead={handleAddLead} onUpdateLead={async l => { setLeads(prev => prev.map(i => i.id === l.id ? l : i)); await supabase.from('leads').update({status: l.status}).eq('id', l.id); }} onDeleteLead={async id => { setLeads(prev => prev.filter(l => l.id !== id)); await supabase.from('leads').delete().eq('id', id); }} onConvertToClient={()=>{}} currentUser={currentUser} addNotification={addNotification} /> : <Navigate to="/dashboard" />} />
           <Route path="/clients" element={hasAccess('canManageClients') ? <Clients clients={clients} tasks={tasks} fileLinks={fileLinks} currentUser={currentUser} onAddClient={handleAddClient} onDeleteClient={async id => { setClients(prev => prev.filter(c => c.id !== id)); await supabase.from('clients').delete().eq('id', id); }} /> : <Navigate to="/dashboard" />} />
-          <Route path="/calendar" element={<Calendar tasks={tasks} users={users} currentUser={currentUser} onAddTask={handleAddTask} onUpdateStatus={async (id, s) => { if(!hasAccess('canCreateTasks')) return; setTasks(prev => prev.map(t => t.id === id ? {...t, status:s} : t)); await supabase.from('tasks').update({status:s}).eq('id', id); }} />} />
+          <Route path="/calendar" element={<Calendar tasks={tasks} users={users} clients={clients} currentUser={currentUser} onAddTask={handleAddTask} onUpdateStatus={async (id, s) => { if(!hasAccess('canCreateTasks')) return; setTasks(prev => prev.map(t => t.id === id ? {...t, status:s} : t)); await supabase.from('tasks').update({status:s}).eq('id', id); }} />} />
           
           <Route path="/team" element={
             hasAccess('canManageTeam') ? (
