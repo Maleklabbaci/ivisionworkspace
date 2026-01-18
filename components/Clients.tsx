@@ -71,63 +71,63 @@ const Clients: React.FC<any> = ({ clients = [], tasks = [], onAddClient, onUpdat
         </div>
       </div>
 
-      {/* MODAL VIEW CLIENT - FIXÉ */}
+      {/* MODAL VIEW CLIENT - OPTIMISÉ PHONE */}
       {viewMode === 'view' && selectedClient && (
         <div className="modal-overlay">
           <div className="fixed inset-0 cursor-pointer" onClick={closeModals}></div>
           <div className="modal-container max-w-2xl">
-            <div className="relative glass w-full transform rounded-[3rem] p-8 md:p-14 border border-white/10 shadow-[0_0_120px_rgba(0,0,0,0.9)] animate-fade-in">
-               <div className="flex justify-between items-start mb-12">
-                  <div className="flex items-center space-x-6 md:space-x-8">
-                     <div className="w-20 h-20 bg-emerald-400 rounded-[2rem] flex items-center justify-center text-slate-950 font-black text-4xl shadow-2xl shadow-emerald-500/30">{selectedClient.name.charAt(0)}</div>
+            <div className="relative glass w-full transform rounded-[2rem] md:rounded-[3.5rem] p-5 md:p-14 border border-white/10 shadow-[0_0_120px_rgba(0,0,0,0.9)] animate-fade-in mb-6 md:mb-10">
+               <div className="flex justify-between items-start mb-6 md:mb-12">
+                  <div className="flex items-center space-x-4 md:space-x-8">
+                     <div className="w-14 h-14 md:w-20 md:h-20 bg-emerald-400 rounded-2xl md:rounded-[2rem] flex items-center justify-center text-slate-950 font-black text-2xl md:text-4xl shadow-2xl shadow-emerald-500/30">{selectedClient.name.charAt(0)}</div>
                      <div className="min-w-0">
-                        <h3 className="text-3xl md:text-4xl font-extrabold text-white uppercase tracking-tighter leading-none truncate">{selectedClient.name}</h3>
-                        <p className="text-[10px] md:text-[11px] text-emerald-400 font-black uppercase tracking-[0.3em] mt-4 flex items-center truncate"><Globe size={14} className="mr-2"/> {selectedClient.company || 'Indépendant'}</p>
+                        <h3 className="text-xl md:text-4xl font-extrabold text-white uppercase tracking-tighter leading-tight truncate">{selectedClient.name}</h3>
+                        <p className="text-[8px] md:text-[11px] text-emerald-400 font-black uppercase tracking-[0.3em] mt-1 md:mt-4 flex items-center truncate"><Globe size={12} className="mr-2"/> {selectedClient.company || 'Indépendant'}</p>
                      </div>
                   </div>
-                  <button onClick={closeModals} className="w-12 h-12 glass text-slate-500 hover:text-white rounded-2xl flex items-center justify-center transition-all flex-shrink-0 active-scale"><X size={24}/></button>
+                  <button onClick={closeModals} className="w-10 h-10 md:w-12 md:h-12 glass text-slate-500 hover:text-white rounded-xl md:rounded-2xl flex items-center justify-center transition-all flex-shrink-0 active-scale"><X size={20}/></button>
                </div>
 
-               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-10">
-                 <div className="p-6 md:p-8 glass-card rounded-[2rem] flex items-center space-x-5 border border-white/5 group hover:bg-white/[0.04]">
-                    <div className="w-12 h-12 rounded-xl bg-emerald-400/10 flex items-center justify-center text-emerald-400 flex-shrink-0"><Mail size={22} /></div>
+               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-6 mb-6 md:mb-10">
+                 <div className="p-4 md:p-8 glass-card rounded-[1.5rem] md:rounded-[2rem] flex items-center space-x-4 md:space-x-5 border border-white/5 group hover:bg-white/[0.04]">
+                    <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg md:rounded-xl bg-emerald-400/10 flex items-center justify-center text-emerald-400 flex-shrink-0"><Mail size={18} /></div>
                     <div className="truncate">
-                      <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Canal Email</p>
-                      <span className="text-[13px] font-bold text-slate-200 truncate block">{selectedClient.email || 'N/A'}</span>
+                      <p className="text-[8px] md:text-[9px] font-black text-slate-500 uppercase tracking-widest mb-0.5 md:mb-1">Canal Email</p>
+                      <span className="text-[12px] md:text-[13px] font-bold text-slate-200 truncate block">{selectedClient.email || 'N/A'}</span>
                     </div>
                  </div>
-                 <div className="p-6 md:p-8 glass-card rounded-[2rem] flex items-center space-x-5 border border-white/5 group hover:bg-white/[0.04]">
-                    <div className="w-12 h-12 rounded-xl bg-emerald-400/10 flex items-center justify-center text-emerald-400 flex-shrink-0"><Phone size={22} /></div>
+                 <div className="p-4 md:p-8 glass-card rounded-[1.5rem] md:rounded-[2rem] flex items-center space-x-4 md:space-x-5 border border-white/5 group hover:bg-white/[0.04]">
+                    <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg md:rounded-xl bg-emerald-400/10 flex items-center justify-center text-emerald-400 flex-shrink-0"><Phone size={18} /></div>
                     <div className="truncate">
-                      <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Contact Direct</p>
-                      <span className="text-[13px] font-bold text-slate-200 truncate block">{selectedClient.phone || 'N/A'}</span>
+                      <p className="text-[8px] md:text-[9px] font-black text-slate-500 uppercase tracking-widest mb-0.5 md:mb-1">Contact Direct</p>
+                      <span className="text-[12px] md:text-[13px] font-bold text-slate-200 truncate block">{selectedClient.phone || 'N/A'}</span>
                     </div>
                  </div>
                </div>
 
-               <div className="p-8 md:p-10 bg-slate-900/40 rounded-[2.5rem] border border-white/5 mb-12 relative overflow-hidden">
-                 <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-400/5 blur-[60px] rounded-full"></div>
-                 <div className="space-y-8">
+               <div className="p-5 md:p-10 bg-slate-900/40 rounded-[1.8rem] md:rounded-[2.5rem] border border-white/5 mb-6 md:mb-12 relative overflow-hidden">
+                 <div className="absolute top-0 right-0 w-24 h-24 md:w-32 md:h-32 bg-emerald-400/5 blur-[40px] md:blur-[60px] rounded-full"></div>
+                 <div className="space-y-6 md:space-y-8">
                     <div>
-                        <h4 className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.3em] mb-4 flex items-center leading-none"><MapPin size={16} className="mr-3"/> Localisation Stratégique</h4>
-                        <p className="text-[14px] font-medium text-slate-300 leading-relaxed">{selectedClient.address || "Aucune adresse enregistrée."}</p>
+                        <h4 className="text-[9px] md:text-[10px] font-black text-emerald-400 uppercase tracking-[0.3em] mb-3 md:mb-4 flex items-center leading-none"><MapPin size={14} className="mr-2 md:mr-3"/> Localisation Stratégique</h4>
+                        <p className="text-[12px] md:text-[14px] font-medium text-slate-300 leading-relaxed">{selectedClient.address || "Aucune adresse enregistrée."}</p>
                     </div>
                     <div>
-                        <h4 className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.3em] mb-4 flex items-center leading-none"><Info size={16} className="mr-3"/> Spécifications du Compte</h4>
-                        <p className="text-[14px] font-medium text-slate-300 leading-relaxed">{selectedClient.description || "Aucune note additionnelle."}</p>
+                        <h4 className="text-[9px] md:text-[10px] font-black text-emerald-400 uppercase tracking-[0.3em] mb-3 md:mb-4 flex items-center leading-none"><Info size={14} className="mr-2 md:mr-3"/> Spécifications du Compte</h4>
+                        <p className="text-[12px] md:text-[14px] font-medium text-slate-300 leading-relaxed">{selectedClient.description || "Aucune note additionnelle."}</p>
                     </div>
                  </div>
                </div>
 
-               <div className="flex flex-col sm:flex-row items-stretch gap-4">
-                  <button className="flex-1 py-6 px-8 bg-emerald-400 text-slate-950 font-black rounded-3xl shadow-2xl active-scale uppercase text-[11px] tracking-[0.25em] transition-all hover:bg-emerald-300 flex items-center justify-center text-center">
+               <div className="flex flex-col sm:flex-row items-stretch gap-3 md:gap-4">
+                  <button className="flex-1 py-4 md:py-6 px-6 md:px-8 bg-emerald-400 text-slate-950 font-black rounded-2xl md:rounded-3xl shadow-2xl active-scale uppercase text-[10px] md:text-[11px] tracking-[0.2em] transition-all hover:bg-emerald-300 flex items-center justify-center text-center">
                     Paramètres Partenaire iV
                   </button>
                   <button 
                     onClick={() => { if(confirm('Révoquer ce compte CRM ?')) { onDeleteClient(selectedClient.id); closeModals(); } }} 
-                    className="w-full sm:w-20 h-auto py-6 sm:py-0 glass text-slate-500 rounded-3xl flex items-center justify-center hover:text-urgent hover:bg-urgent/10 transition-all shadow-xl active-scale border border-white/5"
+                    className="w-full sm:w-20 h-auto py-4 sm:py-0 glass text-slate-500 rounded-2xl md:rounded-3xl flex items-center justify-center hover:text-urgent hover:bg-urgent/10 transition-all shadow-xl active-scale border border-white/5"
                   >
-                    <Trash2 size={24}/>
+                    <Trash2 size={22}/>
                   </button>
                </div>
             </div>
@@ -140,40 +140,40 @@ const Clients: React.FC<any> = ({ clients = [], tasks = [], onAddClient, onUpdat
         <div className="modal-overlay">
           <div className="fixed inset-0 cursor-pointer" onClick={closeModals}></div>
           <div className="modal-container max-w-2xl">
-            <div className="relative glass w-full transform rounded-[3rem] p-8 md:p-14 border border-white/10 shadow-[0_0_120px_rgba(0,0,0,0.9)] animate-fade-in">
-               <div className="flex justify-between items-start mb-10">
+            <div className="relative glass w-full transform rounded-[2rem] md:rounded-[3rem] p-6 md:p-14 border border-white/10 shadow-[0_0_120px_rgba(0,0,0,0.9)] animate-fade-in">
+               <div className="flex justify-between items-start mb-8 md:mb-10">
                  <div>
-                   <h3 className="text-2xl md:text-3xl font-extrabold text-white uppercase tracking-tight leading-none">Ouverture CRM</h3>
-                   <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-3">Partenariat Stratégique iVISION</p>
+                   <h3 className="text-xl md:text-3xl font-extrabold text-white uppercase tracking-tight leading-none">Ouverture CRM</h3>
+                   <p className="text-[9px] md:text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-2 md:mt-3">Partenariat Stratégique iVISION</p>
                  </div>
-                 <button onClick={closeModals} className="w-12 h-12 glass text-slate-500 hover:text-white rounded-2xl flex items-center justify-center transition-all flex-shrink-0 active-scale"><X size={24}/></button>
+                 <button onClick={closeModals} className="w-10 h-10 md:w-12 md:h-12 glass text-slate-500 hover:text-white rounded-xl md:rounded-2xl flex items-center justify-center transition-all flex-shrink-0 active-scale"><X size={20}/></button>
                </div>
-               <form onSubmit={(e) => { e.preventDefault(); onAddClient(formData); closeModals(); }} className="space-y-6">
-                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                    <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2">Contact Principal</label>
-                        <input required className="w-full p-5 bg-white/5 border border-white/10 rounded-2xl text-white font-bold outline-none focus:border-emerald-400 text-sm transition-all" placeholder="Nom complet" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+               <form onSubmit={(e) => { e.preventDefault(); onAddClient(formData); closeModals(); }} className="space-y-4 md:space-y-6">
+                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-5">
+                    <div className="space-y-1.5 md:space-y-2">
+                        <label className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2">Contact Principal</label>
+                        <input required className="w-full p-4 md:p-5 bg-white/5 border border-white/10 rounded-xl md:rounded-2xl text-white font-bold outline-none focus:border-emerald-400 text-xs md:text-sm transition-all" placeholder="Nom complet" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
                     </div>
-                    <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2">Organisation</label>
-                        <input className="w-full p-5 bg-white/5 border border-white/10 rounded-2xl text-white font-bold outline-none focus:border-emerald-400 text-sm transition-all" placeholder="Entreprise" value={formData.company} onChange={e => setFormData({...formData, company: e.target.value})} />
-                    </div>
-                 </div>
-                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                    <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center"><Mail size={12} className="mr-2 text-emerald-400"/> Email Pro</label>
-                        <input type="email" className="w-full p-5 bg-white/5 border border-white/10 rounded-2xl text-white font-bold outline-none focus:border-emerald-400 text-sm transition-all" placeholder="mail@pro.com" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center"><Phone size={12} className="mr-2 text-emerald-400"/> Téléphone</label>
-                        <input type="tel" className="w-full p-5 bg-white/5 border border-white/10 rounded-2xl text-white font-bold outline-none focus:border-emerald-400 text-sm transition-all" placeholder="+213..." value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
+                    <div className="space-y-1.5 md:space-y-2">
+                        <label className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2">Organisation</label>
+                        <input className="w-full p-4 md:p-5 bg-white/5 border border-white/10 rounded-xl md:rounded-2xl text-white font-bold outline-none focus:border-emerald-400 text-xs md:text-sm transition-all" placeholder="Entreprise" value={formData.company} onChange={e => setFormData({...formData, company: e.target.value})} />
                     </div>
                  </div>
-                 <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center"><MapPin size={12} className="mr-2 text-emerald-400"/> Adresse Siège</label>
-                    <input className="w-full p-5 bg-white/5 border border-white/10 rounded-2xl text-white font-bold outline-none focus:border-emerald-400 text-sm transition-all" placeholder="Localisation géographique" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} />
+                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-5">
+                    <div className="space-y-1.5 md:space-y-2">
+                        <label className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center"><Mail size={12} className="mr-2 text-emerald-400"/> Email Pro</label>
+                        <input type="email" className="w-full p-4 md:p-5 bg-white/5 border border-white/10 rounded-xl md:rounded-2xl text-white font-bold outline-none focus:border-emerald-400 text-xs md:text-sm transition-all" placeholder="mail@pro.com" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
+                    </div>
+                    <div className="space-y-1.5 md:space-y-2">
+                        <label className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center"><Phone size={12} className="mr-2 text-emerald-400"/> Téléphone</label>
+                        <input type="tel" className="w-full p-4 md:p-5 bg-white/5 border border-white/10 rounded-xl md:rounded-2xl text-white font-bold outline-none focus:border-emerald-400 text-xs md:text-sm transition-all" placeholder="+213..." value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
+                    </div>
                  </div>
-                 <button className="w-full py-6 bg-emerald-400 text-slate-950 font-black rounded-3xl shadow-xl active-scale uppercase text-[11px] tracking-[0.3em] mt-6 hover:bg-emerald-300 transition-all shadow-emerald-500/30">Activer le Compte Partenaire</button>
+                 <div className="space-y-1.5 md:space-y-2">
+                    <label className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center"><MapPin size={12} className="mr-2 text-emerald-400"/> Adresse Siège</label>
+                    <input className="w-full p-4 md:p-5 bg-white/5 border border-white/10 rounded-xl md:rounded-2xl text-white font-bold outline-none focus:border-emerald-400 text-xs md:text-sm transition-all" placeholder="Localisation géographique" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} />
+                 </div>
+                 <button className="w-full py-5 md:py-6 bg-emerald-400 text-slate-950 font-black rounded-2xl md:rounded-3xl shadow-xl active-scale uppercase text-[10px] md:text-[11px] tracking-[0.3em] mt-2 md:mt-6 hover:bg-emerald-300 transition-all shadow-emerald-500/30">Activer le Compte Partenaire</button>
                </form>
             </div>
           </div>
