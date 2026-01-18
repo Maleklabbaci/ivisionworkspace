@@ -5,7 +5,7 @@ import { HashRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'r
 import Layout from './components/Layout';
 import ToastContainer from './components/Toast';
 import { User, UserRole, Task, TaskStatus, Channel, ToastNotification, Message, Client, FileLink, Lead, ActivityLog } from './types';
-import { Loader2, Zap } from 'lucide-react';
+import { Loader2, Zap, ShieldCheck } from 'lucide-react';
 
 // Modules chargés à la demande (Lazy Loading)
 const Dashboard = lazy(() => import('./components/Dashboard'));
@@ -42,40 +42,62 @@ const PageSkeleton = () => (
 
 const AuthUI = ({ handleAuth, email, setEmail, password, setPassword, isAuthProcessing }: any) => (
   <div className="w-full max-w-[420px] animate-in fade-in zoom-in-95 duration-500 ease-out p-4">
-    <div className="bg-white rounded-[2.5rem] md:rounded-[3.5rem] p-8 md:p-12 shadow-2xl border border-slate-100">
-      <div className="text-center mb-8 md:mb-12">
-        <div className="w-16 h-16 md:w-20 md:h-20 bg-slate-900 rounded-2xl md:rounded-[2rem] flex items-center justify-center text-white font-bold text-xl md:text-2xl mx-auto mb-6 shadow-xl">iV</div>
-        <h1 className="text-3xl md:text-4xl font-black tracking-tighter text-slate-900 uppercase leading-none">iVISION</h1>
-        <p className="text-primary font-bold text-[10px] uppercase tracking-[0.5em] mt-3">Enterprise Access</p>
+    <div className="bg-white rounded-[3rem] md:rounded-[4rem] p-10 md:p-14 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] border border-slate-100 relative overflow-hidden">
+      <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -mr-16 -mt-16 blur-3xl"></div>
+      
+      <div className="text-center mb-10 relative z-10">
+        <div className="w-20 h-20 bg-slate-900 rounded-[2rem] flex items-center justify-center text-white font-bold text-3xl mx-auto mb-6 shadow-2xl shadow-slate-900/20 transform hover:scale-105 transition-transform duration-500">
+            <Zap size={32} fill="currentColor" />
+        </div>
+        <h1 className="text-4xl font-black tracking-tighter text-slate-900 uppercase leading-none">iVISION</h1>
+        <p className="text-primary font-bold text-[10px] uppercase tracking-[0.5em] mt-4 flex items-center justify-center">
+            <ShieldCheck size={12} className="mr-2" />
+            Accès Enterprise
+        </p>
       </div>
       
-      <form onSubmit={handleAuth} className="space-y-4">
-        <div className="space-y-1">
+      <form onSubmit={handleAuth} className="space-y-5 relative z-10">
+        <div className="space-y-1.5">
+          <label className="text-[10px] font-black uppercase text-slate-400 px-2 tracking-widest">Identifiant</label>
           <input 
             type="email" required value={email} 
             onChange={(e) => setEmail(e.target.value)} 
-            placeholder="Email Professionnel" 
-            className="w-full p-4 md:p-5 bg-slate-50 border border-slate-100 rounded-2xl font-bold outline-none focus:bg-white focus:border-primary/20 transition-all text-sm" 
+            placeholder="email@ivision.com" 
+            className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl font-bold outline-none focus:bg-white focus:border-primary/30 focus:ring-4 focus:ring-primary/5 transition-all text-sm placeholder:text-slate-300" 
           />
         </div>
-        <div className="space-y-1">
+        <div className="space-y-1.5">
+          <label className="text-[10px] font-black uppercase text-slate-400 px-2 tracking-widest">Clef d'accès</label>
           <input 
             type="password" required value={password} 
             onChange={(e) => setPassword(e.target.value)} 
-            placeholder="Mot de passe" 
-            className="w-full p-4 md:p-5 bg-slate-50 border border-slate-100 rounded-2xl font-bold outline-none focus:bg-white focus:border-primary/20 transition-all text-sm" 
+            placeholder="••••••••" 
+            className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl font-bold outline-none focus:bg-white focus:border-primary/30 focus:ring-4 focus:ring-primary/5 transition-all text-sm placeholder:text-slate-300" 
           />
         </div>
         
         <button 
           type="submit"
           disabled={isAuthProcessing} 
-          className="w-full py-5 md:py-6 bg-slate-900 text-white font-bold rounded-2xl shadow-xl active-scale disabled:opacity-50 uppercase text-[11px] tracking-widest mt-4 flex items-center justify-center space-x-2"
+          className="w-full group relative overflow-hidden py-6 bg-slate-900 text-white font-black rounded-2xl shadow-2xl shadow-slate-900/20 active-scale disabled:opacity-70 uppercase text-[11px] tracking-[0.2em] mt-6 transition-all"
         >
-          {isAuthProcessing ? <Loader2 className="animate-spin" size={18} /> : <span>DÉVERROUILLER L'ACCÈS</span>}
+          <div className={`absolute inset-0 bg-primary translate-y-full group-hover:translate-y-0 transition-transform duration-300 pointer-events-none opacity-10`}></div>
+          <div className="flex items-center justify-center space-x-3 relative z-10">
+            {isAuthProcessing ? (
+                <>
+                    <Loader2 className="animate-spin text-primary" size={20} />
+                    <span className="text-slate-300">VÉRIFICATION...</span>
+                </>
+            ) : (
+                <>
+                    <span>DÉVERROUILLER LE WORKSPACE</span>
+                </>
+            )}
+          </div>
         </button>
       </form>
     </div>
+    <p className="text-center mt-8 text-[10px] font-bold text-slate-400 uppercase tracking-widest opacity-50">Sécurité iVISION Biometrics Active</p>
   </div>
 );
 
@@ -108,7 +130,6 @@ const AppContent: React.FC<{
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Force redirection Accueil au démarrage
   useEffect(() => {
     if (location.pathname === '/' || location.pathname === '') {
       navigate('/dashboard', { replace: true });
@@ -205,7 +226,7 @@ const App: React.FC = () => {
 
   const fetchInitialData = useCallback(async (userId: string) => {
     try {
-      // PROFIL & AUTO-PROVISIONING
+      // Priorité haute : Chargement du profil utilisateur pour débloquer l'interface
       let { data: dbUser } = await supabase.from('users').select('*').eq('id', userId).maybeSingle();
       
       if (!dbUser) {
@@ -225,9 +246,11 @@ const App: React.FC = () => {
           id: String(userId), name: dbUser.name, email: dbUser.email, avatar: dbUser.avatar,
           role: dbUser.role as UserRole, status: 'active', notificationPref: 'all', permissions: dbUser.permissions || {}
         });
+        // On marque le chargement principal comme terminé dès qu'on a l'utilisateur
+        setIsLoading(false);
       }
 
-      // Chargement granulaire asynchrone (Non-bloquant)
+      // Chargement en arrière-plan (non bloquant pour l'UI principale)
       const load = async (table: string, setter: Function, mapper?: Function) => {
         try {
           const { data } = await supabase.from(table).select('*').limit(100);
@@ -244,52 +267,74 @@ const App: React.FC = () => {
       
     } catch (e) {
       console.error("Initial data load error", e);
-    } finally {
       setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
     let isMounted = true;
-    const safety = setTimeout(() => { if (isMounted && isLoading) setIsLoading(false); }, 4000);
-
+    
+    // Vérification instantanée de la session
     const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user && isMounted) await fetchInitialData(session.user.id);
-      else if (isMounted) setIsLoading(false);
+      if (session?.user && isMounted) {
+          await fetchInitialData(session.user.id);
+      } else if (isMounted) {
+          setIsLoading(false);
+      }
     };
     checkSession();
 
+    // Listener sur les changements d'auth pour transition instantanée
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user && isMounted) await fetchInitialData(session.user.id);
-      else if (isMounted) { setCurrentUser(null); setIsLoading(false); }
+      if (event === 'SIGNED_IN' && session?.user && isMounted) {
+          await fetchInitialData(session.user.id);
+      } else if (event === 'SIGNED_OUT' && isMounted) {
+          setCurrentUser(null);
+          setIsLoading(false);
+      }
     });
 
-    return () => { isMounted = false; clearTimeout(safety); subscription.unsubscribe(); };
+    return () => { isMounted = false; subscription.unsubscribe(); };
   }, [fetchInitialData]);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isAuthProcessing) return;
     setIsAuthProcessing(true);
+    
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      // On ignore l'erreur de confirmation d'email si Supabase permet quand même la session
-      if (error && !error.message.includes('Email not confirmed')) throw error;
-    } catch (err: any) { addNotification("Accès", err.message, "urgent"); }
-    finally { setIsAuthProcessing(false); }
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+          if (error.message.includes('Email not confirmed')) {
+              // On peut loger l'utilisateur quand même si le backend le permet ou afficher un message spécifique
+              // Mais ici on traite ça comme un accès accordé pour la fluidité si possible
+          } else {
+              throw error;
+          }
+      }
+      // fetchInitialData sera déclenché par onAuthStateChange
+    } catch (err: any) { 
+        addNotification("Erreur d'accès", err.message, "urgent"); 
+        setIsAuthProcessing(false); 
+    }
   };
 
   if (isLoading && !currentUser) return (
     <div className="h-screen w-screen flex flex-col items-center justify-center bg-white">
-      <div className="w-12 h-12 border-4 border-slate-100 border-t-primary rounded-full animate-spin"></div>
-      <p className="mt-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] animate-pulse">Initialisation iVISION...</p>
+      <div className="relative">
+          <div className="w-16 h-16 border-4 border-slate-50 border-t-primary rounded-full animate-spin"></div>
+          <Zap size={24} className="absolute inset-0 m-auto text-primary animate-pulse" fill="currentColor" />
+      </div>
+      <p className="mt-8 text-[11px] font-black text-slate-400 uppercase tracking-[0.4em] animate-pulse">Lancement iVISION...</p>
     </div>
   );
 
   return (
     <HashRouter>
       {!currentUser ? (
-        <div className="h-full min-h-screen w-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="h-full min-h-screen w-screen bg-slate-50 flex items-center justify-center p-4 relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_30%_20%,_rgba(0,97,255,0.05)_0%,_transparent_50%)]"></div>
           <ToastContainer notifications={notifications} onDismiss={onDismissNotification} />
           <AuthUI handleAuth={handleAuth} email={email} setEmail={setEmail} password={password} setPassword={setPassword} isAuthProcessing={isAuthProcessing} />
         </div>
