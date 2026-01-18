@@ -42,11 +42,12 @@
       
       html, body {
         height: 100%;
-        height: 100dvh; /* Dynamic viewport height for mobile browsers */
+        height: 100dvh; /* Dynamic height for mobile browsers */
         width: 100%;
         background-color: #ffffff;
         color: #0F172A;
-        overflow: hidden; /* Lock main body to use inner scrollbox */
+        overflow: hidden;
+        overscroll-behavior: none;
       }
 
       #root { 
@@ -57,7 +58,7 @@
       }
 
       button, a, input, select, textarea {
-        touch-action: manipulation; /* Remove 300ms delay */
+        touch-action: manipulation;
       }
 
       .active-scale:active { transform: scale(0.96); opacity: 0.9; }
@@ -71,20 +72,6 @@
       @keyframes modalFadeIn {
         from { opacity: 0; transform: translateY(30px) scale(0.98); }
         to { opacity: 1; transform: translateY(0) scale(1); }
-      }
-
-      .card-formal {
-        background: #ffffff;
-        border: 1px solid #E2E8F0;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      }
-
-      @media (min-width: 1024px) {
-        .card-formal:hover {
-          border-color: #0061FF;
-          box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.05);
-          transform: translateY(-4px);
-        }
       }
 
       .glass-card {

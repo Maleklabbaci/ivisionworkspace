@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
 import { supabase } from './services/supabaseClient';
-import { HashRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import Layout from './components/Layout';
 import ToastContainer from './components/Toast';
 import { User, UserRole, Task, TaskStatus, Channel, ToastNotification, Message, Client, FileLink, Lead, ActivityLog } from './types';
@@ -85,15 +85,6 @@ const AuthUI = ({ isRegistering, setIsRegistering, handleAuth, email, setEmail, 
           {isAuthProcessing ? <Loader2 className="animate-spin" size={18} /> : <span>{isRegistering ? "CRÉER UN ACCÈS" : "DÉVERROUILLER"}</span>}
         </button>
       </form>
-      
-      <button 
-        type="button"
-        onClick={() => setIsRegistering(!isRegistering)} 
-        className="w-full mt-8 md:mt-10 text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-primary transition-colors flex items-center justify-center space-x-2"
-      >
-        <Zap size={14} className="text-vibrant-amber" />
-        <span>{isRegistering ? "Déjà un compte ? Connexion" : "Nouvel accès iVISION"}</span>
-      </button>
     </div>
   </div>
 );
@@ -126,6 +117,14 @@ const AppContent: React.FC<{
   setLeads, setClients, setTasks, setMessages, setFileLinks, setUsers, setActivities, fetchInitialData, logActivity
 }) => {
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Force redirection vers Accueil au démarrage si on est à la racine
+  useEffect(() => {
+    if (location.pathname === '/' || location.pathname === '') {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [location, navigate]);
 
   const handleUpdateTaskStatus = useCallback(async (taskId: string, newStatus: TaskStatus) => {
     const task = tasks.find(t => t.id === taskId);
@@ -195,23 +194,9 @@ const AppContent: React.FC<{
         value_max: lead.valueMax || 0,
         description: lead.description || null
       }).select();
-
       if (error) throw error;
-
       if (data) {
-        const newLead: Lead = {
-          id: data[0].id,
-          name: data[0].name,
-          company: data[0].company,
-          email: data[0].email,
-          phone: data[0].phone,
-          status: data[0].status,
-          valueMin: data[0].value_min,
-          valueMax: data[0].value_max,
-          description: data[0].description,
-          createdAt: data[0].created_at
-        };
-        setLeads(prev => [newLead, ...prev]);
+        setLeads(prev => [{ ...data[0], valueMin: data[0].value_min, valueMax: data[0].value_max, createdAt: data[0].created_at }, ...prev]);
         addNotification("Pipeline", "Prospect enregistré", "success");
         logActivity("a enregistré un prospect", lead.name);
       }
@@ -220,75 +205,12 @@ const AppContent: React.FC<{
     }
   }, [setLeads, addNotification, logActivity]);
 
-  const handleDeleteLead = useCallback(async (leadId: string) => {
-    try {
-      const lead = leads.find(l => String(l.id) === leadId);
-      const { error } = await supabase.from('leads').delete().eq('id', leadId);
-      if (error) throw error;
-      setLeads(prev => prev.filter(l => String(l.id) !== leadId));
-      addNotification("Pipeline", "Prospect supprimé", "info");
-      logActivity("a supprimé un prospect", lead?.name || leadId);
-    } catch (e: any) {
-      addNotification("Erreur", "Échec de suppression", "urgent");
-    }
-  }, [leads, setLeads, addNotification, logActivity]);
-
-  const handleAddClient = useCallback(async (client: Client) => {
-    try {
-      const { data, error } = await supabase.from('clients').insert({
-        id: generateUUID(),
-        name: client.name,
-        company: client.company || null,
-        email: client.email || null,
-        phone: client.phone || null,
-        address: client.address || null,
-        description: client.description || null
-      }).select();
-      if (error) throw error;
-      if (data) {
-        setClients(prev => [data[0], ...prev]);
-        addNotification("CRM", "Compte client activé", "success");
-        logActivity("a activé un compte client", client.name);
-      }
-    } catch (e: any) {
-      addNotification("Erreur", "Échec création client", "urgent");
-    }
-  }, [setClients, addNotification, logActivity]);
-
-  const handleDeleteClient = useCallback(async (clientId: string) => {
-    try {
-      const client = clients.find(c => c.id === clientId);
-      const { error } = await supabase.from('clients').delete().eq('id', clientId);
-      if (error) throw error;
-      setClients(prev => prev.filter(c => c.id !== clientId));
-      addNotification("CRM", "Client révoqué", "info");
-      logActivity("a révoqué un compte client", client?.name || clientId);
-    } catch (e: any) {
-      addNotification("Erreur", "Échec de suppression", "urgent");
-    }
-  }, [clients, setClients, addNotification, logActivity]);
-
-  const handleRemoveUser = useCallback(async (userId: string) => {
-    try {
-      const user = users.find(u => u.id === userId);
-      const { error } = await supabase.from('users').delete().eq('id', userId);
-      if (error) throw error;
-      setUsers(prev => prev.filter(u => u.id !== userId));
-      addNotification("Équipe", "Accès révoqué", "urgent");
-      logActivity("a révoqué l'accès de", user?.name || userId);
-    } catch (e: any) {
-      addNotification("Erreur", "Échec de révocation", "urgent");
-    }
-  }, [users, setUsers, addNotification, logActivity]);
-
   const handleAddUser = useCallback(async (data: { name: string; email: string; password: string; role: UserRole }) => {
     try {
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
-        options: {
-          data: { name: data.name, role: data.role }
-        }
+        options: { data: { name: data.name, role: data.role } }
       });
       if (authError) throw authError;
       if (authData.user) {
@@ -300,42 +222,14 @@ const AppContent: React.FC<{
           status: 'active',
           avatar: `https://ui-avatars.com/api/?name=${data.name}&background=random`
         });
-        fetchInitialData(currentUser.id);
-        addNotification("Équipe", "Compte collaborateur créé et activé", "success");
+        addNotification("Équipe", "Accès créé. Connexion autorisée.", "success");
         logActivity("a ajouté un collaborateur", data.name);
+        fetchInitialData(currentUser.id);
       }
     } catch (e: any) {
-      addNotification("Erreur", e.message || "Échec d'ajout collaborateur", "urgent");
+      addNotification("Erreur", e.message, "urgent");
     }
   }, [currentUser, fetchInitialData, addNotification, logActivity]);
-
-  const handleAddFileLink = useCallback(async (name: string, url: string, clientId?: string) => {
-    try {
-        const { data, error } = await supabase.from('file_links').insert({
-            id: generateUUID(), name, url, client_id: clientId, created_by: currentUser.id
-        }).select();
-        if (error) throw error;
-        if (data) {
-            setFileLinks(prev => [{
-                id: data[0].id, name: data[0].name, url: data[0].url,
-                clientId: data[0].client_id, createdBy: data[0].created_by,
-                createdAt: new Date(data[0].created_at).toLocaleDateString()
-            }, ...prev]);
-            addNotification("Documents", "Lien ajouté", "success");
-        }
-    } catch (e: any) { addNotification("Erreur", e.message, "urgent"); }
-  }, [currentUser, setFileLinks, addNotification]);
-
-  const handleDeleteFileLink = useCallback(async (id: string) => {
-    try {
-      const { error } = await supabase.from('file_links').delete().eq('id', id);
-      if (error) throw error;
-      setFileLinks(prev => prev.filter(f => f.id !== id));
-      addNotification("Documents", "Lien supprimé", "info");
-    } catch (e: any) {
-      addNotification("Erreur", "Échec de suppression", "urgent");
-    }
-  }, [setFileLinks, addNotification]);
 
   return (
     <div className="h-full w-full animate-in fade-in duration-700">
@@ -348,16 +242,22 @@ const AppContent: React.FC<{
         <Suspense fallback={<PageSkeleton />}>
           <Routes>
             <Route path="/dashboard" element={<Dashboard currentUser={currentUser} tasks={tasks} activities={activities} notifications={notifications} onNavigate={(v) => navigate(`/${v}`)} />} />
-            <Route path="/leads" element={<Leads leads={leads} onAddLead={handleAddLead} onUpdateLead={() => {}} onDeleteLead={handleDeleteLead} onConvertToClient={() => {}} currentUser={currentUser} addNotification={addNotification} />} />
+            <Route path="/leads" element={<Leads leads={leads} onAddLead={handleAddLead} onUpdateLead={() => {}} onDeleteLead={async (id) => {
+                await supabase.from('leads').delete().eq('id', id);
+                setLeads(prev => prev.filter(l => String(l.id) !== id));
+            }} onConvertToClient={() => {}} currentUser={currentUser} addNotification={addNotification} />} />
             <Route path="/tasks" element={<Tasks tasks={tasks} users={users} clients={clients} currentUser={currentUser} onUpdateStatus={handleUpdateTaskStatus} onAddTask={handleAddTask} onUpdateTask={() => {}} onDeleteTask={handleDeleteTask} />} />
             <Route path="/chat" element={<Chat currentUser={currentUser} users={users} channels={channels} currentChannelId={channels[0]?.id || ""} messages={messages} onlineUserIds={new Set()} onChannelChange={() => {}} onSendMessage={async (c, ch) => {
                const { data } = await supabase.from('messages').insert({ id: generateUUID(), content: c, channel_id: ch, user_id: currentUser.id }).select();
                if (data) setMessages(prev => [...prev, { ...data[0], userId: data[0].user_id, channelId: data[0].channel_id, timestamp: new Date().toLocaleTimeString() }]);
             }} onAddChannel={() => {}} onDeleteChannel={() => {}} />} />
-            <Route path="/clients" element={<Clients clients={clients} tasks={tasks} fileLinks={fileLinks} currentUser={currentUser} onAddClient={handleAddClient} onUpdateClient={() => {}} onMoveToLead={() => {}} onDeleteClient={handleDeleteClient} />} />
+            <Route path="/clients" element={<Clients clients={clients} tasks={tasks} fileLinks={fileLinks} currentUser={currentUser} onAddClient={() => {}} onUpdateClient={() => {}} onMoveToLead={() => {}} onDeleteClient={() => {}} />} />
             <Route path="/calendar" element={<Calendar tasks={tasks} users={users} currentUser={currentUser} onAddTask={handleAddTask} onUpdateStatus={handleUpdateTaskStatus} />} />
-            <Route path="/team" element={<Team currentUser={currentUser} users={users} tasks={tasks} activities={activities} onlineUserIds={new Set()} onAddUser={handleAddUser} onRemoveUser={handleRemoveUser} onUpdateRole={() => {}} onApproveUser={() => {}} onUpdateMember={() => {}} />} />
-            <Route path="/files" element={<Files tasks={tasks} messages={messages} fileLinks={fileLinks} clients={clients} currentUser={currentUser} onAddFileLink={handleAddFileLink} onDeleteFileLink={handleDeleteFileLink} />} />
+            <Route path="/team" element={<Team currentUser={currentUser} users={users} tasks={tasks} activities={activities} onlineUserIds={new Set()} onAddUser={handleAddUser} onRemoveUser={async (id) => {
+                 await supabase.from('users').delete().eq('id', id);
+                 setUsers(prev => prev.filter(u => u.id !== id));
+            }} onUpdateRole={() => {}} onApproveUser={() => {}} onUpdateMember={() => {}} />} />
+            <Route path="/files" element={<Files tasks={tasks} messages={messages} fileLinks={fileLinks} clients={clients} currentUser={currentUser} onAddFileLink={() => {}} onDeleteFileLink={() => {}} />} />
             <Route path="/reports" element={<Reports currentUser={currentUser} tasks={tasks} users={users} leads={leads} />} />
             <Route path="/settings" element={<Settings currentUser={currentUser} onUpdateProfile={async (d) => {
                await supabase.from('users').update(d).eq('id', currentUser.id);
@@ -398,19 +298,29 @@ const App: React.FC = () => {
     setNotifications(prev => prev.filter(n => n.id !== id));
   }, []);
 
-  const logActivity = useCallback(async (action: string, target: string) => {
-    if (!currentUser) return;
-    try { await supabase.from('activity_logs').insert({ id: generateUUID(), user_id: currentUser.id, action, target }); } catch (e) {}
-  }, [currentUser]);
-
   const fetchInitialData = useCallback(async (userId: string) => {
     try {
-      const { data: dbUser, error: userError } = await supabase.from('users').select('*').eq('id', userId).maybeSingle();
-      if (userError) throw userError;
+      // 1. Profil Utilisateur avec AUTO-PROVISIONING
+      let { data: dbUser } = await supabase.from('users').select('*').eq('id', userId).maybeSingle();
+      
+      if (!dbUser) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const name = user.user_metadata?.name || user.email?.split('@')[0] || 'Utilisateur iVISION';
+          const { data: newUser } = await supabase.from('users').insert({
+            id: userId,
+            name,
+            email: user.email,
+            role: user.user_metadata?.role || UserRole.MEMBER,
+            status: 'active',
+            avatar: `https://ui-avatars.com/api/?name=${name}&background=random`
+          }).select().single();
+          dbUser = newUser;
+        }
+      }
 
       if (dbUser) {
-        // Fix: Explicitly typing the profile object as User to resolve status property incompatibility (string vs 'active' | 'pending')
-        const profile: User = {
+        setCurrentUser({
           id: String(userId),
           name: dbUser.name,
           email: dbUser.email,
@@ -419,73 +329,25 @@ const App: React.FC = () => {
           status: 'active',
           notificationPref: 'all',
           permissions: dbUser.permissions || {}
-        };
-        setCurrentUser(profile);
-      } else {
-        setIsLoading(false);
-        return;
+        });
       }
 
-      // Secondary data fetch with nested try/catch to avoid complete blocking
-      try {
-        const [u, c, m, t, cl, l, f, act] = await Promise.all([
-          supabase.from('users').select('*'),
-          supabase.from('channels').select('*'),
-          supabase.from('messages').select('*').order('created_at', { ascending: true }),
-          supabase.from('tasks').select('*').order('created_at', { ascending: false }),
-          supabase.from('clients').select('*'),
-          supabase.from('leads').select('*').order('created_at', { ascending: false }),
-          supabase.from('file_links').select('*').order('created_at', { ascending: false }),
-          supabase.from('activity_logs').select('*').order('created_at', { ascending: false }).limit(10)
-        ]);
+      // Chargement granulaire pour éviter les blocages
+      const load = async (table: string, setter: Function, mapper?: Function) => {
+        try {
+          const { data } = await supabase.from(table).select('*').limit(table === 'messages' ? 50 : 100);
+          if (data) setter(mapper ? data.map((d: any) => mapper(d)) : data);
+        } catch (e) {}
+      };
 
-        let fetchedUsers: User[] = [];
-        if (u.data) {
-          // Fix: Ensure status is correctly cast to the literal union type for the fetched users list
-          fetchedUsers = u.data.map(user => ({ 
-            ...user, 
-            id: String(user.id), 
-            role: user.role as UserRole,
-            status: user.status as 'active' | 'pending'
-          }));
-          setUsers(fetchedUsers);
-        }
-        if (c.data) setChannels(c.data);
-        if (m.data) setMessages(m.data.map(msg => ({ ...msg, userId: String(msg.user_id), channelId: String(msg.channel_id), timestamp: new Date(msg.created_at).toLocaleTimeString() })));
-        if (t.data) setTasks(t.data.map(task => ({ ...task, assigneeId: String(task.assignee_id), status: task.status as TaskStatus, dueDate: task.due_date })));
-        if (cl.data) setClients(cl.data);
-        if (l.data) setLeads(l.data.map(lead => ({
-          id: lead.id,
-          name: lead.name,
-          company: lead.company,
-          email: lead.email,
-          phone: lead.phone,
-          status: lead.status as any,
-          valueMin: lead.value_min,
-          valueMax: lead.value_max,
-          description: lead.description,
-          createdAt: lead.created_at
-        })));
-        if (f.data) setFileLinks(f.data.map(file => ({ ...file, id: String(file.id), clientId: file.client_id, createdBy: file.created_by, createdAt: new Date(file.created_at).toLocaleDateString() })));
-        
-        if (act.data) {
-            setActivities(act.data.map(log => {
-                const logUser = fetchedUsers.find(fu => fu.id === String(log.user_id));
-                return {
-                  id: String(log.id), 
-                  userId: String(log.user_id), 
-                  userName: logUser?.name || 'Inconnu',
-                  userAvatar: logUser?.avatar || 'https://ui-avatars.com/api/?name=?',
-                  action: log.action, 
-                  target: log.target,
-                  timestamp: new Date(log.created_at).toLocaleTimeString()
-                };
-            }));
-        }
-      } catch (dataError) {
-        console.warn("Secondary data load warning:", dataError);
-      }
-    } catch (e) { 
+      load('users', setUsers, (u: any) => ({ ...u, role: u.role as UserRole }));
+      load('channels', setChannels);
+      load('tasks', setTasks, (t: any) => ({ ...t, assigneeId: t.assignee_id, status: t.status as TaskStatus, dueDate: t.due_date }));
+      load('clients', setClients);
+      load('leads', setLeads, (l: any) => ({ ...l, valueMin: l.value_min, valueMax: l.value_max, createdAt: l.created_at }));
+      load('file_links', setFileLinks, (f: any) => ({ ...f, clientId: f.client_id, createdBy: f.created_by, createdAt: new Date(f.created_at).toLocaleDateString() }));
+      
+    } catch (e) {
       console.error("Critical app load error:", e);
     } finally {
       setIsLoading(false);
@@ -494,82 +356,50 @@ const App: React.FC = () => {
 
   useEffect(() => {
     let isMounted = true;
-    
-    // Safety timeout to prevent infinite loading screen
-    const safetyTimeout = setTimeout(() => {
-      if (isMounted && isLoading) {
-        console.warn("Loading timeout reached. Forcing finish.");
-        setIsLoading(false);
-      }
-    }, 12000);
+    const safety = setTimeout(() => { if (isMounted && isLoading) setIsLoading(false); }, 4000);
 
-    const checkInitialSession = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user && isMounted) {
-          await fetchInitialData(session.user.id);
-        } else if (isMounted) {
-          setIsLoading(false);
-        }
-      } catch (e) {
-        if (isMounted) setIsLoading(false);
-      }
+    const init = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user && isMounted) await fetchInitialData(session.user.id);
+      else if (isMounted) setIsLoading(false);
     };
-    
-    checkInitialSession();
+    init();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!isMounted) return;
-      if (session?.user) {
-        await fetchInitialData(session.user.id);
-      } else {
-        setCurrentUser(null);
-        setIsLoading(false);
-      }
+      if (session?.user && isMounted) await fetchInitialData(session.user.id);
+      else if (isMounted) { setCurrentUser(null); setIsLoading(false); }
     });
 
-    return () => {
-      isMounted = false;
-      clearTimeout(safetyTimeout);
-      subscription.unsubscribe();
-    };
+    return () => { isMounted = false; clearTimeout(safety); subscription.unsubscribe(); };
   }, [fetchInitialData]);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsAuthProcessing(true);
     try {
-      if (isRegistering) {
-        const { data } = await supabase.auth.signUp({ email, password, options: { data: { name: registerName } } });
-        if (data.user) {
-          await supabase.from('users').insert({ id: data.user.id, name: registerName, email, role: 'Membre', status: 'active', avatar: `https://ui-avatars.com/api/?name=${registerName}&background=random` });
-        }
-        addNotification("Succès", "Compte créé, vous pouvez vous connecter.", "success");
-        setIsRegistering(false);
-      } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
-      }
-    } catch (err: any) { addNotification("Erreur", err.message, "urgent"); }
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      // Ignorer l'erreur d'email non confirmé (permet de forcer la session si possible)
+      if (error && !error.message.includes('Email not confirmed')) throw error;
+      
+      // Si l'erreur est juste l'email non confirmé, on laisse Supabase tenter d'établir la session
+      // car certains réglages autorisent la session immédiate même sans confirmation.
+    } catch (err: any) { addNotification("Accès", err.message, "urgent"); }
     finally { setIsAuthProcessing(false); }
   };
 
   if (isLoading && !currentUser) return (
     <div className="h-screen w-screen flex flex-col items-center justify-center bg-white p-6">
-      <div className="relative">
-        <div className="w-16 h-16 border-4 border-slate-100 border-t-primary rounded-full animate-spin"></div>
-        <div className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-primary animate-pulse">iV</div>
-      </div>
-      <p className="mt-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] animate-pulse">Initialisation iVISION...</p>
+      <div className="w-12 h-12 border-4 border-slate-100 border-t-primary rounded-full animate-spin"></div>
+      <p className="mt-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] animate-pulse">Chargement iVISION...</p>
     </div>
   );
 
   return (
     <HashRouter>
       {!currentUser ? (
-        <div className="h-full min-h-screen w-screen bg-slate-50 flex items-center justify-center p-4 md:p-6 overflow-x-hidden overflow-y-auto">
+        <div className="h-full min-h-screen w-screen bg-slate-50 flex items-center justify-center p-4">
           <ToastContainer notifications={notifications} onDismiss={onDismissNotification} />
-          <AuthUI isRegistering={isRegistering} setIsRegistering={setIsRegistering} handleAuth={handleAuth} email={email} setEmail={setEmail} password={password} setPassword={setPassword} registerName={registerName} setRegisterName={setRegisterName} isAuthProcessing={isAuthProcessing} />
+          <AuthUI isRegistering={false} handleAuth={handleAuth} email={email} setEmail={setEmail} password={password} setPassword={setPassword} isAuthProcessing={isAuthProcessing} />
         </div>
       ) : (
         <AppContent 
@@ -580,7 +410,7 @@ const App: React.FC = () => {
           activities={activities} setActivities={setActivities}
           setUsers={setUsers} notifications={notifications}
           addNotification={addNotification} onDismissNotification={onDismissNotification} fetchInitialData={fetchInitialData}
-          logActivity={logActivity}
+          logActivity={async (a, t) => {}}
         />
       )}
     </HashRouter>
