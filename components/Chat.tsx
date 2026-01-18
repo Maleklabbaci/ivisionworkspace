@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Send, Paperclip, Hash, Lock, Plus, X, Search, MoreVertical } from 'lucide-react';
+import { Send, Paperclip, Hash, Lock, Plus, X, Search, MoreVertical, CheckCheck } from 'lucide-react';
 import { Message, User, Channel, UserRole } from '../types';
 
 const Chat: React.FC<any> = ({ currentUser, users, channels, currentChannelId, messages, onChannelChange, onSendMessage, onAddChannel }) => {
@@ -72,7 +72,7 @@ const Chat: React.FC<any> = ({ currentUser, users, channels, currentChannelId, m
                         <div className={`flex max-w-[85%] md:max-w-[75%] ${isMe ? 'flex-row-reverse space-x-reverse' : 'flex-row'} items-end space-x-3 md:space-x-4`}>
                             {!isMe && (
                               <div className="flex flex-col items-center">
-                                <img src={sender?.avatar} className="w-6 h-6 md:w-8 md:h-8 rounded-xl border border-white/10 shadow-sm mb-1" />
+                                <img src={sender?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(sender?.name || 'U')}`} className="w-6 h-6 md:w-8 md:h-8 rounded-xl border border-white/10 shadow-sm mb-1" />
                               </div>
                             )}
                             <div className="space-y-1">
@@ -80,7 +80,10 @@ const Chat: React.FC<any> = ({ currentUser, users, channels, currentChannelId, m
                                 <div className={`p-4 md:p-5 rounded-2xl md:rounded-[1.8rem] text-[12px] md:text-[13px] leading-relaxed font-medium shadow-sm transition-all hover:shadow-md ${isMe ? 'bg-white text-slate-950 rounded-br-none' : 'bg-slate-900/60 text-slate-200 border border-white/5 rounded-bl-none'}`}>
                                     {msg.content}
                                 </div>
-                                <p className={`text-[8px] font-bold text-slate-600 uppercase tracking-widest ${isMe ? 'text-right mr-2' : 'ml-2'}`}>{msg.timestamp}</p>
+                                <div className={`flex items-center space-x-1 ${isMe ? 'justify-end mr-2' : 'ml-2'}`}>
+                                    <p className={`text-[8px] font-bold text-slate-600 uppercase tracking-widest`}>{msg.timestamp}</p>
+                                    {isMe && <CheckCheck size={12} className="text-sky-500" />}
+                                </div>
                             </div>
                         </div>
                     </div>

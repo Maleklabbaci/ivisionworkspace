@@ -90,7 +90,7 @@ const AppContent: React.FC<any> = ({
       await supabase.auth.signOut();
       setCurrentUser(null);
       addNotification("Système", "Déconnexion réussie. Session révoquée.", "info");
-      // Force reload to clear all states and re-render AuthUI via HashRouter
+      // Force reload to clean all states and ensure redirection to login
       setTimeout(() => window.location.reload(), 100);
     } catch (error) {
       addNotification("Erreur", "Problème lors de la déconnexion.", "urgent");
@@ -103,6 +103,7 @@ const AppContent: React.FC<any> = ({
     return !!(currentUser.permissions as any)?.[permissionKey];
   };
 
+  // CRUD TASKS
   const handleAddTask = async (task: Task) => {
     if (!hasAccess('canCreateTasks')) {
       addNotification("Accès Refusé", "Permission de création requise.", "urgent");
@@ -122,8 +123,6 @@ const AppContent: React.FC<any> = ({
     if (data) {
       setTasks((prev: any) => [mapFromDB('tasks', data), ...prev]);
       addNotification("Système iV", "Mission initialisée.", "success");
-    } else {
-      addNotification("Erreur Task", error.message, "urgent");
     }
   };
 
@@ -141,7 +140,9 @@ const AppContent: React.FC<any> = ({
       status: t.status, 
       description: t.description, 
       priority: t.priority, 
-      type: t.type
+      type: t.type,
+      due_date: t.dueDate,
+      assignee_id: t.assigneeId
     }).eq('id', t.id);
   };
 
@@ -151,6 +152,7 @@ const AppContent: React.FC<any> = ({
     await supabase.from('tasks').delete().eq('id', id);
   };
 
+  // CRUD FILES
   const handleAddFileLink = async (name: string, url: string) => {
     if (!hasAccess('canCreateTasks')) return;
     const { data, error } = await supabase.from('file_links').insert({
@@ -160,8 +162,6 @@ const AppContent: React.FC<any> = ({
     if (data) {
       setFileLinks((prev: any) => [mapFromDB('file_links', data), ...prev]);
       addNotification("Documents", "Actif archivé avec succès.", "success");
-    } else {
-      addNotification("Erreur Document", error.message, "urgent");
     }
   };
 
@@ -174,11 +174,70 @@ const AppContent: React.FC<any> = ({
     if (!error) {
       setFileLinks((prev: any) => prev.filter((f: any) => f.id !== id));
       addNotification("Documents", "Actif révoqué du cloud iVISION.", "info");
-    } else {
-      addNotification("Erreur Suppression", error.message, "urgent");
     }
   };
 
+  // CRUD LEADS
+  const handleAddLead = async (l: any) => {
+    if (!hasAccess('canManageLeads')) return;
+    const { data, error } = await supabase.from('leads').insert({
+      name: l.name, 
+      company: l.company || '', 
+      status: l.status || 'new',
+      email: l.email || '',
+      phone: l.phone || '',
+      value_min: l.valueMin || 0,
+      value_max: l.valueMax || 0,
+      description: l.description || ''
+    }).select().single();
+    if (data) {
+      setLeads((p: any) => [mapFromDB('leads', data), ...p]);
+      addNotification("Leads", "Nouveau lead enregistré.", "success");
+    }
+  };
+
+  const handleUpdateLead = async (l: any) => {
+    if (!hasAccess('canManageLeads')) return;
+    await supabase.from('leads').update({ status: l.status }).eq('id', l.id);
+    setLeads((p: any) => p.map((i: any) => i.id === l.id ? l : i));
+  };
+
+  const handleDeleteLead = async (id: string) => {
+    if (!hasAccess('canManageLeads')) return;
+    const { error } = await supabase.from('leads').delete().eq('id', id);
+    if (!error) {
+      setLeads((p: any) => p.filter((i: any) => i.id !== id));
+      addNotification("Leads", "Lead supprimé.", "info");
+    }
+  };
+
+  // CRUD CLIENTS
+  const handleAddClient = async (c: any) => {
+    if (!hasAccess('canManageClients')) return;
+    const { data, error } = await supabase.from('clients').insert({
+      name: c.name, 
+      company: c.company || '',
+      email: c.email || '',
+      phone: c.phone || '',
+      address: c.address || '',
+      description: c.description || ''
+    }).select().single();
+    if (data) {
+      setClients((p: any) => [data, ...p]);
+      addNotification("CRM", "Client ajouté avec succès.", "success");
+    }
+  };
+
+  const handleDeleteClient = async (id: string) => {
+    if (!hasAccess('canManageClients')) return;
+    const { error } = await supabase.from('clients').delete().eq('id', id);
+    if (!error) {
+      setClients((p: any) => p.filter((c: any) => c.id !== id));
+      addNotification("CRM", "Fiche client révoquée.", "info");
+    }
+  };
+
+  // CRUD TEAM
   const handleAddUser = async (user: any) => {
     if (!hasAccess('canManageTeam')) return;
     const { data, error } = await supabase.from('users').insert({
@@ -187,14 +246,12 @@ const AppContent: React.FC<any> = ({
       role: user.role,
       permissions: user.permissions,
       status: 'active',
-      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=10b981&color=fff&bold=true`
+      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=0EA5E9&color=fff&bold=true`
     }).select().single();
 
     if (data) {
       setUsers((prev: any) => [...prev, mapFromDB('users', data)]);
       addNotification("Équipe", `Accès activé pour ${user.name}.`, "success");
-    } else {
-      addNotification("Erreur Team", error.message, "urgent");
     }
   };
 
@@ -228,8 +285,8 @@ const AppContent: React.FC<any> = ({
           <Route path="/dashboard" element={<Dashboard currentUser={currentUser} tasks={tasks} onNavigate={(v: any) => navigate(`/${v}`)} />} />
           <Route path="/tasks" element={<Tasks tasks={tasks} users={users} clients={clients} currentUser={currentUser} onAddTask={handleAddTask} onUpdateStatus={handleUpdateTaskStatus} onUpdateTask={handleUpdateTask} onDeleteTask={handleDeleteTask} />} />
           <Route path="/chat" element={<Chat currentUser={currentUser} users={users} channels={channels} currentChannelId={channels[0]?.id || ""} messages={messages} onSendMessage={async (c:string, cid:string) => { if(!hasAccess('canManageChat')) return; const { data } = await supabase.from('messages').insert({content:c, channel_id:cid, user_id:currentUser.id}).select().single(); if(data) setMessages((p:any) => [...p, mapFromDB('messages', data)]); }} onAddChannel={async (ch:any) => { if(!hasAccess('canManageChannels')) return; const { data } = await supabase.from('channels').insert({name:ch.name, type:ch.type}).select().single(); if(data) setChannels((p:any) => [...p, data]); }} onChannelChange={()=>{}} />} />
-          <Route path="/leads" element={<Leads leads={leads} onAddLead={async (l:any) => { if(!hasAccess('canManageLeads')) return; const { data } = await supabase.from('leads').insert({name:l.name, company:l.company, status:l.status}).select().single(); if(data) setLeads((p:any) => [mapFromDB('leads', data), ...p]); }} onUpdateLead={async (l:any) => { await supabase.from('leads').update({status:l.status}).eq('id', l.id); setLeads((p:any) => p.map((i:any) => i.id === l.id ? l : i)); }} onDeleteLead={async (id:string) => { if(!hasAccess('canManageLeads')) return; await supabase.from('leads').delete().eq('id', id); setLeads((p:any) => p.filter((i:any) => i.id !== id)); }} currentUser={currentUser} />} />
-          <Route path="/clients" element={<Clients clients={clients} tasks={tasks} onAddClient={async (c:any) => { if(!hasAccess('canManageClients')) return; const { data } = await supabase.from('clients').insert({name:c.name, company:c.company}).select().single(); if(data) setClients((p:any) => [data, ...p]); }} onDeleteClient={async (id:string) => { if(!hasAccess('canManageClients')) return; await supabase.from('clients').delete().eq('id', id); setClients((p:any) => p.filter((c:any) => c.id !== id)); }} currentUser={currentUser} />} />
+          <Route path="/leads" element={<Leads leads={leads} onAddLead={handleAddLead} onUpdateLead={handleUpdateLead} onDeleteLead={handleDeleteLead} currentUser={currentUser} />} />
+          <Route path="/clients" element={<Clients clients={clients} tasks={tasks} onAddClient={handleAddClient} onDeleteClient={handleDeleteClient} currentUser={currentUser} />} />
           <Route path="/calendar" element={<Calendar tasks={tasks} users={users} clients={clients} currentUser={currentUser} onAddTask={handleAddTask} onUpdateStatus={handleUpdateTaskStatus} />} />
           <Route path="/team" element={<Team currentUser={currentUser} users={users} onAddUser={handleAddUser} onRemoveUser={handleRemoveUser} onUpdateMember={handleUpdateMember} />} />
           <Route path="/files" element={<Files fileLinks={fileLinks} onAddFileLink={handleAddFileLink} onDeleteFileLink={handleDeleteFileLink} currentUser={currentUser} />} />
