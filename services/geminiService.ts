@@ -1,20 +1,13 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 
-// Variable locale pour stocker la clé API récupérée de la base de données
-let activeApiKey: string | null = null;
-
 /**
- * Définit la clé API à utiliser pour les appels Gemini.
- * Cette fonction est appelée par App.tsx lors du chargement des données Admin.
+ * Initialise le client Google GenAI.
+ * La clé API est récupérée exclusivement depuis process.env.API_KEY.
+ * Pour le développeur : il suffit de s'assurer que process.env.API_KEY est défini globalement.
  */
-export const setGeminiApiKey = (key: string) => {
-  activeApiKey = key;
-};
-
 const getAIClient = () => {
-  // On utilise la clé dynamique si disponible, sinon on retombe sur l'env (sécurité)
-  const key = activeApiKey || process.env.API_KEY;
+  const key = process.env.API_KEY;
   if (!key) {
     throw new Error("Clé API Gemini non configurée.");
   }
@@ -22,7 +15,7 @@ const getAIClient = () => {
 };
 
 /**
- * Nettoie la sortie de l'IA pour ne garder que le JSON pur.
+ * Nettoie la sortie de l'IA pour ne garder que le JSON pur si nécessaire.
  */
 const sanitizeJson = (text: string): string => {
   try {
@@ -40,13 +33,13 @@ export const generateMarketingInsight = async (context: string): Promise<string>
     
     const response = await ai.models.generateContent({
       model: model,
-      contents: `Expert Marketing. Analyse ces KPIs iVISION et donne 3 conseils courts (max 50 mots total) : ${context}`,
+      contents: `Tu es l'analyste stratégique iVISION. Analyse ces données et donne un conseil direct, sans bla-bla, max 30 mots : ${context}`,
     });
 
-    return response.text?.trim() || "Analyse IA indisponible.";
+    return response.text?.trim() || "Analyse indisponible.";
   } catch (error) {
     console.error("Gemini Error:", error);
-    return "L'IA iVISION nécessite une clé API valide (configurée par l'Admin).";
+    return "Intelligence iV momentanément hors ligne.";
   }
 };
 
@@ -57,10 +50,7 @@ export const parseLeadFromText = async (text: string): Promise<any> => {
     
     const response = await ai.models.generateContent({
       model: model,
-      contents: `Tu es un assistant iVISION spécialisé en extraction de données. 
-      Extrais les infos suivantes du texte : "${text}"
-      Renvoie UNIQUEMENT un objet JSON avec les clés : name, company, email, phone, valueMin (nombre), valueMax (nombre), description.
-      Si un budget est "50k", écris 50000.`,
+      contents: `Extrais les données de prospect du texte suivant : "${text}"`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -79,8 +69,7 @@ export const parseLeadFromText = async (text: string): Promise<any> => {
       }
     });
 
-    const cleanText = sanitizeJson(response.text || "{}");
-    return JSON.parse(cleanText);
+    return JSON.parse(sanitizeJson(response.text || "{}"));
   } catch (error) {
     console.error("Extraction Error:", error);
     throw error;

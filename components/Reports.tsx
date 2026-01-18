@@ -2,7 +2,8 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import { User, UserRole, Task, TaskStatus, Lead } from '../types';
-import { Target, Zap, AlertCircle, TrendingUp, Loader2, Database, Shield, Sparkles, Cpu, Activity, ArrowUpRight } from 'lucide-react';
+import { Target, Zap, AlertCircle, TrendingUp, Loader2, Database, Shield, Sparkles, Cpu, Activity, ArrowUpRight, Wand2, X } from 'lucide-react';
+import { generateMarketingInsight } from '../services/geminiService';
 
 interface ReportsProps {
     currentUser: User;
@@ -13,8 +14,9 @@ interface ReportsProps {
 
 const Reports: React.FC<ReportsProps> = ({ currentUser, tasks = [], users = [], leads = [] }) => {
   const [isSyncing, setIsSyncing] = useState(true);
+  const [isAnalysing, setIsAnalysing] = useState(false);
+  const [strategyReport, setStrategyReport] = useState<string | null>(null);
 
-  // Simulation d'une connexion sécurisée à la DB iVISION
   useEffect(() => {
     const timer = setTimeout(() => setIsSyncing(false), 800);
     return () => clearTimeout(timer);
@@ -32,16 +34,32 @@ const Reports: React.FC<ReportsProps> = ({ currentUser, tasks = [], users = [], 
   }, [tasks, leads]);
 
   const taskData = useMemo(() => [
-    { name: 'À faire', value: tasks.filter(t => t.status === TaskStatus.TODO).length, color: '#6366F1' }, // Indigo
-    { name: 'En cours', value: tasks.filter(t => t.status === TaskStatus.IN_PROGRESS).length, color: '#0061FF' }, // Primary
-    { name: 'Terminé', value: tasks.filter(t => t.status === TaskStatus.DONE).length, color: '#10B981' }, // Emerald
+    { name: 'À faire', value: tasks.filter(t => t.status === TaskStatus.TODO).length, color: '#6366F1' }, 
+    { name: 'En cours', value: tasks.filter(t => t.status === TaskStatus.IN_PROGRESS).length, color: '#0061FF' }, 
+    { name: 'Terminé', value: tasks.filter(t => t.status === TaskStatus.DONE).length, color: '#10B981' }, 
   ].filter(d => d.value > 0), [tasks]);
+
+  const handleGenerateStrategy = async () => {
+    setIsAnalysing(true);
+    try {
+        const context = `
+            Tâches complétées: ${tasks.filter(t => t.status === TaskStatus.DONE).length} / ${tasks.length}.
+            Leads qualifiés: ${leads.filter(l => l.status === 'qualified').length} / ${leads.length}.
+            Valeur Pipeline: ${stats.pipelineValue} DZD.
+        `;
+        const report = await generateMarketingInsight(`Génère une analyse stratégique iVISION iV pour ce dashboard : ${context}. Sois pro, direct et donne 2 actions prioritaires.`);
+        setStrategyReport(report);
+    } catch (e) {
+        console.error(e);
+    } finally {
+        setIsAnalysing(false);
+    }
+  };
 
   if (isSyncing) {
     return (
       <div className="h-[70vh] flex flex-col items-center justify-center space-y-8 animate-in fade-in duration-500">
           <div className="relative">
-              {/* Animation Pulse AI */}
               <div className="absolute inset-0 bg-primary/20 rounded-full animate-ping scale-150"></div>
               <div className="relative w-24 h-24 bg-white rounded-3xl shadow-2xl border border-slate-100 flex items-center justify-center">
                   <Cpu size={40} className="text-primary animate-pulse" />
@@ -76,13 +94,30 @@ const Reports: React.FC<ReportsProps> = ({ currentUser, tasks = [], users = [], 
               </div>
               <p className="text-slate-400 font-bold text-[10px] uppercase tracking-[0.4em] ml-11">Moteur d'analyse iVISION • Temps Réel</p>
           </div>
-          <div className="flex items-center space-x-4">
-              <div className="px-4 py-2 bg-slate-50 rounded-xl border border-slate-100 flex items-center space-x-3">
-                  <Activity size={16} className="text-vibrant-indigo" />
-                  <span className="text-[10px] font-bold uppercase text-slate-500 tracking-wider">Flux Actif</span>
+          <button 
+            onClick={handleGenerateStrategy}
+            disabled={isAnalysing}
+            className="px-6 py-4 bg-slate-900 text-white font-black rounded-2xl flex items-center space-x-3 active-scale text-[10px] uppercase tracking-widest disabled:opacity-50"
+          >
+            {isAnalysing ? <Loader2 className="animate-spin" size={16} /> : <Wand2 size={16} />}
+            <span>{isAnalysing ? "ANALYSE..." : "GÉNÉRER ANALYSE IA"}</span>
+          </button>
+      </div>
+
+      {strategyReport && (
+          <div className="bg-gradient-to-br from-vibrant-indigo to-primary p-1 rounded-[3rem] animate-in zoom-in-95 duration-500 shadow-2xl">
+              <div className="bg-white p-10 rounded-[2.8rem] relative">
+                  <button onClick={() => setStrategyReport(null)} className="absolute top-6 right-6 p-2 text-slate-300 hover:text-slate-900 transition-colors"><X size={20}/></button>
+                  <div className="flex items-center space-x-3 mb-6">
+                      <Sparkles size={20} className="text-vibrant-amber" />
+                      <h4 className="font-black text-slate-900 text-sm uppercase tracking-widest">Analyse Stratégique IA iV</h4>
+                  </div>
+                  <div className="text-slate-700 font-bold text-lg leading-relaxed italic border-l-4 border-vibrant-indigo pl-6 py-2">
+                    {strategyReport}
+                  </div>
               </div>
           </div>
-      </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm group hover:border-primary/20 transition-all">
@@ -122,7 +157,7 @@ const Reports: React.FC<ReportsProps> = ({ currentUser, tasks = [], users = [], 
                     {new Intl.NumberFormat('fr-FR').format(stats.pipelineValue)} DZD
                   </h4>
                 </div>
-                <button className="text-[10px] font-bold text-white/40 uppercase tracking-widest hover:text-white transition-colors mt-8">Voir Détails Finance</button>
+                <div className="text-[10px] font-bold text-white/40 uppercase tracking-widest mt-8">Données de Transaction iV</div>
               </div>
           </div>
       </div>
@@ -146,14 +181,6 @@ const Reports: React.FC<ReportsProps> = ({ currentUser, tasks = [], users = [], 
                       </PieChart>
                   </ResponsiveContainer>
               </div>
-              <div className="grid grid-cols-3 gap-4">
-                  {taskData.map((d, i) => (
-                      <div key={i} className="text-center">
-                          <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">{d.name}</p>
-                          <p className="text-lg font-bold text-slate-900">{d.value}</p>
-                      </div>
-                  ))}
-              </div>
           </div>
 
           <div className="bg-slate-50 p-10 rounded-[2.5rem] border border-slate-100 flex flex-col justify-center text-center space-y-8">
@@ -163,12 +190,12 @@ const Reports: React.FC<ReportsProps> = ({ currentUser, tasks = [], users = [], 
               <div className="max-w-xs mx-auto space-y-4">
                   <h3 className="text-xl font-bold text-slate-900 uppercase tracking-tight">Efficacité Opérationnelle</h3>
                   <p className="text-sm font-medium text-slate-500 leading-relaxed uppercase tracking-wider text-[11px]">
-                      Votre équipe a complété <span className="text-vibrant-emerald font-bold">{tasks.filter(t => t.status === TaskStatus.DONE).length} missions</span> ce mois-ci, soit une progression de 12% par rapport au flux précédent.
+                      Votre équipe a complété <span className="text-vibrant-emerald font-bold">{tasks.filter(t => t.status === TaskStatus.DONE).length} missions</span> au total.
                   </p>
                   <div className="pt-4">
                       <div className="inline-flex items-center space-x-2 px-4 py-2 bg-vibrant-emerald/10 text-vibrant-emerald rounded-xl text-[10px] font-bold uppercase tracking-widest border border-vibrant-emerald/10">
-                          <ArrowUpRight size={14} />
-                          <span>Performance Optimale</span>
+                          <Activity size={14} />
+                          <span>Flux iV Connecté</span>
                       </div>
                   </div>
               </div>

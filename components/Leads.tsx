@@ -102,13 +102,13 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
           status: 'new'
         });
         setIsAiMode(false);
-        addNotification("Intelligence iV", "Prospect extrait avec succès", "success");
+        addNotification("Intelligence iV", "Prospect extrait. Vérifiez les champs avant validation.", "success");
       } else {
         addNotification("Intelligence iV", "Impossible d'identifier les données.", "urgent");
       }
     } catch (err) {
       console.error("Extraction failed", err);
-      addNotification("Intelligence iV", "Erreur réseau ou Clé API non configurée.", "urgent");
+      addNotification("Intelligence iV", "Erreur d'analyse IA.", "urgent");
     } finally {
       setIsExtracting(false);
     }
@@ -119,16 +119,13 @@ const Leads: React.FC<LeadsProps> = ({ leads, onAddLead, onUpdateLead, onDeleteL
     if (!formData.name) return;
 
     if (viewMode === 'add') {
-      onAddLead({
-        ...formData,
-        id: `temp-${Date.now()}`,
-        createdAt: new Date().toISOString()
-      } as Lead);
+      onAddLead(formData as Lead);
     } else {
       onUpdateLead(formData as Lead);
     }
     setViewMode('list');
     setSelectedLeadId(null);
+    setFormData({name: '', company: '', email: '', phone: '', status: 'new', valueMin: 0, valueMax: 0, description: ''});
   };
 
   const inputClasses = "w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-slate-900 placeholder-slate-300 focus:bg-white focus:border-primary/20 outline-none transition-all text-sm";
