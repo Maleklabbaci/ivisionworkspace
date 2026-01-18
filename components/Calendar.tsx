@@ -1,158 +1,124 @@
 
 import React, { useState, useMemo } from 'react';
-import { ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon, X, Clock, CheckCircle } from 'lucide-react';
-import { Task, User, TaskStatus } from '../types';
+import { Task, TaskStatus } from '../types';
+import { ChevronLeft, ChevronRight, Plus, X, Calendar as CalendarIcon, Clock, Check } from 'lucide-react';
 
-interface CalendarProps {
-  tasks: Task[];
-  users: User[];
-  currentUser: User;
-  onAddTask: (task: Task) => void;
-  onUpdateStatus: (taskId: string, status: TaskStatus) => void;
-}
-
-const Calendar: React.FC<CalendarProps> = ({ tasks, users, currentUser, onAddTask, onUpdateStatus }) => {
+const Calendar: React.FC<any> = ({ tasks = [], onAddTask, onUpdateStatus, currentUser }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
   const [showAddModal, setShowAddModal] = useState(false);
 
-  const daysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
-  const firstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
-
   const monthNames = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
   const dayNames = ["DIM", "LUN", "MAR", "MER", "JEU", "VEN", "SAM"];
 
-  const prevMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
-  const nextMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
-
-  const year = currentDate.getFullYear();
-  const month = currentDate.getMonth();
+  const daysInMonth = (y: number, m: number) => new Date(y, m + 1, 0).getDate();
+  const firstDay = (y: number, m: number) => new Date(y, m, 1).getDay();
 
   const calendarDays = useMemo(() => {
     const days = [];
-    const totalDays = daysInMonth(year, month);
-    const startDay = firstDayOfMonth(year, month);
-    for (let i = 0; i < startDay; i++) days.push(null);
-    for (let i = 1; i <= totalDays; i++) days.push(new Date(year, month, i));
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const total = daysInMonth(year, month);
+    const start = firstDay(year, month);
+    for (let i = 0; i < start; i++) days.push(null);
+    for (let i = 1; i <= total; i++) days.push(new Date(year, month, i));
     return days;
-  }, [year, month]);
+  }, [currentDate]);
 
   const tasksByDate = useMemo(() => {
     const map: Record<string, Task[]> = {};
-    tasks.forEach(task => {
-      if (!task.dueDate) return;
-      const dateStr = new Date(task.dueDate).toDateString();
-      if (!map[dateStr]) map[dateStr] = [];
-      map[dateStr].push(task);
+    tasks.forEach((t: Task) => {
+      const d = new Date(t.dueDate).toDateString();
+      if (!map[d]) map[d] = [];
+      map[d].push(t);
     });
     return map;
   }, [tasks]);
 
-  const selectedTasks = useMemo(() => {
-    if (!selectedDate) return [];
-    return (tasksByDate[selectedDate.toDateString()] || []).sort((a, b) => (a.priority === 'high' ? -1 : 1));
-  }, [selectedDate, tasksByDate]);
-
-  const isToday = (date: Date) => {
-    const now = new Date();
-    return date.getDate() === now.getDate() && date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
-  };
-
-  const isSelected = (date: Date) => selectedDate && date.toDateString() === selectedDate.toDateString();
-
   return (
-    <div className="flex flex-col h-full space-y-8 page-transition pb-24">
-      <div className="flex items-center justify-between px-2">
+    <div className="space-y-10 animate-fade-in">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 px-2">
         <div>
-          <h2 className="text-3xl font-black text-slate-900 tracking-tighter uppercase leading-none">
-            {monthNames[month].toUpperCase()} <span className="text-primary ml-2">{year}</span>
+          <p className="text-[10px] font-black uppercase tracking-[0.4em] text-rose-400 mb-2">OPERATIONAL TIMELINE</p>
+          <h2 className="text-4xl font-extrabold text-white tracking-tight uppercase leading-none">
+            {monthNames[currentDate.getMonth()]} <span className="text-rose-400">{currentDate.getFullYear()}</span>
           </h2>
-          <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mt-2">Planning Stratégique iVISION</p>
         </div>
-        <div className="flex space-x-2">
-          <button onClick={prevMonth} className="p-3 bg-white border border-slate-100 rounded-2xl active-scale"><ChevronLeft size={20}/></button>
-          <button onClick={nextMonth} className="p-3 bg-white border border-slate-100 rounded-2xl active-scale"><ChevronRight size={20}/></button>
+        <div className="flex space-x-3">
+          <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} className="w-12 h-12 glass border border-white/10 rounded-2xl text-slate-400 hover:text-white transition-all flex items-center justify-center active-scale"><ChevronLeft size={20}/></button>
+          <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))} className="w-12 h-12 glass border border-white/10 rounded-2xl text-slate-400 hover:text-white transition-all flex items-center justify-center active-scale"><ChevronRight size={20}/></button>
+          <button onClick={() => setShowAddModal(true)} className="w-12 h-12 bg-rose-400 text-white rounded-2xl shadow-xl shadow-rose-500/20 active-scale flex items-center justify-center transition-transform hover:scale-110"><Plus size={24}/></button>
         </div>
       </div>
 
-      <div className="bg-white rounded-[2.5rem] shadow-sm p-6 border border-slate-50">
-        <div className="grid grid-cols-7 gap-1 mb-4">
-          {dayNames.map(day => <div key={day} className="text-center text-[9px] font-black text-slate-300 uppercase tracking-widest">{day}</div>)}
-        </div>
-        <div className="grid grid-cols-7 gap-y-2 gap-x-1">
-          {calendarDays.map((date, idx) => {
-            if (!date) return <div key={`empty-${idx}`} className="h-12" />;
-            const dayTasks = tasksByDate[date.toDateString()] || [];
-            const hasUrgent = dayTasks.some(t => t.priority === 'high' && t.status !== TaskStatus.DONE);
-            
-            return (
-              <button
-                key={date.toISOString()}
-                onClick={() => setSelectedDate(date)}
-                className={`h-12 rounded-2xl flex flex-col items-center justify-center relative transition-all active-scale
-                  ${isSelected(date) ? 'bg-primary text-white shadow-lg shadow-primary/30 scale-105' : 
-                    isToday(date) ? 'bg-slate-50 text-slate-900 border border-slate-200' : 'text-slate-600 hover:bg-slate-50'}
-                `}
-              >
-                <span className="text-sm font-black">{date.getDate()}</span>
-                <div className="flex space-x-0.5 mt-1">
-                   {dayTasks.length > 0 && (
-                     <div className={`w-1 h-1 rounded-full ${isSelected(date) ? 'bg-white' : hasUrgent ? 'bg-urgent animate-pulse' : 'bg-primary'}`} />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+        <div className="lg:col-span-2 glass p-10 rounded-[3.5rem] border border-white/5 shadow-2xl relative overflow-hidden">
+           <div className="absolute top-0 right-0 w-64 h-64 bg-rose-400/5 blur-[100px] rounded-full"></div>
+           <div className="grid grid-cols-7 gap-2 mb-10 relative z-10">
+             {dayNames.map(d => <div key={d} className="text-center text-[9px] font-black text-slate-600 uppercase tracking-widest">{d}</div>)}
+           </div>
+           <div className="grid grid-cols-7 gap-3 relative z-10">
+             {calendarDays.map((date, idx) => {
+               if (!date) return <div key={idx} />;
+               const isSelected = selectedDate?.toDateString() === date.toDateString();
+               const isToday = new Date().toDateString() === date.toDateString();
+               const dayTasks = tasksByDate[date.toDateString()] || [];
+               const hasTasks = dayTasks.length > 0;
+               return (
+                 <button 
+                  key={idx} 
+                  onClick={() => setSelectedDate(date)} 
+                  className={`h-16 rounded-[1.4rem] flex flex-col items-center justify-center relative transition-all active-scale group ${isSelected ? 'bg-rose-400 text-white shadow-xl shadow-rose-500/20' : isToday ? 'bg-white/10 text-white border border-white/10' : 'text-slate-500 hover:bg-white/5'}`}
+                 >
+                   <span className="text-sm font-extrabold tracking-tight">{date.getDate()}</span>
+                   {hasTasks && (
+                    <div className="flex space-x-1 mt-1.5">
+                      {dayTasks.slice(0, 3).map((_, i) => (
+                        <div key={i} className={`w-1 h-1 rounded-full ${isSelected ? 'bg-white' : 'bg-rose-400'}`} />
+                      ))}
+                    </div>
                    )}
-                </div>
-              </button>
-            );
-          })}
+                 </button>
+               );
+             })}
+           </div>
         </div>
-      </div>
 
-      <div className="space-y-4">
-        <h3 className="font-black text-slate-900 text-sm uppercase px-2 flex items-center">
-            <Clock size={16} className="mr-2 text-primary" />
-            Agenda du {selectedDate?.getDate()} {monthNames[selectedDate?.getMonth() || 0]}
-        </h3>
-        {selectedTasks.length === 0 ? (
-          <div className="p-12 text-center bg-slate-50 rounded-[2.5rem] border-dashed border-2 border-slate-100">
-            <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Aucune mission ce jour</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {selectedTasks.map(task => (
-              <div key={task.id} className="bg-white p-5 rounded-[2rem] border border-slate-50 shadow-sm flex items-center justify-between">
-                <div className="flex items-center space-x-4">
-                  <div className={`w-1.5 h-10 rounded-full ${task.status === TaskStatus.DONE ? 'bg-success' : task.priority === 'high' ? 'bg-urgent' : 'bg-primary'}`}></div>
-                  <div>
-                    <h4 className={`font-black text-sm uppercase tracking-tight ${task.status === TaskStatus.DONE ? 'opacity-30 line-through' : ''}`}>{task.title}</h4>
-                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{task.status}</span>
+        <div className="space-y-6">
+           <div className="flex items-center space-x-4 px-3 mb-8">
+             <div className="w-12 h-12 bg-rose-400/10 rounded-2xl flex items-center justify-center text-rose-400 shadow-inner border border-rose-400/10"><Clock size={20}/></div>
+             <div>
+                <h3 className="font-extrabold text-white text-base tracking-tight uppercase">{selectedDate?.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}</h3>
+                <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mt-0.5">Missions programmées</p>
+             </div>
+           </div>
+           <div className="space-y-3 px-1">
+             {(tasksByDate[selectedDate?.toDateString() || ''] || []).map((t: Task) => (
+               <div key={t.id} className="glass-card p-6 rounded-[2.2rem] border border-white/5 flex items-center justify-between group">
+                  <div className="truncate pr-4">
+                    <h4 className={`font-bold text-white text-[13px] truncate uppercase tracking-tight transition-opacity ${t.status === TaskStatus.DONE ? 'opacity-30 line-through' : ''}`}>{t.title}</h4>
+                    <div className="flex items-center space-x-2 mt-1.5">
+                       <span className={`w-1.5 h-1.5 rounded-full ${t.status === TaskStatus.DONE ? 'bg-emerald-400' : 'bg-rose-400 animate-pulse'}`}></span>
+                       <p className="text-[9px] text-slate-500 font-extrabold uppercase tracking-widest">{t.status}</p>
+                    </div>
                   </div>
-                </div>
-                <button onClick={() => onUpdateStatus(task.id, TaskStatus.DONE)} className="p-2 bg-slate-50 rounded-xl text-slate-200 hover:text-success transition-colors"><CheckCircle size={20}/></button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <button onClick={() => setShowAddModal(true)} className="fixed bottom-24 right-6 w-16 h-16 bg-primary text-white rounded-3xl shadow-xl flex items-center justify-center z-40 border-4 border-white active-scale"><Plus size={32}/></button>
-
-      {showAddModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-end md:items-center justify-center z-[110] p-4 animate-in fade-in">
-          <div className="bg-white rounded-t-[3rem] md:rounded-[3rem] shadow-2xl w-full max-w-md p-10 animate-in slide-in-from-bottom">
-            <div className="flex justify-between items-center mb-8">
-              <h3 className="text-2xl font-black text-slate-900 tracking-tighter uppercase">Nouveau Plan</h3>
-              <button onClick={() => setShowAddModal(false)} className="p-2 text-slate-400"><X size={20}/></button>
-            </div>
-            <input type="text" className="w-full p-6 bg-slate-50 rounded-3xl font-black text-slate-900 outline-none mb-6" placeholder="Titre de la mission..." id="cal-new-title" />
-            <button onClick={() => {
-              const input = document.getElementById('cal-new-title') as HTMLInputElement;
-              if (input.value && selectedDate) {
-                onAddTask({ id: `temp-${Date.now()}`, title: input.value, description: '', dueDate: selectedDate.toISOString().split('T')[0], status: TaskStatus.TODO, type: 'content', assigneeId: currentUser.id, priority: 'medium' });
-                setShowAddModal(false);
-              }
-            }} className="w-full py-6 bg-primary text-white font-black rounded-3xl uppercase text-xs tracking-widest active-scale">PLANIFIER</button>
-          </div>
+                  <button 
+                    onClick={() => onUpdateStatus(t.id, TaskStatus.DONE)} 
+                    className={`w-9 h-9 rounded-xl border border-white/10 flex items-center justify-center transition-all ${t.status === TaskStatus.DONE ? 'bg-emerald-400 border-none text-white' : 'hover:bg-rose-400 hover:border-none hover:text-white text-slate-700'}`}
+                  >
+                    {t.status === TaskStatus.DONE ? <Check size={16} strokeWidth={3} /> : ''}
+                  </button>
+               </div>
+             ))}
+             {(!tasksByDate[selectedDate?.toDateString() || '']?.length) && (
+               <div className="py-20 text-center glass rounded-[2.5rem] border-white/5 opacity-20 flex flex-col items-center">
+                 <CalendarIcon size={40} className="mb-4" />
+                 <p className="text-[10px] font-black uppercase tracking-[0.3em]">Aucune opération planifiée</p>
+               </div>
+             )}
+           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 };

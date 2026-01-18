@@ -1,97 +1,92 @@
-import React, { useState, useMemo } from 'react';
-import { Search, Link as LinkIcon, Plus, X, Trash2, ExternalLink, Check } from 'lucide-react';
-import { Task, Message, User, FileLink, Client } from '../types';
 
-interface FilesProps {
-  tasks: Task[];
-  messages: Message[];
-  fileLinks?: FileLink[];
-  clients?: Client[];
-  currentUser: User;
-  onAddFileLink?: (name: string, url: string, clientId?: string) => void;
-  onDeleteFileLink?: (id: string) => void;
-}
+import React, { useState } from 'react';
+import { FileLink, User } from '../types';
+import { Plus, Search, FileText, ExternalLink, Trash2, X, Link as LinkIcon, Cloud } from 'lucide-react';
 
-const Files: React.FC<FilesProps> = ({ tasks, messages, fileLinks = [], clients = [], currentUser, onAddFileLink, onDeleteFileLink }) => {
+const Files: React.FC<any> = ({ fileLinks = [], onAddFileLink, onDeleteFileLink, currentUser }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
-  const [formData, setFormData] = useState({ name: '', url: '', clientId: '' });
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [formData, setFormData] = useState({ name: '', url: '' });
 
-  const validate = () => {
-    const e: Record<string, string> = {};
-    if (!formData.name.trim()) e.name = "Nom requis";
-    if (!formData.url.trim() || !formData.url.startsWith('http')) e.url = "URL invalide";
-    setErrors(e);
-    return Object.keys(e).length === 0;
+  const filteredFiles = fileLinks.filter((f: FileLink) => 
+    f.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const closeModals = () => {
+    setShowAddModal(false);
   };
-
-  const handleAddSubmit = (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!validate()) return;
-      if (onAddFileLink) {
-          onAddFileLink(formData.name, formData.url, formData.clientId || undefined);
-          setShowAddModal(false);
-          setFormData({ name: '', url: '', clientId: '' });
-      }
-  };
-
-  const inputClasses = "w-full p-4 bg-slate-100/50 border border-slate-200 rounded-3xl font-bold text-slate-900 placeholder-slate-400 focus:bg-white focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all outline-none";
 
   return (
-    <div className="space-y-6 pb-24 px-1">
-      <div className="flex flex-col space-y-4">
-        <h2 className="text-2xl font-bold">Fichiers</h2>
-        <div className="relative">
-            <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input type="text" placeholder="Rechercher..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-12 pr-4 py-4 bg-white border border-slate-100 rounded-3xl text-sm font-bold shadow-sm focus:ring-4 focus:ring-primary/10 outline-none transition-all" />
+    <div className="relative">
+      <div className="space-y-10 animate-fade-in">
+        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 px-2">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.4em] text-blue-400 mb-2">ASSET STORAGE SYSTEM</p>
+            <h2 className="text-4xl font-extrabold text-white tracking-tight uppercase">Documents</h2>
+          </div>
+          <div className="flex space-x-4 w-full lg:w-auto">
+             <div className="relative flex-1 lg:w-72">
+               <Search size={16} className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-500" />
+               <input type="text" placeholder="Rechercher..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-12 pr-6 py-4.5 bg-white/5 border border-white/10 rounded-[1.5rem] text-[11px] font-black uppercase tracking-wider text-white outline-none focus:border-blue-400 focus:bg-white/10 transition-all placeholder-slate-700" />
+             </div>
+             <button onClick={() => { setFormData({name: '', url: ''}); setShowAddModal(true); }} className="w-14 h-14 bg-blue-400 text-white rounded-2xl shadow-xl shadow-blue-500/20 active-scale flex items-center justify-center transition-transform hover:scale-105">
+               <Plus size={28} strokeWidth={3} />
+             </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredFiles.map((file: FileLink) => (
+            <div key={file.id} className="glass-card p-7 rounded-[2.8rem] border border-white/5 group flex items-center justify-between relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-24 h-24 bg-blue-400/5 blur-3xl rounded-full -translate-x-12 -translate-y-12"></div>
+              <div className="flex items-center space-x-5 truncate relative z-10">
+                 <div className="w-16 h-16 bg-gradient-to-br from-blue-400/10 to-blue-600/20 rounded-[1.5rem] flex items-center justify-center text-blue-400 shadow-inner border border-blue-400/10 group-hover:scale-110 transition-transform duration-500">
+                    <FileText size={28} />
+                 </div>
+                 <div className="truncate">
+                    <h3 className="font-extrabold text-white text-[14px] truncate uppercase tracking-tight">{file.name}</h3>
+                    <div className="flex items-center space-x-2 mt-2">
+                      <Cloud size={10} className="text-blue-500" />
+                      <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest">{file.createdAt}</p>
+                    </div>
+                 </div>
+              </div>
+              <div className="flex space-x-2.5 relative z-10">
+                 <button onClick={() => window.open(file.url, '_blank')} className="w-10 h-10 glass text-slate-500 hover:text-white hover:bg-blue-500/20 rounded-xl transition-all flex items-center justify-center"><ExternalLink size={18}/></button>
+                 <button onClick={() => { if(confirm('Supprimer cette ressource ?')) onDeleteFileLink(file.id); }} className="w-10 h-10 glass text-slate-500 hover:text-rose-400 hover:bg-rose-400/10 rounded-xl transition-all flex items-center justify-center"><Trash2 size={18}/></button>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
-      <div className="space-y-3">
-          {fileLinks.filter(f => f.name.toLowerCase().includes(searchTerm.toLowerCase())).map(link => (
-              <div key={link.id} className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm flex items-center justify-between">
-                  <div className="flex items-center space-x-4">
-                      <div className="p-3 bg-slate-50 rounded-2xl text-primary"><LinkIcon size={20} /></div>
-                      <div>
-                          <h4 className="font-bold text-sm text-slate-800">{link.name}</h4>
-                          <p className="text-[9px] text-slate-400 uppercase font-black">{link.createdAt}</p>
-                      </div>
-                  </div>
-                  <div className="flex space-x-2">
-                    <button onClick={() => window.open(link.url, '_blank')} className="p-2 text-primary bg-primary/5 rounded-xl"><ExternalLink size={16} /></button>
-                    {onDeleteFileLink && <button onClick={() => confirm("Supprimer ?") && onDeleteFileLink(link.id)} className="p-2 text-red-500 bg-red-50 rounded-xl"><Trash2 size={16} /></button>}
-                  </div>
-              </div>
-          ))}
-      </div>
-
-      <button onClick={() => { setErrors({}); setShowAddModal(true); }} className="fixed bottom-24 right-6 w-14 h-14 bg-primary text-white rounded-full shadow-2xl flex items-center justify-center z-50 border-4 border-white active-scale transition-transform"><Plus size={28} /></button>
-
+      {/* MODAL INDEXATION - FIXÉ POUR TOUTES TAILLES */}
       {showAddModal && (
-          <div className="fixed inset-0 bg-white z-[160] animate-in slide-in-from-bottom duration-300 flex flex-col safe-top">
-              <header className="p-4 border-b flex items-center justify-between sticky top-0 bg-white z-20">
-                  <button onClick={() => setShowAddModal(false)} className="p-2 text-slate-400"><X size={24}/></button>
-                  <h3 className="font-bold">Nouveau Lien</h3>
-                  <button onClick={handleAddSubmit} className="bg-primary text-white px-5 py-2 rounded-full font-bold text-sm active-scale transition-transform flex items-center space-x-1">
-                      <Check size={16} /> <span>Ajouter</span>
-                  </button>
-              </header>
-              <form className="p-6 space-y-6 flex-1 overflow-y-auto">
-                  <div className="space-y-4">
-                      <div>
-                          <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block tracking-widest px-2">Nom du document *</label>
-                          <input type="text" className={`${inputClasses} ${errors.name ? 'border-red-100 bg-red-50' : ''}`} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="Ex: Cahier des charges" />
-                          {errors.name && <p className="text-red-500 text-[10px] font-bold mt-1 px-2">{errors.name}</p>}
-                      </div>
-                      <div>
-                          <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block tracking-widest px-2">URL (Drive, Dropbox...) *</label>
-                          <input type="url" className={`${inputClasses} ${errors.url ? 'border-red-100 bg-red-50' : ''}`} value={formData.url} onChange={e => setFormData({...formData, url: e.target.value})} placeholder="https://..." />
-                          {errors.url && <p className="text-red-500 text-[10px] font-bold mt-1 px-2">{errors.url}</p>}
-                      </div>
-                  </div>
-              </form>
+        <div className="fixed inset-0 z-[10000] overflow-y-auto bg-slate-950/95 backdrop-blur-2xl py-6 md:py-12 px-4">
+          <div className="flex min-h-full items-center justify-center">
+            <div className="fixed inset-0 cursor-pointer" onClick={closeModals}></div>
+            <div className="relative glass w-full max-w-lg transform rounded-[2.5rem] md:rounded-[3.5rem] p-8 md:p-14 border border-white/10 shadow-[0_0_120px_rgba(0,0,0,0.9)] animate-fade-in transition-all">
+               <div className="flex justify-between items-start mb-10">
+                 <div>
+                   <h3 className="text-2xl md:text-3xl font-extrabold text-white uppercase tracking-tight leading-none">Indexation</h3>
+                   <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-2">Système iVISION</p>
+                 </div>
+                 <button onClick={closeModals} className="w-12 h-12 glass text-slate-500 hover:text-white rounded-xl flex items-center justify-center transition-all flex-shrink-0"><X size={24}/></button>
+               </div>
+               <form onSubmit={(e) => { e.preventDefault(); onAddFileLink(formData.name, formData.url); closeModals(); setFormData({name:'', url:''}); }} className="space-y-6">
+                 <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2">Label de l'actif</label>
+                    <input required className="w-full p-5 bg-white/5 border border-white/10 rounded-2xl text-white font-bold outline-none focus:border-blue-400 text-sm transition-all" placeholder="Guideline_V1" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                 </div>
+                 <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2">Source Cloud</label>
+                    <input required className="w-full p-5 bg-white/5 border border-white/10 rounded-2xl text-white font-bold outline-none focus:border-blue-400 text-sm transition-all" placeholder="https://..." value={formData.url} onChange={e => setFormData({...formData, url: e.target.value})} />
+                 </div>
+                 <button className="w-full py-6 bg-blue-400 text-white font-black rounded-3xl shadow-xl uppercase text-[11px] tracking-[0.3em] mt-4 hover:bg-blue-500 transition-all">Confirmer Indexation</button>
+               </form>
+            </div>
           </div>
+        </div>
       )}
     </div>
   );

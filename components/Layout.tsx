@@ -1,200 +1,105 @@
 
-import React, { useState, useMemo } from 'react';
-import { LayoutGrid, CheckSquare, MessageSquare, Briefcase, Settings, LogOut, Search, Menu, Users, FileText, Calendar as CalendarIcon, Target, TrendingUp, X } from 'lucide-react';
-import { User, Task, Message, Channel, FileLink, UserRole } from '../types';
+import React from 'react';
+import { LayoutGrid, CheckSquare, MessageSquare, Briefcase, Settings, LogOut, Menu, Users, Target, FileText, Calendar as CalendarIcon, BarChart3, Search } from 'lucide-react';
+import { User } from '../types';
 import { useLocation, useNavigate } from 'react-router-dom';
-import GlobalSearch from './GlobalSearch';
 
 interface LayoutProps {
   children: React.ReactNode;
   currentUser: User;
   onLogout: () => void;
-  unreadMessageCount?: number;
-  tasks?: Task[];
-  messages?: Message[];
-  users?: User[];
-  channels?: Channel[];
-  fileLinks?: FileLink[];
 }
 
-const Layout: React.FC<LayoutProps> = ({ 
-  children, currentUser, onLogout, unreadMessageCount = 0,
-  tasks = [], messages = [], users = [], channels = [], fileLinks = []
-}) => {
-  const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
-  
+const Layout: React.FC<LayoutProps> = ({ children, currentUser, onLogout }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const currentPath = location.pathname.replace('/', '') || 'dashboard';
 
-  const handleNavigate = (path: string) => {
-    setIsMoreMenuOpen(false);
-    setTimeout(() => navigate(`/${path}`), 10);
-  };
+  const navItems = [
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutGrid, color: 'text-sky-400', bg: 'bg-sky-400', shadow: 'shadow-sky-500/20' },
+    { id: 'tasks', label: 'Missions', icon: CheckSquare, color: 'text-violet-400', bg: 'bg-violet-400', shadow: 'shadow-violet-500/20' },
+    { id: 'chat', label: 'Messages', icon: MessageSquare, color: 'text-indigo-400', bg: 'bg-indigo-400', shadow: 'shadow-indigo-500/20' },
+    { id: 'leads', label: 'Leads', icon: Target, color: 'text-orange-400', bg: 'bg-orange-400', shadow: 'shadow-orange-500/20' },
+    { id: 'clients', label: 'CRM', icon: Briefcase, color: 'text-emerald-400', bg: 'bg-emerald-400', shadow: 'shadow-emerald-500/20' },
+    { id: 'files', label: 'Documents', icon: FileText, color: 'text-blue-400', bg: 'bg-blue-400', shadow: 'shadow-blue-500/20' },
+    { id: 'calendar', label: 'Planning', icon: CalendarIcon, color: 'text-rose-400', bg: 'bg-rose-400', shadow: 'shadow-rose-500/20' },
+    { id: 'reports', label: 'Rapports', icon: BarChart3, color: 'text-pink-400', bg: 'bg-pink-400', shadow: 'shadow-pink-500/20' },
+    { id: 'team', label: 'Équipe', icon: Users, color: 'text-slate-400', bg: 'bg-slate-400', shadow: 'shadow-slate-500/20' },
+  ];
 
-  // ADMIN a accès à TOUT sans exception
-  const hasAccess = (permissionKey?: string) => {
-    if (currentUser.role === UserRole.ADMIN) return true;
-    if (!permissionKey) return true;
-    return !!(currentUser.permissions as any)?.[permissionKey];
-  };
-
-  const visibleNavItems = useMemo(() => {
-    const items = [
-      { id: 'dashboard', label: 'Accueil', icon: LayoutGrid, path: 'dashboard', color: 'text-vibrant-indigo' },
-      { id: 'tasks', label: 'Missions', icon: CheckSquare, path: 'tasks', color: 'text-vibrant-violet' },
-      { id: 'calendar', label: 'Planning', icon: CalendarIcon, path: 'calendar', color: 'text-vibrant-emerald' },
-    ];
-
-    if (hasAccess('canManageLeads')) {
-      items.push({ id: 'leads', label: 'Leads', icon: Target, path: 'leads', color: 'text-vibrant-orange' });
-    }
-
-    return items;
-  }, [currentUser]);
-
-  const visibleMoreItems = useMemo(() => {
-    const items = [];
-
-    if (hasAccess('canManageClients')) {
-      items.push({ id: 'clients', label: 'CRM Clients', icon: Briefcase, color: 'text-vibrant-sky' });
-    }
-    
-    if (hasAccess('canViewReports')) {
-      items.push({ id: 'reports', label: 'Rapports IA', icon: TrendingUp, color: 'text-vibrant-amber' });
-    }
-
-    if (hasAccess('canManageChat')) {
-      items.push({ id: 'chat', label: 'Messages', icon: MessageSquare, color: 'text-primary' });
-    }
-
-    if (hasAccess('canManageTeam')) {
-      items.push({ id: 'team', label: 'Équipe', icon: Users, color: 'text-vibrant-indigo' });
-    }
-
-    if (hasAccess('canViewFiles')) {
-      items.push({ id: 'files', label: 'Documents', icon: FileText, color: 'text-vibrant-orange' });
-    }
-
-    items.push({ id: 'settings', label: 'Paramètres', icon: Settings, color: 'text-slate-400' });
-
-    return items;
-  }, [currentUser]);
+  const currentItem = navItems.find(i => i.id === currentPath) || navItems[0];
 
   return (
-    <div className="flex h-screen w-full bg-white overflow-hidden text-slate-900 font-sans">
-      <GlobalSearch 
-        isOpen={isSearchOpen} 
-        onClose={() => setIsSearchOpen(false)} 
-        tasks={tasks}
-        messages={messages}
-        users={users}
-        channels={channels}
-        fileLinks={fileLinks}
-      />
-      
-      <aside className="hidden lg:flex flex-col w-64 bg-slate-50 border-r border-slate-200 h-full flex-shrink-0">
-        <div className="p-8 flex items-center space-x-4">
-            <div className="w-10 h-10 bg-gradient-to-tr from-primary to-vibrant-indigo rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-lg shadow-primary/10">iV</div>
-            <div className="flex flex-col">
-              <span className="font-bold text-xl tracking-tighter leading-none uppercase">iVISION</span>
-              <span className="text-[9px] font-bold text-primary uppercase tracking-[0.2em] mt-1">Enterprise</span>
-            </div>
+    <div className="flex h-screen w-full overflow-hidden bg-slate-950">
+      {/* Sidebar Desktop */}
+      <aside className="hidden lg:flex flex-col w-64 glass border-r border-white/5 relative z-20">
+        <div className="p-8 flex items-center space-x-3 mb-4">
+          <div className="w-10 h-10 bg-gradient-to-br from-sky-400 to-sky-600 rounded-xl flex items-center justify-center text-white font-extrabold shadow-lg shadow-sky-500/20">iV</div>
+          <span className="text-xl font-extrabold tracking-tighter text-white uppercase">iVISION</span>
         </div>
         
-        <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto no-scrollbar">
-            <div className="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Workspace</div>
-            {visibleNavItems.map(item => (
-                <button key={item.id} onClick={() => handleNavigate(item.path)} className={`w-full flex items-center space-x-4 px-4 py-3 rounded-2xl font-bold text-sm transition-all ${currentPath === item.id ? 'bg-white text-primary shadow-sm ring-1 ring-slate-200' : 'text-slate-500 hover:bg-white hover:text-slate-900'}`}>
-                    <item.icon size={18} className={currentPath === item.id ? 'text-primary' : item.color} />
-                    <span>{item.label}</span>
-                </button>
-            ))}
-            
-            <div className="pt-6 px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Business & Tools</div>
-            {visibleMoreItems.filter(i => i.id !== 'settings').map(item => (
-              <button key={item.id} onClick={() => handleNavigate(item.id)} className={`w-full flex items-center space-x-4 px-4 py-3 rounded-2xl font-bold text-sm transition-all ${currentPath === item.id ? 'bg-white text-primary shadow-sm ring-1 ring-slate-200' : 'text-slate-500 hover:bg-white hover:text-slate-900'}`}>
-                <item.icon size={18} className={currentPath === item.id ? 'text-primary' : item.color} />
-                <span>{item.label}</span>
+        <nav className="flex-1 px-4 space-y-1.5 overflow-y-auto no-scrollbar pb-6">
+          {navItems.map(item => {
+            const isActive = currentPath === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => navigate(`/${item.id}`)}
+                className={`w-full flex items-center space-x-3.5 px-4 py-3 rounded-xl transition-all duration-300 relative group ${isActive ? `${item.bg} text-white shadow-lg ${item.shadow} sidebar-item-active` : 'text-slate-500 hover:text-slate-200 hover:bg-white/5'}`}
+              >
+                <item.icon size={18} className={`transition-colors duration-300 ${isActive ? 'text-white' : item.color}`} />
+                <span className="text-[11px] font-bold uppercase tracking-wider">{item.label}</span>
+                {isActive && <div className="absolute right-3 w-1.5 h-1.5 bg-white rounded-full"></div>}
               </button>
-            ))}
+            );
+          })}
         </nav>
 
-        <div className="p-6 border-t border-slate-200">
-            <button onClick={() => handleNavigate('settings')} className="w-full flex items-center space-x-4 p-3 rounded-2xl hover:bg-white transition-all group">
-                <img src={currentUser.avatar} className="w-9 h-9 rounded-xl object-cover ring-2 ring-slate-50" alt="" />
-                <div className="flex-1 text-left truncate">
-                    <p className="font-bold text-slate-900 text-xs truncate uppercase">{currentUser.name}</p>
-                    <p className="text-[9px] text-primary font-bold uppercase tracking-widest">{currentUser.role}</p>
-                </div>
-            </button>
-            <button onClick={onLogout} className="w-full mt-2 flex items-center justify-center space-x-2 p-2 text-slate-400 hover:text-urgent font-bold transition-colors text-[10px] uppercase tracking-widest">
-                <LogOut size={14} />
-                <span>Quitter</span>
-            </button>
+        <div className="p-6 mt-auto border-t border-white/5">
+          <button 
+            onClick={() => navigate('/settings')}
+            className={`w-full flex items-center space-x-3.5 px-4 py-3 rounded-xl mb-3 transition-all ${currentPath === 'settings' ? 'bg-white/10 text-white' : 'text-slate-500 hover:text-white'}`}
+          >
+            <img src={currentUser.avatar} className="w-6 h-6 rounded-full border border-white/10" alt="" />
+            <span className="text-[11px] font-bold uppercase tracking-wider">Profil</span>
+          </button>
+          <button onClick={onLogout} className="w-full flex items-center space-x-3.5 px-4 py-3 text-slate-500 hover:text-rose-400 transition-colors text-[11px] font-bold uppercase tracking-wider active-scale">
+            <LogOut size={18} />
+            <span>Quitter</span>
+          </button>
         </div>
       </aside>
 
-      <div className="flex-1 flex flex-col h-full relative overflow-hidden bg-white">
-        <header className="lg:hidden flex items-center justify-between px-6 h-[72px] flex-shrink-0 bg-white/80 backdrop-blur-xl border-b border-slate-200 z-[50]" style={{ paddingTop: 'var(--safe-top)' }}>
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-gradient-to-tr from-primary to-vibrant-indigo rounded-xl flex items-center justify-center text-white font-bold text-xs shadow-md">iV</div>
-            <span className="font-bold text-lg tracking-tighter uppercase leading-none">iVISION</span>
-          </div>
-          <div className="flex items-center space-x-4">
-            <button onClick={() => setIsSearchOpen(true)} className="p-2 text-slate-400"><Search size={22} /></button>
-            <button onClick={() => handleNavigate('settings')} className="w-9 h-9 rounded-xl overflow-hidden border-2 border-slate-100 active-scale">
-              <img src={currentUser.avatar} className="w-full h-full object-cover" alt="" />
-            </button>
-          </div>
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col h-full overflow-hidden relative">
+        <header className="lg:hidden flex items-center justify-between px-6 py-4 glass border-b border-white/5 z-20">
+          <div className="w-9 h-9 bg-sky-500 rounded-xl flex items-center justify-center text-white font-black text-sm">iV</div>
+          <span className={`text-[10px] font-extrabold px-4 py-1.5 rounded-full border border-white/10 ${currentItem.color} glass uppercase tracking-[0.2em]`}>
+            {currentItem.label}
+          </span>
+          <button onClick={() => navigate('/settings')} className="text-slate-400">
+             <img src={currentUser.avatar} className="w-8 h-8 rounded-full border border-white/10" alt="" />
+          </button>
         </header>
 
-        <main className="flex-1 overflow-y-auto overflow-x-hidden no-scrollbar w-full relative">
-          <div className="w-full max-w-screen-xl mx-auto px-6 py-8 lg:px-12 lg:py-16 pb-32">
+        <main className="flex-1 overflow-y-auto no-scrollbar relative z-10">
+          <div className="max-w-7xl mx-auto p-6 lg:p-10 pb-32">
             {children}
           </div>
         </main>
 
-        <nav className="lg:hidden flex justify-around items-center bg-white/95 backdrop-blur-xl border-t border-slate-200 px-4 flex-shrink-0 z-[50] shadow-lg" style={{ height: 'calc(64px + var(--safe-bottom))', paddingBottom: 'var(--safe-bottom)' }}>
-          {visibleNavItems.map(item => {
+        {/* Mobile Bottom Bar */}
+        <nav className="lg:hidden fixed bottom-6 left-6 right-6 h-16 glass rounded-[2rem] px-2 flex justify-around items-center z-50 shadow-2xl border border-white/10">
+          {navItems.filter(i => ['dashboard', 'tasks', 'chat', 'leads', 'clients'].includes(i.id)).map(item => {
             const isActive = currentPath === item.id;
             return (
-              <button key={item.id} onClick={() => handleNavigate(item.path)} className="flex flex-col items-center justify-center flex-1 h-full transition-all">
-                <div className={`p-2 rounded-xl transition-all ${isActive ? 'bg-primary/10' : ''}`}>
-                  <item.icon size={22} className={isActive ? 'text-primary' : item.color} />
-                </div>
-                <span className={`text-[10px] font-bold mt-1 tracking-tight ${isActive ? 'text-primary' : 'text-slate-400'}`}>{item.label}</span>
+              <button key={item.id} onClick={() => navigate(`/${item.id}`)} className={`p-3.5 rounded-2xl transition-all ${isActive ? `${item.bg} text-white shadow-lg scale-110 -translate-y-1` : 'text-slate-500'}`}>
+                <item.icon size={20} />
               </button>
             );
           })}
-          <button onClick={() => setIsMoreMenuOpen(true)} className="flex flex-col items-center justify-center flex-1 h-full text-slate-400 relative">
-            <div className="p-2">
-              <Menu size={22} className="text-slate-400" />
-            </div>
-            <span className="text-[10px] font-bold mt-1 tracking-tight">Plus</span>
-          </button>
         </nav>
       </div>
-
-      {isMoreMenuOpen && (
-        <div className="fixed inset-0 z-[100] flex flex-col justify-end lg:hidden">
-          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setIsMoreMenuOpen(false)}></div>
-          <div className="relative bg-white rounded-t-[3rem] p-8 pb-[calc(2rem+var(--safe-bottom))] modal-drawer shadow-2xl max-h-[80vh] overflow-y-auto">
-            <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-10 opacity-50"></div>
-            <div className="grid grid-cols-2 gap-4">
-              {visibleMoreItems.map(item => (
-                <button key={item.id} onClick={() => handleNavigate(item.id)} className="flex items-center space-x-5 p-5 bg-slate-50 rounded-[2rem] border border-slate-100 active-scale group transition-all text-left">
-                  <div className={`w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-sm flex-shrink-0 ${item.color}`}>
-                    <item.icon size={22} />
-                  </div>
-                  <span className="font-bold text-slate-800 text-[11px] uppercase tracking-tight">{item.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
