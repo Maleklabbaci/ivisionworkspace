@@ -17,7 +17,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], activiti
   const [loadingAi, setLoadingAi] = useState(false);
   const [showInsightModal, setShowInsightModal] = useState(false);
 
-  const today = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const today = useMemo(() => new Date().toLocaleDateString('en-CA'), []);
   const isAdmin = currentUser.role === UserRole.ADMIN;
   
   const hasAccess = (permissionKey: string) => {
@@ -39,19 +39,28 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], activiti
   
   const performanceScore = useMemo(() => {
     if (!tasks || tasks.length === 0) return 100;
-    let score = 0;
+    
+    let totalScore = 0;
     tasks.forEach(t => {
-        if (t.status === TaskStatus.DONE) score += 100;
-        else if (t.status === TaskStatus.IN_PROGRESS) score += 50;
+        // Base score par statut
+        if (t.status === TaskStatus.DONE) totalScore += 100;
+        else if (t.status === TaskStatus.IN_PROGRESS) totalScore += 40;
+        
+        // Pénalité de retard (-20% par tâche critique en retard)
+        if (t.dueDate < today && t.status !== TaskStatus.DONE) {
+          totalScore -= 15;
+        }
     });
-    return Math.max(0, Math.min(100, Math.round(score / tasks.length)));
-  }, [tasks]);
+    
+    const final = Math.round(totalScore / tasks.length);
+    return Math.max(0, Math.min(100, final));
+  }, [tasks, today]);
 
   const handleGetInsights = async () => {
     if (loadingAi) return;
     setLoadingAi(true);
     try {
-      const insight = await generateMarketingInsight(`Score: ${performanceScore}%. Tâches: ${tasks.length}`);
+      const insight = await generateMarketingInsight(`Score Santé: ${performanceScore}%. Tâches totales: ${tasks.length}, Retards: ${overdueTasks.length}.`);
       setAiInsight(insight);
       setShowInsightModal(true);
     } catch (err) {
@@ -93,7 +102,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], activiti
         </div>
         <div className="flex items-center space-x-3 bg-slate-50 px-4 py-2 rounded-xl border border-slate-200 self-start md:self-auto">
            <Clock size={14} className="text-vibrant-indigo" />
-           <span className="text-[10px] font-bold uppercase text-slate-500 tracking-wider">Aujourd'hui</span>
+           <span className="text-[10px] font-bold uppercase text-slate-500 tracking-wider">Aujourd'hui : {new Date().toLocaleDateString('fr-FR')}</span>
         </div>
       </div>
 
@@ -110,7 +119,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], activiti
              <div className="w-10 h-10 bg-vibrant-emerald/10 text-vibrant-emerald rounded-xl flex items-center justify-center mb-6 transition-colors">
                  <CheckCircle size={18} />
              </div>
-             <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Indice Santé</p>
+             <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Indice Santé iV</p>
              <p className="text-4xl font-bold text-slate-900 tracking-tighter mt-1 group-hover:text-vibrant-emerald transition-colors">{performanceScore}%</p>
         </div>
 
@@ -119,8 +128,10 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], activiti
               <div className="w-10 h-10 bg-vibrant-sky/10 text-vibrant-sky rounded-xl flex items-center justify-center mb-6 transition-colors">
                 <Target size={18} />
               </div>
-              <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Actifs CRM</p>
-              <p className="text-4xl font-bold text-slate-900 tracking-tighter mt-1 group-hover:text-vibrant-sky transition-colors">{tasks.filter(t => t.clientId).length}</p>
+              <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Clients en Mission</p>
+              <p className="text-4xl font-bold text-slate-900 tracking-tighter mt-1 group-hover:text-vibrant-sky transition-colors">
+                {new Set(tasks.filter(t => t.clientId).map(t => t.clientId)).size}
+              </p>
           </div>
         )}
 
@@ -128,7 +139,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], activiti
           <div className="bg-gradient-to-br from-slate-900 to-vibrant-indigo p-6 rounded-2xl shadow-xl text-white group cursor-pointer transition-all border border-slate-800 flex flex-col justify-between" onClick={handleGetInsights}>
               <Sparkles size={20} className={`${loadingAi ? 'animate-spin' : 'text-vibrant-amber'}`} />
               <div className="mt-8 flex items-center justify-between">
-                <span className="text-[10px] font-bold tracking-widest uppercase truncate mr-2">{loadingAi ? "Analyse..." : "Insight IA"}</span>
+                <span className="text-[10px] font-bold tracking-widest uppercase truncate mr-2">{loadingAi ? "Analyse..." : "Générer Insight IA"}</span>
                 <ArrowUpRight size={16} />
               </div>
           </div>
@@ -153,7 +164,9 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], activiti
                       <div className={`w-1 h-8 rounded-full flex-shrink-0 transition-all ${task.priority === 'high' ? 'bg-vibrant-rose' : 'bg-primary'}`}></div>
                       <div className="truncate">
                         <h4 className="font-bold text-slate-900 text-sm truncate uppercase tracking-tight group-hover:text-primary transition-colors">{task.title}</h4>
-                        <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider mt-0.5">{task.dueDate}</p>
+                        <p className={`text-[9px] font-semibold uppercase tracking-wider mt-0.5 ${task.dueDate < today ? 'text-urgent' : 'text-slate-400'}`}>
+                          {task.dueDate < today ? `En retard depuis ${task.dueDate}` : `Échéance : ${task.dueDate}`}
+                        </p>
                       </div>
                     </div>
                     <ChevronRight size={16} className="text-slate-300 group-hover:text-primary transition-colors flex-shrink-0" />
@@ -162,15 +175,14 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], activiti
               )}
             </div>
 
-            {/* ADMIN ACTIVITY FEED - Below Tasks for better structure */}
             {isAdmin && (
                <div className="pt-8 space-y-4">
                   <div className="flex items-center justify-between">
                       <h3 className="font-bold text-slate-900 text-sm uppercase tracking-wider flex items-center space-x-2">
                         <Activity size={16} className="text-primary" />
-                        <span>Flux d'activités Global</span>
+                        <span>Flux d'activités iV</span>
                       </h3>
-                      <button onClick={() => onNavigate('team')} className="text-[10px] font-bold uppercase text-slate-400 hover:text-primary transition-colors">Gérer l'équipe</button>
+                      <button onClick={() => onNavigate('team')} className="text-[10px] font-bold uppercase text-slate-400 hover:text-primary transition-colors">Équipe</button>
                   </div>
                   <div className="space-y-3">
                     {activities.length === 0 ? (

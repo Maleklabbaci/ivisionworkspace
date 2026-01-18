@@ -23,14 +23,17 @@ const Reports: React.FC<ReportsProps> = ({ currentUser, tasks = [], users = [], 
   }, []);
 
   const stats = useMemo(() => {
-    const completed = tasks.filter(t => t.status === TaskStatus.DONE).length;
-    const rate = tasks.length > 0 ? Math.round((completed / tasks.length) * 100) : 0;
+    const totalTasks = tasks.length;
+    const completedTasks = tasks.filter(t => t.status === TaskStatus.DONE).length;
+    const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
     
-    const qualifiedLeads = leads.filter(l => l.status === 'qualified');
-    const pipelineValue = qualifiedLeads.reduce((acc, curr) => acc + (curr.valueMin || 0), 0);
-    const convRate = leads.length > 0 ? Math.round((qualifiedLeads.length / leads.length) * 100) : 0;
+    const totalLeads = leads.length;
+    const qualifiedLeadsCount = leads.filter(l => l.status === 'qualified').length;
+    // La valeur du pipeline se calcule sur TOUS les prospects actifs (pas seulement qualifiés)
+    const pipelineValue = leads.reduce((acc, curr) => acc + (Number(curr.valueMin) || 0), 0);
+    const convRate = totalLeads > 0 ? Math.round((qualifiedLeadsCount / totalLeads) * 100) : 0;
 
-    return { completionRate: rate, pipelineValue, leadCount: leads.length, convRate };
+    return { completionRate, pipelineValue, leadCount: totalLeads, convRate };
   }, [tasks, leads]);
 
   const taskData = useMemo(() => [
@@ -43,11 +46,11 @@ const Reports: React.FC<ReportsProps> = ({ currentUser, tasks = [], users = [], 
     setIsAnalysing(true);
     try {
         const context = `
-            Tâches complétées: ${tasks.filter(t => t.status === TaskStatus.DONE).length} / ${tasks.length}.
-            Leads qualifiés: ${leads.filter(l => l.status === 'qualified').length} / ${leads.length}.
-            Valeur Pipeline: ${stats.pipelineValue} DZD.
+            KPIs iVISION : Tâches ${stats.completionRate}% (Total ${tasks.length}).
+            Pipeline : ${stats.pipelineValue} DZD (${leads.length} leads).
+            Conversion : ${stats.convRate}%.
         `;
-        const report = await generateMarketingInsight(`Génère une analyse stratégique iVISION iV pour ce dashboard : ${context}. Sois pro, direct et donne 2 actions prioritaires.`);
+        const report = await generateMarketingInsight(`Analyse ces métriques iVISION et donne 2 recommandations stratégiques : ${context}`);
         setStrategyReport(report);
     } catch (e) {
         console.error(e);
@@ -100,7 +103,7 @@ const Reports: React.FC<ReportsProps> = ({ currentUser, tasks = [], users = [], 
             className="px-6 py-4 bg-slate-900 text-white font-black rounded-2xl flex items-center space-x-3 active-scale text-[10px] uppercase tracking-widest disabled:opacity-50"
           >
             {isAnalysing ? <Loader2 className="animate-spin" size={16} /> : <Wand2 size={16} />}
-            <span>{isAnalysing ? "ANALYSE..." : "GÉNÉRER ANALYSE IA"}</span>
+            <span>{isAnalysing ? "ANALYSE EN COURS..." : "GÉNÉRER ANALYSE IA"}</span>
           </button>
       </div>
 
@@ -143,7 +146,7 @@ const Reports: React.FC<ReportsProps> = ({ currentUser, tasks = [], users = [], 
               </div>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Conversion Leads</p>
               <h4 className="text-3xl font-bold text-slate-900 mt-1 tracking-tight">{stats.convRate}%</h4>
-              <p className="text-[9px] font-semibold text-slate-400 mt-2 uppercase">Basé sur {stats.leadCount} prospects</p>
+              <p className="text-[9px] font-semibold text-slate-400 mt-2 uppercase">Qualifiés sur {stats.leadCount} prospects</p>
           </div>
 
           <div className="bg-slate-900 p-8 rounded-3xl shadow-xl shadow-slate-200 group relative overflow-hidden">
@@ -152,12 +155,12 @@ const Reports: React.FC<ReportsProps> = ({ currentUser, tasks = [], users = [], 
               </div>
               <div className="relative z-10 flex flex-col h-full justify-between">
                 <div>
-                  <p className="text-[10px] font-bold text-vibrant-amber uppercase tracking-widest">Valeur Pipeline</p>
+                  <p className="text-[10px] font-bold text-vibrant-amber uppercase tracking-widest">Valeur Pipeline iV</p>
                   <h4 className="text-2xl font-bold text-white mt-1 tracking-tighter">
                     {new Intl.NumberFormat('fr-FR').format(stats.pipelineValue)} DZD
                   </h4>
                 </div>
-                <div className="text-[10px] font-bold text-white/40 uppercase tracking-widest mt-8">Données de Transaction iV</div>
+                <div className="text-[10px] font-bold text-white/40 uppercase tracking-widest mt-8">Basé sur tous les leads actifs</div>
               </div>
           </div>
       </div>
@@ -165,10 +168,10 @@ const Reports: React.FC<ReportsProps> = ({ currentUser, tasks = [], users = [], 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <div className="card-formal p-10 rounded-[2.5rem] space-y-8">
               <div className="flex items-center justify-between">
-                  <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">État Global des Missions</h3>
+                  <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">Répartition Opérationnelle</h3>
                   <div className="flex items-center space-x-2">
                       <div className="w-2 h-2 rounded-full bg-vibrant-indigo"></div>
-                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Répartition</span>
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">États de Mission</span>
                   </div>
               </div>
               <div className="h-[300px] w-full">
@@ -188,14 +191,14 @@ const Reports: React.FC<ReportsProps> = ({ currentUser, tasks = [], users = [], 
                   <TrendingUp size={36} />
               </div>
               <div className="max-w-xs mx-auto space-y-4">
-                  <h3 className="text-xl font-bold text-slate-900 uppercase tracking-tight">Efficacité Opérationnelle</h3>
+                  <h3 className="text-xl font-bold text-slate-900 uppercase tracking-tight">Capacité de Livraison</h3>
                   <p className="text-sm font-medium text-slate-500 leading-relaxed uppercase tracking-wider text-[11px]">
-                      Votre équipe a complété <span className="text-vibrant-emerald font-bold">{tasks.filter(t => t.status === TaskStatus.DONE).length} missions</span> au total.
+                      L'agence a finalisé <span className="text-vibrant-emerald font-bold">{tasks.filter(t => t.status === TaskStatus.DONE).length} objectifs</span> avec succès sur la période actuelle.
                   </p>
                   <div className="pt-4">
                       <div className="inline-flex items-center space-x-2 px-4 py-2 bg-vibrant-emerald/10 text-vibrant-emerald rounded-xl text-[10px] font-bold uppercase tracking-widest border border-vibrant-emerald/10">
                           <Activity size={14} />
-                          <span>Flux iV Connecté</span>
+                          <span>Moteur d'Efficacité iV</span>
                       </div>
                   </div>
               </div>
