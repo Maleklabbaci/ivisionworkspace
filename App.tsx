@@ -437,7 +437,8 @@ const AppContent: React.FC<any> = ({
             const id = generateUUID();
             supabase.from('projects').insert({id, name:p.name, description:p.description, total_budget:p.totalBudget, spent_budget:0, status:p.status, client_id:p.clientId}).then(()=>setProjects([{...p, id, spentBudget:0, createdAt: new Date().toISOString()}, ...projects]));
           }} onDeleteProject={(id:string)=> {
-            supabase.from('projects').delete().eq('id',id).then(()=>setProjects(projects.filter(p=>p.id!==id)));
+            setProjects(projects.filter(p=>p.id!==id));
+            supabase.from('projects').delete().eq('id',id);
           }} onUpdateProject={(p:Project)=>{
              supabase.from('projects').update({
                name: p.name, 
@@ -455,7 +456,8 @@ const AppContent: React.FC<any> = ({
                 const id = generateUUID();
                 supabase.from('salaries').insert({id, user_id:s.userId, project_id:s.projectId, amount:s.amount, bonus:s.bonus, frequency:s.frequency, status:s.status}).then(()=>setSalaries([{...s, id}, ...salaries]));
               }} onDeleteSalary={(id:string)=> {
-                supabase.from('salaries').delete().eq('id',id).then(()=>setSalaries(salaries.filter(s=>s.id!==id)));
+                setSalaries(salaries.filter(s=>s.id!==id));
+                supabase.from('salaries').delete().eq('id',id);
               }} onUpdateSalary={(s:SalaryRecord)=>{
                 supabase.from('salaries').update({status:s.status, amount:s.amount, bonus:s.bonus, frequency:s.frequency, project_id:s.projectId}).eq('id',s.id).then(()=>setSalaries(salaries.map(sl=>sl.id===s.id?s:sl)));
               }} 
@@ -463,13 +465,15 @@ const AppContent: React.FC<any> = ({
                 const id = generateUUID();
                 supabase.from('expenses').insert({id, name:ex.name, amount:ex.amount, type:ex.type, project_id:ex.projectId, status:ex.status}).then(()=>setExpenses([{...ex, id, createdAt: new Date().toISOString()}, ...expenses]));
               }} onDeleteExpense={(id:string)=> {
-                supabase.from('expenses').delete().eq('id',id).then(()=>setExpenses(expenses.filter(e=>e.id!==id)));
+                setExpenses(expenses.filter(e=>e.id!==id));
+                supabase.from('expenses').delete().eq('id',id);
               }}
               onAddAdCampaign={(ad:any)=>{
                 const id = generateUUID();
                 supabase.from('ad_campaigns').insert({id, name:ad.name, amount:ad.amount, platform:ad.platform, project_id:ad.projectId, status:ad.status}).then(()=>setAdCampaigns([{...ad, id, createdAt: new Date().toISOString()}, ...adCampaigns]));
               }} onDeleteAdCampaign={(id:string)=> {
-                supabase.from('ad_campaigns').delete().eq('id',id).then(()=>setAdCampaigns(adCampaigns.filter(a=>a.id!==id)));
+                setAdCampaigns(adCampaigns.filter(a=>a.id!==id));
+                supabase.from('ad_campaigns').delete().eq('id',id);
               }}
             />
           </AccessGuard>} />
@@ -483,18 +487,49 @@ const AppContent: React.FC<any> = ({
               }} 
             />
           </AccessGuard>} />
-          <Route path="/team" element={<AccessGuard currentUser={currentUser} role={UserRole.ADMIN}><Team currentUser={currentUser} users={users} onAddUser={(u:any)=> {
-            supabase.from('users').insert({id:generateUUID(), ...u, email:u.email.toLowerCase(), avatar:`https://ui-avatars.com/api/?name=${encodeURIComponent(u.name)}&background=random`, status:'active'}).select().single().then(({data})=>{if(data) setUsers([mapFromDB('users',data),...users])});
+          <Route path="/team" element={<AccessGuard currentUser={currentUser} role={UserRole.ADMIN}><Team currentUser={currentUser} users={users} onAddUser={async (u:any)=> {
+            // Création dans Auth Supabase
+            const { data: authData, error: authError } = await supabase.auth.signUp({ email: u.email, password: u.password });
+            if (authError) {
+              addNotification("Erreur Déploiement", authError.message, "urgent");
+              return;
+            }
+            if (authData.user) {
+              // Création du profil utilisateur dans la table 'users'
+              const { error: userError } = await supabase.from('users').insert({
+                id: authData.user.id,
+                email: u.email.toLowerCase(),
+                name: u.name,
+                role: u.role,
+                permissions: u.permissions,
+                status: 'active',
+                avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name)}&background=random`
+              });
+              if (userError) {
+                addNotification("Erreur Profil", userError.message, "urgent");
+              } else {
+                addNotification("Succès", `Accès déployé pour ${u.name}.`, "success");
+                // Le rechargement automatique de fetchUserData se chargera de mettre à jour la liste
+              }
+            }
           }} onRemoveUser={(id:string)=> {
-            supabase.from('users').delete().eq('id', id).then(()=>setUsers(users.filter(u=>u.id!==id)));
+            setUsers(users.filter(u=>u.id!==id));
+            supabase.from('users').delete().eq('id', id);
           }} onUpdateMember={async (id:string, up:any) => {
-             await supabase.from('users').update(up).eq('id',id);
+             await supabase.from('users').update({
+               name: up.name,
+               email: up.email,
+               role: up.role,
+               permissions: up.permissions
+             }).eq('id',id);
              setUsers(users.map(u => u.id === id ? {...u, ...up} : u));
+             addNotification("Système", "Profil mis à jour.", "success");
           }} /></AccessGuard>} />
           <Route path="/files" element={<AccessGuard currentUser={currentUser} permission="canViewFiles"><Files fileLinks={fileLinks} onAddFileLink={(n:string,u:string)=> {
             supabase.from('file_links').insert({id:generateUUID(), name:n, url:u, created_by:currentUser.id}).select().single().then(({data})=>{if(data) setFileLinks([mapFromDB('file_links',data),...fileLinks])});
           }} onDeleteFileLink={(id:string)=> {
-             supabase.from('file_links').delete().eq('id',id).then(()=>setFileLinks(fileLinks.filter(f=>f.id!==id)));
+             setFileLinks(fileLinks.filter(f=>f.id!==id));
+             supabase.from('file_links').delete().eq('id',id);
           }} currentUser={currentUser} /></AccessGuard>} />
           <Route path="/settings" element={<Settings currentUser={currentUser} onUpdateProfile={async (up:any)=>{
             await supabase.from('users').update(up).eq('id', currentUser.id);
@@ -515,7 +550,8 @@ const AppContent: React.FC<any> = ({
           <Route path="/clients" element={<AccessGuard currentUser={currentUser} permission="canManageClients"><Clients clients={clients} tasks={tasks} onAddClient={(c:any)=> {
             supabase.from('clients').insert({id:generateUUID(), ...c}).select().single().then(({data})=>{if(data) setClients([data,...clients])});
           }} onUpdateClient={handleUpdateClient} onDeleteClient={(id:string)=> {
-            supabase.from('clients').delete().eq('id',id).then(()=>setClients(clients.filter(c=>c.id!==id)));
+            setClients(clients.filter(c=>c.id!==id));
+            supabase.from('clients').delete().eq('id',id);
           }} currentUser={currentUser} /></AccessGuard>} />
           <Route path="/calendar" element={<Calendar tasks={tasks} onAddTask={(t:any)=> {
              const newTask = {...t, id:generateUUID(), created_at: new Date().toISOString()};
@@ -528,13 +564,14 @@ const AppContent: React.FC<any> = ({
           }} onUpdateLead={(l:any)=> {
             supabase.from('leads').update({...l, value_min:l.valueMin, value_max:l.valueMax}).eq('id',l.id).then(()=>setLeads(leads.map(ld=>ld.id===l.id?{...ld,...l}:ld)));
           }} onDeleteLead={(id:string)=> {
-            supabase.from('leads').delete().eq('id',id).then(()=>setLeads(leads.filter(l=>l.id!==id)));
+            setLeads(leads.filter(l=>l.id!==id));
+            supabase.from('leads').delete().eq('id',id);
           }} onConvertToClient={(l:any)=> {
-             const {id:_, ...cData} = l;
              supabase.from('clients').insert({id:generateUUID(), name:l.name, company:l.company, email:l.email, phone:l.phone}).select().single().then(({data})=>{
                if(data) {
                  setClients([data,...clients]);
-                 supabase.from('leads').delete().eq('id',l.id).then(()=>setLeads(leads.filter(ld=>ld.id!==l.id)));
+                 setLeads(leads.filter(ld=>ld.id!==l.id));
+                 supabase.from('leads').delete().eq('id',l.id);
                  addNotification("CRM", "Prospect converti en client.", "success");
                }
              });

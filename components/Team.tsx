@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { User, UserRole, UserPermissions } from '../types';
-import { Plus, X, Edit2, Trash2, Loader2, ShieldCheck, CheckSquare, Square, User as UserIcon, Mail } from 'lucide-react';
+import { Plus, X, Edit2, Trash2, Loader2, ShieldCheck, CheckSquare, Square, User as UserIcon, Mail, Key } from 'lucide-react';
 import Modal from './Modal';
 
 const DEFAULT_PERMISSIONS: UserPermissions = {
@@ -56,6 +56,7 @@ const Team: React.FC<any> = ({ currentUser, users, onAddUser, onRemoveUser, onUp
   const [formData, setFormData] = useState<any>({ 
     name: '', 
     email: '', 
+    password: '',
     role: UserRole.MEMBER, 
     permissions: { ...DEFAULT_PERMISSIONS } 
   });
@@ -68,6 +69,7 @@ const Team: React.FC<any> = ({ currentUser, users, onAddUser, onRemoveUser, onUp
       setFormData({
         name: editingUser.name,
         email: editingUser.email,
+        password: '', // On ne remplit pas le mot de passe en édition pour des raisons de sécurité
         role: editingUser.role,
         permissions: editingUser.permissions || { ...DEFAULT_PERMISSIONS }
       });
@@ -75,6 +77,7 @@ const Team: React.FC<any> = ({ currentUser, users, onAddUser, onRemoveUser, onUp
       setFormData({
         name: '',
         email: '',
+        password: '',
         role: UserRole.MEMBER,
         permissions: { ...DEFAULT_PERMISSIONS }
       });
@@ -120,7 +123,10 @@ const Team: React.FC<any> = ({ currentUser, users, onAddUser, onRemoveUser, onUp
               </div>
             </div>
             {isAdmin && (
-              <button onClick={() => { setEditingUser(user); setShowModal('edit'); }} className="p-3 glass rounded-xl text-slate-500 hover:text-white transition-colors active-scale"><Edit2 size={16}/></button>
+              <div className="flex items-center space-x-2">
+                <button onClick={() => { setEditingUser(user); setShowModal('edit'); }} className="p-3 glass rounded-xl text-slate-500 hover:text-white transition-colors active-scale"><Edit2 size={16}/></button>
+                <button onClick={() => confirm('Révoquer cet accès ?') && onRemoveUser(user.id)} className="p-3 glass rounded-xl text-slate-500 hover:text-rose-400 transition-colors active-scale"><Trash2 size={16}/></button>
+              </div>
             )}
           </div>
         ))}
@@ -134,27 +140,40 @@ const Team: React.FC<any> = ({ currentUser, users, onAddUser, onRemoveUser, onUp
       >
         <form onSubmit={handleSubmit} className="space-y-8">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <div>
+            <div className="space-y-2">
               <label className="label-iv"><UserIcon size={14} className="text-emerald-400"/> Nom complet</label>
               <input required className="input-iv" placeholder="Marc L." value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
             </div>
-            <div>
+            <div className="space-y-2">
               <label className="label-iv"><Mail size={14} className="text-emerald-400"/> Email Pro</label>
               <input required type="email" className="input-iv" placeholder="marc@ivision.pro" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
             </div>
           </div>
 
-          <div>
-            <label className="label-iv">Rôle opérationnel</label>
-            <select className="input-iv appearance-none cursor-pointer" value={formData.role} onChange={e => setFormData({...formData, role: e.target.value as UserRole})}>
-              {Object.values(UserRole).map(role => <option key={role} value={role}>{role}</option>)}
-            </select>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div className="space-y-2">
+              <label className="label-iv">Rôle opérationnel</label>
+              <select className="input-iv appearance-none cursor-pointer" value={formData.role} onChange={e => setFormData({...formData, role: e.target.value as UserRole})}>
+                {Object.values(UserRole).map(role => <option key={role} value={role}>{role}</option>)}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label className="label-iv"><Key size={14} className="text-emerald-400"/> Mot de passe</label>
+              <input 
+                required={showModal === 'add'} 
+                type="password" 
+                className="input-iv" 
+                placeholder={showModal === 'add' ? "Code secret" : "Laisser vide pour inchangé"} 
+                value={formData.password} 
+                onChange={e => setFormData({...formData, password: e.target.value})} 
+              />
+            </div>
           </div>
 
           <div className="pt-2">
             <div className="flex items-center space-x-3 mb-6">
               <ShieldCheck size={18} className="text-emerald-400" />
-              <h4 className="text-[10px] font-black text-white uppercase">Permissions iV</h4>
+              <h4 className="text-[10px] font-black text-white uppercase tracking-normal">Permissions iV</h4>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {(Object.keys(PERMISSION_LABELS) as Array<keyof UserPermissions>).map((key) => (
@@ -168,8 +187,8 @@ const Team: React.FC<any> = ({ currentUser, users, onAddUser, onRemoveUser, onUp
             </div>
           </div>
 
-          <button disabled={isSubmitting} className="w-full py-6 bg-emerald-400 text-slate-950 font-black rounded-[2rem] shadow-2xl shadow-emerald-400/20 active-scale disabled:opacity-50 uppercase text-[11px] tracking-tight hover:bg-emerald-300 transition-all mt-4">
-            {isSubmitting ? <Loader2 className="animate-spin mx-auto" size={24}/> : "Activer l'Accès"}
+          <button disabled={isSubmitting} className="w-full py-6 bg-emerald-400 text-slate-950 font-black rounded-[2rem] shadow-2xl shadow-emerald-400/20 active-scale disabled:opacity-50 uppercase text-[11px] tracking-normal hover:bg-emerald-300 transition-all mt-4">
+            {isSubmitting ? <Loader2 className="animate-spin mx-auto" size={24}/> : (showModal === 'add' ? "Déployer l'Accès" : "Mettre à jour l'Accès")}
           </button>
         </form>
       </Modal>
