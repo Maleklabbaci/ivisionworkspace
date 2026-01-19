@@ -21,6 +21,7 @@ export interface UserPermissions {
   canManageClients?: boolean;
   canManageLeads?: boolean;
   canManageCampaigns?: boolean;
+  canManageFinances?: boolean;
 }
 
 export interface User {
@@ -35,6 +36,49 @@ export interface User {
   permissions?: UserPermissions;
   lastSeen?: string;
   ai_api_key?: string;
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  description: string;
+  totalBudget: number;
+  spentBudget: number;
+  status: 'active' | 'completed' | 'on_hold';
+  clientId?: string;
+  createdAt: string;
+}
+
+export interface SalaryRecord {
+  id: string;
+  userId: string;
+  projectId?: string;
+  amount: number;
+  bonus?: number;
+  frequency: 'hebdo' | 'mensuel';
+  status: 'paid' | 'pending';
+  lastPaidDate?: string;
+}
+
+export interface Expense {
+  id: string;
+  name: string;
+  description?: string;
+  amount: number;
+  type: 'travel' | 'freelance' | 'software' | 'office' | 'other';
+  projectId?: string;
+  status: 'paid' | 'pending';
+  createdAt: string;
+}
+
+export interface AdCampaignExpense {
+  id: string;
+  name: string;
+  platform: 'facebook' | 'google' | 'tiktok' | 'instagram' | 'other';
+  amount: number;
+  projectId?: string;
+  status: 'active' | 'paused' | 'completed';
+  createdAt: string;
 }
 
 export interface Client {
@@ -74,6 +118,7 @@ export interface Task {
   description: string;
   assigneeId: string;
   clientId?: string;
+  projectId?: string;
   dueDate: string;
   status: TaskStatus;
   type: 'content' | 'ads' | 'social' | 'seo' | 'admin'; 
@@ -116,7 +161,7 @@ export interface ToastNotification {
   type: 'info' | 'success' | 'urgent';
 }
 
-export type ViewState = 'dashboard' | 'tasks' | 'chat' | 'files' | 'team' | 'settings' | 'reports' | 'clients' | 'calendar' | 'leads';
+export type ViewState = 'dashboard' | 'tasks' | 'chat' | 'files' | 'team' | 'settings' | 'reports' | 'clients' | 'calendar' | 'leads' | 'projects' | 'finance';
 
 export type CampaignCategory = 'content' | 'ads' | 'social' | 'mixed';
 

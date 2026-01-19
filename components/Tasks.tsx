@@ -1,9 +1,9 @@
 
 import React, { useState, useMemo } from 'react';
 import { Plus, X, Calendar as CalendarIcon, Trash2, GripVertical, CheckCircle2, MoreHorizontal, Briefcase, User as UserIcon, Type as TypeIcon, AlertTriangle, Layers, Info } from 'lucide-react';
-import { Task, TaskStatus, User, Client } from '../types';
+import { Task, TaskStatus, User, Client, Project } from '../types';
 
-const TaskCard = ({ task, onClick, clientName, assignee, onDragStart }: any) => {
+const TaskCard = ({ task, onClick, clientName, projectName, assignee, onDragStart }: any) => {
   return (
     <div 
       draggable
@@ -18,7 +18,14 @@ const TaskCard = ({ task, onClick, clientName, assignee, onDragStart }: any) => 
             <h4 className={`font-bold text-white text-[11px] md:text-[13px] tracking-tight truncate ${task.status === TaskStatus.DONE ? 'opacity-40 line-through' : ''}`}>
               {task.title}
             </h4>
-            <p className="text-[7px] md:text-[9px] text-slate-500 font-extrabold uppercase tracking-widest mt-1 truncate">{clientName}</p>
+            <div className="flex flex-col mt-1">
+              <p className="text-[7px] md:text-[9px] text-slate-500 font-extrabold uppercase tracking-widest truncate">{clientName}</p>
+              {projectName && (
+                <p className="text-[6px] md:text-[8px] text-violet-400 font-black uppercase tracking-widest mt-0.5 truncate flex items-center">
+                  <Layers size={8} className="mr-1" /> {projectName}
+                </p>
+              )}
+            </div>
           </div>
         </div>
         {assignee && (
@@ -38,10 +45,11 @@ const TaskCard = ({ task, onClick, clientName, assignee, onDragStart }: any) => 
   );
 };
 
-const KanbanColumn = ({ status, tasks, users, clients, onDrop, onTaskClick, onDragStart }: any) => {
+const KanbanColumn = ({ status, tasks, users, clients, projects, onDrop, onTaskClick, onDragStart }: any) => {
   const [isOver, setIsOver] = useState(false);
   const clientMap = useMemo(() => new Map<string, Client>(clients.map((c: any) => [c.id, c])), [clients]);
   const userMap = useMemo(() => new Map<string, User>(users.map((u: any) => [u.id, u])), [users]);
+  const projectMap = useMemo(() => new Map<string, Project>(projects.map((p: any) => [p.id, p])), [projects]);
 
   const colorConfig = {
     [TaskStatus.TODO]: { color: 'text-slate-400', bg: 'bg-slate-400/10', line: 'border-slate-400/20' },
@@ -72,6 +80,7 @@ const KanbanColumn = ({ status, tasks, users, clients, onDrop, onTaskClick, onDr
             key={task.id} task={task} onDragStart={onDragStart}
             onClick={() => onTaskClick(task.id)} 
             clientName={clientMap.get(task.clientId || '')?.name || 'Interne'} 
+            projectName={projectMap.get(task.projectId || '')?.name}
             assignee={userMap.get(task.assigneeId)}
           />
         ))}
@@ -86,7 +95,7 @@ const KanbanColumn = ({ status, tasks, users, clients, onDrop, onTaskClick, onDr
   );
 };
 
-const Tasks = ({ tasks, users, clients = [], currentUser, onUpdateStatus, onAddTask, onUpdateTask, onDeleteTask }: any) => {
+const Tasks = ({ tasks, users, clients = [], projects = [], currentUser, onUpdateStatus, onAddTask, onUpdateTask, onDeleteTask }: any) => {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'add' | 'edit'>('list');
   const [formData, setFormData] = useState<Partial<Task>>({ 
@@ -96,7 +105,8 @@ const Tasks = ({ tasks, users, clients = [], currentUser, onUpdateStatus, onAddT
     priority: 'medium', 
     assigneeId: currentUser.id, 
     type: 'content', 
-    clientId: '' 
+    clientId: '',
+    projectId: ''
   });
   
   const tasksByStatus = useMemo(() => ({
@@ -121,21 +131,19 @@ const Tasks = ({ tasks, users, clients = [], currentUser, onUpdateStatus, onAddT
             <h2 className="text-2xl md:text-4xl font-extrabold text-white tracking-tight uppercase">Missions</h2>
           </div>
           <button 
-            onClick={() => { setFormData({ title: '', description: '', dueDate: new Date().toLocaleDateString('en-CA'), priority: 'medium', assigneeId: currentUser.id, type: 'content', clientId: '' }); setViewMode('add'); }} 
+            onClick={() => { setFormData({ title: '', description: '', dueDate: new Date().toLocaleDateString('en-CA'), priority: 'medium', assigneeId: currentUser.id, type: 'content', clientId: '', projectId: '' }); setViewMode('add'); }} 
             className="w-12 h-12 md:w-14 md:h-14 bg-violet-400 text-white rounded-xl md:rounded-2xl shadow-xl shadow-violet-400/20 active-scale transition-all flex items-center justify-center"
           >
-            {/* Fix: removed invalid md:size prop and used className for responsive sizing */}
             <Plus size={24} className="md:w-7 md:h-7" strokeWidth={3} />
           </button>
         </div>
 
-        {/* Kanban Board - Scrollable horizontally on mobile */}
         <div className="flex lg:grid lg:grid-cols-3 gap-4 md:gap-8 overflow-x-auto lg:overflow-x-visible no-scrollbar pb-6 px-1 snap-x">
           {[TaskStatus.TODO, TaskStatus.IN_PROGRESS, TaskStatus.DONE].map(status => (
               <div key={status} className="snap-center">
                 <KanbanColumn 
                   status={status} tasks={tasksByStatus[status]} 
-                  users={users} clients={clients} 
+                  users={users} clients={clients} projects={projects}
                   onDragStart={(e: any, id: any) => { e.dataTransfer.setData('taskId', id); }} 
                   onDrop={(id: any, st: any) => onUpdateStatus(id, st)} 
                   onTaskClick={setSelectedTaskId} 
@@ -145,7 +153,6 @@ const Tasks = ({ tasks, users, clients = [], currentUser, onUpdateStatus, onAddT
         </div>
       </div>
 
-      {/* MODAL AJOUT/EDITION - Conserving Desktop Size, Fix Phone Size */}
       {(viewMode === 'add' || viewMode === 'edit') && (
         <div className="modal-overlay">
           <div className="fixed inset-0 cursor-pointer" onClick={closeModals}></div>
@@ -156,7 +163,6 @@ const Tasks = ({ tasks, users, clients = [], currentUser, onUpdateStatus, onAddT
                     <h3 className="text-xl md:text-3xl font-extrabold text-white tracking-tight uppercase leading-none">{viewMode === 'add' ? 'Déployer Mission' : 'Configuration'}</h3>
                     <p className="text-[8px] md:text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-2 md:mt-3">Paramètres opérationnels iVISION</p>
                   </div>
-                  {/* Fix: removed invalid md:size prop and used className for responsive sizing */}
                   <button onClick={closeModals} className="w-10 h-10 md:w-12 md:h-12 glass text-slate-500 hover:text-white rounded-lg md:rounded-xl flex items-center justify-center transition-all flex-shrink-0"><X size={20} className="md:w-6 md:h-6"/></button>
                </div>
                
@@ -178,9 +184,10 @@ const Tasks = ({ tasks, users, clients = [], currentUser, onUpdateStatus, onAddT
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
                     <div className="space-y-1 md:space-y-2">
-                      <label className="text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center"><UserIcon size={12} className="mr-2 text-violet-400"/> Responsable</label>
-                      <select className="w-full p-4 md:p-5 bg-slate-900 border border-white/10 rounded-xl md:rounded-2xl font-bold text-slate-300 outline-none text-xs md:text-sm appearance-none cursor-pointer" value={formData.assigneeId} onChange={e => setFormData({...formData, assigneeId: e.target.value})}>
-                          {users.map((u: User) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                      <label className="text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center"><Layers size={12} className="mr-2 text-violet-400"/> Activité (Projet)</label>
+                      <select className="w-full p-4 md:p-5 bg-slate-900 border border-white/10 rounded-xl md:rounded-2xl font-bold text-slate-300 outline-none text-xs md:text-sm appearance-none cursor-pointer" value={formData.projectId} onChange={e => setFormData({...formData, projectId: e.target.value})}>
+                          <option value="">Mission Indépendante</option>
+                          {projects.map((p: Project) => <option key={p.id} value={p.id}>{p.name}</option>)}
                       </select>
                     </div>
                     <div className="space-y-1 md:space-y-2">
@@ -192,11 +199,20 @@ const Tasks = ({ tasks, users, clients = [], currentUser, onUpdateStatus, onAddT
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 md:gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
+                    <div className="space-y-1 md:space-y-2">
+                      <label className="text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center"><UserIcon size={12} className="mr-2 text-violet-400"/> Responsable</label>
+                      <select className="w-full p-4 md:p-5 bg-slate-900 border border-white/10 rounded-xl md:rounded-2xl font-bold text-slate-300 outline-none text-xs md:text-sm appearance-none cursor-pointer" value={formData.assigneeId} onChange={e => setFormData({...formData, assigneeId: e.target.value})}>
+                          {users.map((u: User) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                      </select>
+                    </div>
                     <div className="space-y-1 md:space-y-2">
                       <label className="text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center"><CalendarIcon size={12} className="mr-2 text-violet-400"/> Échéance</label>
                       <input type="date" className="w-full p-4 md:p-5 bg-white/5 border border-white/10 rounded-xl md:rounded-2xl font-bold text-white outline-none focus:border-violet-400 text-xs md:text-sm" value={formData.dueDate} onChange={e => setFormData({...formData, dueDate: e.target.value})} />
                     </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 md:gap-4">
                     <div className="space-y-1 md:space-y-2">
                       <label className="text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center"><AlertTriangle size={12} className="mr-2 text-violet-400"/> Priorité</label>
                       <select className="w-full p-4 md:p-5 bg-slate-900 border border-white/10 rounded-xl md:rounded-2xl font-bold text-slate-300 outline-none text-xs md:text-sm appearance-none cursor-pointer" value={formData.priority} onChange={e => setFormData({...formData, priority: e.target.value as any})}>
@@ -205,9 +221,9 @@ const Tasks = ({ tasks, users, clients = [], currentUser, onUpdateStatus, onAddT
                           <option value="high">Haute</option>
                       </select>
                     </div>
-                    <div className="hidden sm:block space-y-1 md:space-y-2">
-                      <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center"><Layers size={12} className="mr-2 text-violet-400"/> Type</label>
-                      <select className="w-full p-5 bg-slate-900 border border-white/10 rounded-2xl font-bold text-slate-300 outline-none text-sm appearance-none cursor-pointer" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value as any})}>
+                    <div className="space-y-1 md:space-y-2">
+                      <label className="text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center"><Layers size={12} className="mr-2 text-violet-400"/> Type Flux</label>
+                      <select className="w-full p-4 md:p-5 bg-slate-900 border border-white/10 rounded-xl md:rounded-2xl font-bold text-slate-300 outline-none text-xs md:text-sm appearance-none cursor-pointer" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value as any})}>
                           <option value="content">Contenu</option>
                           <option value="ads">Publicité</option>
                           <option value="social">Social</option>
@@ -225,7 +241,6 @@ const Tasks = ({ tasks, users, clients = [], currentUser, onUpdateStatus, onAddT
         </div>
       )}
 
-      {/* MODAL DETAILS - Conserving Desktop Size, Fix Phone Size */}
       {selectedTaskId && currentTask && viewMode === 'list' && (
         <div className="modal-overlay">
           <div className="fixed inset-0 cursor-pointer" onClick={closeModals}></div>
@@ -236,8 +251,7 @@ const Tasks = ({ tasks, users, clients = [], currentUser, onUpdateStatus, onAddT
                   <h3 className="text-xl md:text-2xl font-extrabold text-white tracking-tight uppercase leading-tight truncate">{currentTask.title}</h3>
                   <p className="text-[8px] md:text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-2 md:mt-3">Détails de la mission iVISION</p>
                 </div>
-                {/* Fix: removed invalid md:size prop and used className for responsive sizing */}
-                <button onClick={closeModals} className="w-10 h-10 md:w-12 md:h-12 glass text-slate-500 hover:text-white rounded-xl flex items-center justify-center transition-all flex-shrink-0"><X size={20} className="md:w-6 md:h-6"/></button>
+                <button onClick={closeModals} className="w-10 h-10 md:w-12 md:h-12 glass text-slate-500 hover:text-white rounded-xl flex items-center justify-center transition-all flex-shrink-0 active-scale"><X size={20} className="md:w-6 md:h-6"/></button>
               </div>
               
               <div className="space-y-6 md:space-y-8">

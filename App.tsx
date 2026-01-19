@@ -1,9 +1,10 @@
+
 import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
 import { supabase } from './services/supabaseClient';
 import { HashRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import Layout from './components/Layout';
 import ToastContainer from './components/Toast';
-import { User, UserRole, Task, TaskStatus, Channel, ToastNotification, Message, Client, FileLink, Lead, UserPermissions, ViewState } from './types';
+import { User, UserRole, Task, TaskStatus, Channel, ToastNotification, Message, Client, FileLink, Lead, UserPermissions, ViewState, Project, SalaryRecord, Expense, AdCampaignExpense } from './types';
 import { Loader2, Zap, Lock } from 'lucide-react';
 
 const Dashboard = lazy(() => import('./components/Dashboard'));
@@ -16,6 +17,8 @@ const Reports = lazy(() => import('./components/Reports'));
 const Clients = lazy(() => import('./components/Clients'));
 const Calendar = lazy(() => import('./components/Calendar'));
 const Leads = lazy(() => import('./components/Leads'));
+const Projects = lazy(() => import('./components/Projects'));
+const Finances = lazy(() => import('./components/Finances'));
 
 const generateUUID = () => crypto.randomUUID();
 
@@ -37,6 +40,7 @@ const mapFromDB = (table: string, item: any) => {
   } else if (table === 'tasks') {
     mapped.assigneeId = item.assignee_id;
     mapped.clientId = item.client_id;
+    mapped.projectId = item.project_id;
     mapped.dueDate = item.due_date;
   } else if (table === 'users') {
     mapped.permissions = parsePermissions(item.permissions);
@@ -53,6 +57,22 @@ const mapFromDB = (table: string, item: any) => {
     mapped.member_ids = Array.isArray(item.member_ids) ? item.member_ids : [];
     mapped.created_by = item.created_by;
     mapped.is_private = !!item.is_private;
+  } else if (table === 'projects') {
+    mapped.totalBudget = item.total_budget;
+    mapped.spentBudget = item.spent_budget;
+    mapped.clientId = item.client_id;
+    mapped.createdAt = item.created_at;
+  } else if (table === 'salaries') {
+    mapped.userId = item.user_id;
+    mapped.projectId = item.project_id;
+    mapped.lastPaidDate = item.last_paid_date;
+    mapped.bonus = item.bonus || 0;
+  } else if (table === 'expenses') {
+    mapped.projectId = item.project_id;
+    mapped.createdAt = item.created_at;
+  } else if (table === 'ad_campaigns') {
+    mapped.projectId = item.project_id;
+    mapped.createdAt = item.created_at;
   }
   return mapped;
 };
@@ -66,6 +86,10 @@ const App: React.FC = () => {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [fileLinks, setFileLinks] = useState<FileLink[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [salaries, setSalaries] = useState<SalaryRecord[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [adCampaigns, setAdCampaigns] = useState<AdCampaignExpense[]>([]);
   const [notifications, setNotifications] = useState<ToastNotification[]>([]);
   const [isAuthProcessing, setIsAuthProcessing] = useState(false);
   const [email, setEmail] = useState('');
@@ -132,14 +156,18 @@ const App: React.FC = () => {
       if (userError) throw userError;
       setCurrentUser(mapFromDB('users', userData));
 
-      const [u, t, c, l, ch, m, f] = await Promise.all([
+      const [u, t, c, l, ch, m, f, pr, sl, ex, ad] = await Promise.all([
         supabase.from('users').select('*'),
         supabase.from('tasks').select('*').order('created_at', { ascending: false }),
         supabase.from('clients').select('*'),
         supabase.from('leads').select('*').order('created_at', { ascending: false }),
         supabase.from('channels').select('*'),
         supabase.from('messages').select('*').order('created_at', { ascending: true }),
-        supabase.from('file_links').select('*').order('created_at', { ascending: false })
+        supabase.from('file_links').select('*').order('created_at', { ascending: false }),
+        supabase.from('projects').select('*').order('created_at', { ascending: false }),
+        supabase.from('salaries').select('*'),
+        supabase.from('expenses').select('*').order('created_at', { ascending: false }),
+        supabase.from('ad_campaigns').select('*').order('created_at', { ascending: false })
       ]);
 
       setUsers(u.data?.map(i => mapFromDB('users', i)) || []);
@@ -149,18 +177,10 @@ const App: React.FC = () => {
       setChannels(ch.data?.map(i => mapFromDB('channels', i)) || []);
       setMessages(m.data?.map(i => mapFromDB('messages', i)) || []);
       setFileLinks(f.data?.map(i => mapFromDB('file_links', i)) || []);
-
-      const channel = supabase.channel('global-sync')
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
-          setMessages(prev => prev.some(m => m.id === payload.new.id) ? prev : [...prev, mapFromDB('messages', payload.new)]);
-        })
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'channels' }, payload => {
-          setChannels(prev => prev.some(c => c.id === payload.new.id) ? prev : [...prev, mapFromDB('channels', payload.new)]);
-        })
-        .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'channels' }, payload => {
-          setChannels(prev => prev.filter(c => c.id !== payload.old.id));
-        })
-        .subscribe();
+      setProjects(pr.data?.map(i => mapFromDB('projects', i)) || []);
+      setSalaries(sl.data?.map(i => mapFromDB('salaries', i)) || []);
+      setExpenses(ex.data?.map(i => mapFromDB('expenses', i)) || []);
+      setAdCampaigns(ad.data?.map(i => mapFromDB('ad_campaigns', i)) || []);
 
     } catch (error) {
       console.error(error);
@@ -199,6 +219,10 @@ const App: React.FC = () => {
             channels={channels} setChannels={setChannels}
             messages={messages} setMessages={setMessages}
             fileLinks={fileLinks} setFileLinks={setFileLinks}
+            projects={projects} setProjects={setProjects}
+            salaries={salaries} setSalaries={setSalaries}
+            expenses={expenses} setExpenses={setExpenses}
+            adCampaigns={adCampaigns} setAdCampaigns={setAdCampaigns}
             notifications={notifications}
             addNotification={addNotification}
             onDismissNotification={(id: string) => setNotifications(prev => prev.filter(n => n.id !== id))}
@@ -241,9 +265,36 @@ const AuthUI = ({ handleAuth, email, setEmail, password, setPassword, isAuthProc
   </div>
 );
 
+// Composant AccessGuard pour sécuriser les routes selon le rôle ou les permissions
+const AccessGuard: React.FC<{
+  currentUser: User;
+  permission?: keyof UserPermissions;
+  role?: UserRole;
+  children: React.ReactNode;
+}> = ({ currentUser, permission, role, children }) => {
+  // L'admin a toujours accès à tout
+  if (currentUser.role === UserRole.ADMIN) return <>{children}</>;
+  
+  const hasRole = role ? currentUser.role === role : true;
+  const hasPermission = permission ? !!(currentUser.permissions as any)?.[permission] : true;
+
+  if (hasRole && hasPermission) {
+    return <>{children}</>;
+  }
+
+  return (
+    <div className="h-full flex flex-col items-center justify-center text-center p-8 pt-20">
+      <div className="bg-rose-500/10 p-10 rounded-full mb-6 flex items-center justify-center text-rose-500 shadow-[0_0_50px_rgba(244,63,94,0.1)]"><Lock size={48} /></div>
+      <h2 className="text-3xl font-black text-white mb-2 uppercase tracking-tighter">Accès Restreint</h2>
+      <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">Désolé, vous n'avez pas les autorisations iVISION nécessaires pour accéder à ce noyau.</p>
+    </div>
+  );
+};
+
 const AppContent: React.FC<any> = ({ 
   currentUser, users, tasks, setTasks, clients, setClients, leads, setLeads, 
   channels, setChannels, messages, setMessages, fileLinks, setFileLinks, 
+  projects, setProjects, salaries, setSalaries, expenses, setExpenses, adCampaigns, setAdCampaigns,
   setUsers, notifications, addNotification, onDismissNotification, setCurrentUser 
 }) => {
   const navigate = useNavigate();
@@ -271,55 +322,55 @@ const AppContent: React.FC<any> = ({
     }
   };
 
-  const handleAddChannel = async (c: any) => {
-    const { data, error } = await supabase.from('channels').insert({ id: generateUUID(), ...c }).select().single();
-    if (error) {
-      addNotification("Erreur", error, "urgent");
-      console.error(error);
-    } else if (data) {
-      setChannels(prev => prev.some(ch => ch.id === data.id) ? prev : [...prev, mapFromDB('channels', data)]);
-      addNotification("Chat", `Canal #${data.name} déployé.`, "success");
-    }
-  };
-
-  const handleDeleteChannel = async (id: string) => {
-    const { error } = await supabase.from('channels').delete().eq('id', id);
-    if (error) {
-      addNotification("Erreur", error, "urgent");
-      console.error(error);
-    } else {
-      setChannels(prev => prev.filter(c => c.id !== id));
-      if (currentChannelId === id) setCurrentChannelId(channels.find(c => c.id !== id)?.id || null);
-      addNotification("Chat", "Canal supprimé.", "info");
-    }
-  };
-
-  const handleUpdateChannelMembers = async (channelId: string, memberIds: string[]) => {
-    const { error } = await supabase.from('channels').update({ member_ids: memberIds }).eq('id', channelId);
-    if (error) {
-      addNotification("Erreur", error, "urgent");
-      console.error(error);
-    } else {
-      setChannels(prev => prev.map(c => c.id === channelId ? { ...c, member_ids: memberIds } : c));
-      addNotification("Sécurité", "Liste des accès mise à jour.", "info");
-    }
-  };
-
   return (
     <Layout currentUser={currentUser} onLogout={handleLogout}>
       <Suspense fallback={<div className="h-full w-full flex items-center justify-center"><Loader2 className="animate-spin text-primary" size={40} /></div>}>
         <Routes>
           <Route path="/dashboard" element={<Dashboard currentUser={currentUser} tasks={tasks} clients={clients} onNavigate={(v:ViewState)=>navigate(`/${v}`)} />} />
-          <Route path="/tasks" element={<Tasks tasks={tasks} users={users} clients={clients} currentUser={currentUser} onUpdateStatus={(id:string,st:any)=> {
+          <Route path="/tasks" element={<Tasks tasks={tasks} users={users} clients={clients} projects={projects} currentUser={currentUser} onUpdateStatus={(id:string,st:any)=> {
             supabase.from('tasks').update({status:st}).eq('id',id).then(()=>setTasks(tasks.map(t=>t.id===id?{...t,status:st}:t)));
           }} onAddTask={(t:any)=> {
              const newTask = {...t, id:generateUUID(), created_at: new Date().toISOString()};
-             supabase.from('tasks').insert({id:newTask.id, title:t.title, description:t.description, assignee_id:t.assigneeId, client_id:t.clientId, due_date:t.dueDate, status:t.status, type:t.type, priority:t.priority}).then(()=>setTasks([mapFromDB('tasks', newTask), ...tasks]));
+             supabase.from('tasks').insert({id:newTask.id, title:t.title, description:t.description, assignee_id:t.assigneeId, client_id:t.clientId, project_id:t.projectId, due_date:t.dueDate, status:t.status, type:t.type, priority:t.priority}).then(()=>setTasks([mapFromDB('tasks', newTask), ...tasks]));
           }} onUpdateTask={(t:any)=> {
-             supabase.from('tasks').update({title:t.title, description:t.description, assignee_id:t.assigneeId, client_id:t.clientId, due_date:t.dueDate, status:t.status, type:t.type, priority:t.priority}).eq('id',t.id).then(()=>setTasks(tasks.map(tk=>tk.id===t.id?{...tk,...t}:tk)));
+             supabase.from('tasks').update({title:t.title, description:t.description, assignee_id:t.assigneeId, client_id:t.clientId, project_id:t.projectId, due_date:t.dueDate, status:t.status, type:t.type, priority:t.priority}).eq('id',t.id).then(()=>setTasks(tasks.map(tk=>tk.id===t.id?{...tk,...t}:tk)));
           }} onDeleteTask={(id:string)=> {
              supabase.from('tasks').delete().eq('id',id).then(()=>setTasks(tasks.filter(t=>t.id!==id)));
           }} />} />
+          <Route path="/projects" element={<Projects projects={projects} clients={clients} salaries={salaries} expenses={expenses} adCampaigns={adCampaigns} currentUser={currentUser} onAddProject={(p:any)=>{
+            const id = generateUUID();
+            supabase.from('projects').insert({id, name:p.name, description:p.description, total_budget:p.totalBudget, spent_budget:0, status:p.status, client_id:p.clientId}).then(()=>setProjects([{...p, id, spentBudget:0, createdAt: new Date().toISOString()}, ...projects]));
+          }} onDeleteProject={(id:string)=> {
+            supabase.from('projects').delete().eq('id',id).then(()=>setProjects(projects.filter(p=>p.id!==id)));
+          }} onUpdateProject={(p:Project)=>{
+             supabase.from('projects').update({name:p.name, description:p.description, total_budget:p.totalBudget, status:p.status, client_id:p.clientId}).eq('id',p.id).then(()=>setProjects(projects.map(pr=>pr.id===p.id?p:pr)));
+          }} />} />
+          <Route path="/finance" element={<AccessGuard currentUser={currentUser} permission="canManageFinances" role={UserRole.ADMIN}>
+            <Finances 
+              salaries={salaries} expenses={expenses} adCampaigns={adCampaigns} users={users} projects={projects}
+              currentUser={currentUser} 
+              onAddSalary={(s:any)=>{
+                const id = generateUUID();
+                supabase.from('salaries').insert({id, user_id:s.userId, project_id:s.projectId, amount:s.amount, bonus:s.bonus, frequency:s.frequency, status:s.status}).then(()=>setSalaries([{...s, id}, ...salaries]));
+              }} onDeleteSalary={(id:string)=> {
+                supabase.from('salaries').delete().eq('id',id).then(()=>setSalaries(salaries.filter(s=>s.id!==id)));
+              }} onUpdateSalary={(s:SalaryRecord)=>{
+                supabase.from('salaries').update({status:s.status, amount:s.amount, bonus:s.bonus, frequency:s.frequency, project_id:s.projectId}).eq('id',s.id).then(()=>setSalaries(salaries.map(sl=>sl.id===s.id?s:sl)));
+              }} 
+              onAddExpense={(ex:any)=>{
+                const id = generateUUID();
+                supabase.from('expenses').insert({id, name:ex.name, amount:ex.amount, type:ex.type, project_id:ex.projectId, status:ex.status}).then(()=>setExpenses([{...ex, id, createdAt: new Date().toISOString()}, ...expenses]));
+              }} onDeleteExpense={(id:string)=> {
+                supabase.from('expenses').delete().eq('id',id).then(()=>setExpenses(expenses.filter(e=>e.id!==id)));
+              }}
+              onAddAdCampaign={(ad:any)=>{
+                const id = generateUUID();
+                supabase.from('ad_campaigns').insert({id, name:ad.name, amount:ad.amount, platform:ad.platform, project_id:ad.projectId, status:ad.status}).then(()=>setAdCampaigns([{...ad, id, createdAt: new Date().toISOString()}, ...adCampaigns]));
+              }} onDeleteAdCampaign={(id:string)=> {
+                supabase.from('ad_campaigns').delete().eq('id',id).then(()=>setAdCampaigns(adCampaigns.filter(a=>a.id!==id)));
+              }}
+            />
+          </AccessGuard>} />
           <Route path="/chat" element={<AccessGuard currentUser={currentUser} permission="canManageChat">
             <Chat 
               currentUser={currentUser} users={users} channels={channels} 
@@ -328,9 +379,6 @@ const AppContent: React.FC<any> = ({
               onSendMessage={(c:string,cid:string)=> {
                 supabase.from('messages').insert({id:generateUUID(), content:c, channel_id:cid, user_id:currentUser.id}).select().single().then(({data})=>{if(data) setMessages([...messages, mapFromDB('messages', data)])});
               }} 
-              onAddChannel={handleAddChannel} 
-              onDeleteChannel={handleDeleteChannel}
-              onUpdateChannelMembers={handleUpdateChannelMembers}
             />
           </AccessGuard>} />
           <Route path="/team" element={<AccessGuard currentUser={currentUser} role={UserRole.ADMIN}><Team currentUser={currentUser} users={users} onAddUser={(u:any)=> {
@@ -350,7 +398,18 @@ const AppContent: React.FC<any> = ({
             await supabase.from('users').update(up).eq('id', currentUser.id);
             setCurrentUser({...currentUser, ...up});
           }} />} />
-          <Route path="/reports" element={<AccessGuard currentUser={currentUser} permission="canViewReports"><Reports tasks={tasks} leads={leads} messages={messages} currentUser={currentUser} /></AccessGuard>} />
+          <Route path="/reports" element={<AccessGuard currentUser={currentUser} permission="canViewReports">
+            <Reports 
+              tasks={tasks} 
+              leads={leads} 
+              messages={messages} 
+              projects={projects}
+              salaries={salaries}
+              expenses={expenses}
+              adCampaigns={adCampaigns}
+              currentUser={currentUser} 
+            />
+          </AccessGuard>} />
           <Route path="/clients" element={<AccessGuard currentUser={currentUser} permission="canManageClients"><Clients clients={clients} tasks={tasks} onAddClient={(c:any)=> {
             supabase.from('clients').insert({id:generateUUID(), ...c}).select().single().then(({data})=>{if(data) setClients([data,...clients])});
           }} onUpdateClient={handleUpdateClient} onDeleteClient={(id:string)=> {
@@ -358,10 +417,10 @@ const AppContent: React.FC<any> = ({
           }} currentUser={currentUser} /></AccessGuard>} />
           <Route path="/calendar" element={<Calendar tasks={tasks} onAddTask={(t:any)=> {
              const newTask = {...t, id:generateUUID(), created_at: new Date().toISOString()};
-             supabase.from('tasks').insert({id:newTask.id, title:t.title, description:t.description, assignee_id:t.assigneeId, client_id:t.clientId, due_date:t.dueDate, status:t.status, type:t.type, priority:t.priority}).then(()=>setTasks([mapFromDB('tasks', newTask), ...tasks]));
+             supabase.from('tasks').insert({id:newTask.id, title:t.title, description:t.description, assignee_id:t.assigneeId, client_id:t.clientId, project_id:t.projectId, due_date:t.dueDate, status:t.status, type:t.type, priority:t.priority}).then(()=>setTasks([mapFromDB('tasks', newTask), ...tasks]));
           }} onUpdateStatus={(id:string,st:any)=> {
             supabase.from('tasks').update({status:st}).eq('id',id).then(()=>setTasks(tasks.map(t=>t.id===id?{...t,status:st}:t)));
-          }} currentUser={currentUser} users={users} clients={clients} />} />
+          }} currentUser={currentUser} users={users} clients={clients} projects={projects} />} />
           <Route path="/leads" element={<AccessGuard currentUser={currentUser} permission="canManageLeads"><Leads leads={leads} onAddLead={(l:any)=> {
             supabase.from('leads').insert({id:generateUUID(), ...l, value_min:l.valueMin, value_max:l.valueMax}).select().single().then(({data})=>{if(data) setLeads([mapFromDB('leads',data),...leads])});
           }} onUpdateLead={(l:any)=> {
@@ -383,29 +442,6 @@ const AppContent: React.FC<any> = ({
       </Suspense>
     </Layout>
   );
-};
-
-const AccessGuard = ({ children, currentUser, permission, role }: { children: React.ReactNode, currentUser: User, permission?: keyof UserPermissions, role?: UserRole }) => {
-  const navigate = useNavigate();
-  const isAdmin = currentUser.role === UserRole.ADMIN;
-  const hasPermission = permission ? !!(currentUser.permissions as any)?.[permission] : true;
-  const hasRole = role ? currentUser.role === role : true;
-
-  if (isAdmin) return <>{children}</>;
-
-  if (!hasPermission || !hasRole) {
-    return (
-      <div className="h-[60vh] flex flex-col items-center justify-center text-center p-8">
-        <div className="w-20 h-20 bg-urgent/10 rounded-full flex items-center justify-center text-urgent mb-6">
-          <Lock size={32} />
-        </div>
-        <h2 className="text-2xl font-black text-white mb-2 uppercase tracking-tighter">Accès Restreint</h2>
-        <p className="text-slate-500 max-w-md mx-auto">Demandez à l'administrateur d'activer vos accès pour cette section.</p>
-        <button onClick={() => navigate('/dashboard')} className="mt-8 px-8 py-3 bg-white text-slate-950 font-black rounded-xl uppercase text-[10px] tracking-widest active-scale">Retour au Dashboard</button>
-      </div>
-    );
-  }
-  return <>{children}</>;
 };
 
 export default App;

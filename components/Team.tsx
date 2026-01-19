@@ -27,6 +27,8 @@ const PERMISSION_LABELS: Record<keyof UserPermissions, string> = {
   canManageClients: "Gérer le CRM",
   canManageLeads: "Gérer les leads",
   canManageCampaigns: "Gérer les campagnes",
+  // Fix: added missing canManageFinances label
+  canManageFinances: "Gérer les finances",
 };
 
 const PermissionToggle: React.FC<{
