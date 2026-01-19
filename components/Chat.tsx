@@ -17,9 +17,12 @@ const Chat: React.FC<any> = ({ currentUser, users, channels, currentChannelId, m
   const activeChannel = useMemo(() => channels.find((c: any) => c.id === currentChannelId), [channels, currentChannelId]);
   const activeMessages = useMemo(() => messages.filter((m: any) => m.channelId === currentChannelId), [messages, currentChannelId]);
   
+  const isAdmin = currentUser.role === UserRole.ADMIN;
+  const canManageChannels = isAdmin || currentUser.permissions?.canManageChannels;
+
   const visibleChannels = useMemo(() => {
     return channels.filter((c: Channel) => {
-      if (currentUser.role === UserRole.ADMIN) return true;
+      if (isAdmin) return true;
       if (!c.is_private) return true;
       return c.member_ids?.includes(currentUser.id);
     });
@@ -49,7 +52,7 @@ const Chat: React.FC<any> = ({ currentUser, users, channels, currentChannelId, m
     setShowAddChannel(false);
   };
 
-  const isOwner = activeChannel?.created_by === currentUser.id || currentUser.role === UserRole.ADMIN;
+  const isOwner = activeChannel?.created_by === currentUser.id || isAdmin;
 
   const filteredUsersForInvite = useMemo(() => {
     return users.filter((u: User) => u.name.toLowerCase().includes(memberSearch.toLowerCase()));
@@ -64,13 +67,15 @@ const Chat: React.FC<any> = ({ currentUser, users, channels, currentChannelId, m
 
   return (
     <div className="flex h-[calc(100vh-180px)] glass rounded-[2.5rem] md:rounded-[3.5rem] overflow-hidden animate-fade-in border-white/5 shadow-2xl relative">
-      <div className="hidden md:flex flex-col w-80 border-r border-white/5 bg-slate-900/30 backdrop-blur-3xl">
+      <div className="hidden md:flex flex-col w-80 border-r border-white/5 bg-slate-900/30 backdrop-blur-3xl text-left">
         <div className="p-8 border-b border-white/5 flex justify-between items-center bg-white/5">
             <div>
               <h2 className="font-black text-white text-[10px] uppercase tracking-[0.3em] leading-none">Canaux iV</h2>
               <p className="text-[8px] text-slate-500 font-bold uppercase mt-2 leading-none">Communication Core</p>
             </div>
-            <button onClick={() => setShowAddChannel(true)} className="w-10 h-10 flex items-center justify-center bg-indigo-500 text-white rounded-xl shadow-lg active-scale hover:scale-105 transition-all flex-shrink-0"><Plus size={20} strokeWidth={3}/></button>
+            {canManageChannels && (
+              <button onClick={() => setShowAddChannel(true)} className="w-10 h-10 flex items-center justify-center bg-indigo-500 text-white rounded-xl shadow-lg active-scale hover:scale-105 transition-all flex-shrink-0"><Plus size={20} strokeWidth={3}/></button>
+            )}
         </div>
         <div className="flex-1 overflow-y-auto p-4 space-y-1.5 no-scrollbar">
             {visibleChannels.map((channel: Channel) => (
@@ -90,7 +95,7 @@ const Chat: React.FC<any> = ({ currentUser, users, channels, currentChannelId, m
       </div>
 
       <div className="flex-1 flex flex-col bg-transparent">
-        <header className="p-5 md:p-8 border-b border-white/5 flex items-center justify-between bg-white/5 backdrop-blur-2xl sticky top-0 z-10">
+        <header className="p-5 md:p-8 border-b border-white/5 flex items-center justify-between bg-white/5 backdrop-blur-2xl sticky top-0 z-10 text-left">
             <div className="flex items-center space-x-5 truncate">
               <div className="w-12 h-12 md:w-14 md:h-14 bg-indigo-500/20 rounded-2xl flex items-center justify-center text-indigo-400 shadow-inner border border-indigo-500/10 flex-shrink-0">
                   {activeChannel?.is_private ? <Lock size={22} /> : <Hash size={22} />}
@@ -113,7 +118,7 @@ const Chat: React.FC<any> = ({ currentUser, users, channels, currentChannelId, m
             </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-4 md:p-12 space-y-6 md:space-y-10 no-scrollbar">
+        <div className="flex-1 overflow-y-auto p-4 md:p-12 space-y-6 md:space-y-10 no-scrollbar text-left">
             {activeMessages.map((msg: any) => {
                 const isMe = msg.userId === currentUser.id;
                 const sender = users.find((u: any) => u.id === msg.userId);
@@ -164,7 +169,7 @@ const Chat: React.FC<any> = ({ currentUser, users, channels, currentChannelId, m
         title="Nouveau Canal"
         subtitle="Architecture iVISION Secure"
       >
-        <div className="space-y-6 md:space-y-8">
+        <div className="space-y-6 md:space-y-8 text-left">
           <div className="space-y-1.5">
             <label className="text-[10px] md:text-[11px] font-black uppercase tracking-widest text-slate-500 px-2 leading-none">Nom de l'espace</label>
             <input value={newChannelName} onChange={e => setNewChannelName(e.target.value)} className="w-full p-4 md:p-6 bg-white/5 border border-white/10 rounded-xl md:rounded-3xl font-bold text-white outline-none focus:border-indigo-500 transition-all text-xs md:text-sm" placeholder="Ex: STRATÉGIE_Q4" />
@@ -197,7 +202,7 @@ const Chat: React.FC<any> = ({ currentUser, users, channels, currentChannelId, m
         title="Accès & Membres"
         subtitle="Sécurisé par iVISION Core"
       >
-        <div className="flex flex-col h-full max-h-[60vh]">
+        <div className="flex flex-col h-full max-h-[60vh] text-left">
           <div className="relative mb-5 flex-shrink-0">
              <Search size={14} className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-500" />
              <input type="text" placeholder="RECHERCHER..." value={memberSearch} onChange={e => setMemberSearch(e.target.value)} className="w-full pl-12 pr-4 py-3 md:py-4 bg-white/5 border border-white/10 rounded-xl text-[9px] font-black uppercase tracking-widest text-white outline-none focus:border-indigo-500 transition-all placeholder-slate-800" />

@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { FileLink, User } from '../types';
+import { FileLink, User, UserRole } from '../types';
 import { Plus, Search, FileText, ExternalLink, Trash2, X, Cloud, ArrowUpRight, Link as LinkIcon, Type } from 'lucide-react';
 import Modal from './Modal';
 
@@ -12,6 +12,9 @@ const Files: React.FC<any> = ({ fileLinks = [], onAddFileLink, onDeleteFileLink,
   const filteredFiles = fileLinks.filter((f: FileLink) => 
     f.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const isAdmin = currentUser.role === UserRole.ADMIN;
+  const canDelete = isAdmin || currentUser.permissions?.canDeleteFiles;
 
   const closeModals = () => {
     setShowAddModal(false);
@@ -47,7 +50,7 @@ const Files: React.FC<any> = ({ fileLinks = [], onAddFileLink, onDeleteFileLink,
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 px-1">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 px-1 text-left">
           {filteredFiles.map((file: FileLink) => (
             <div key={file.id} className="glass group rounded-[2.5rem] border border-white/5 p-6 transition-all duration-500 hover:border-sky-400/30 hover:bg-white/[0.04] flex items-center justify-between">
               <div className="flex items-center space-x-6 min-w-0">
@@ -65,7 +68,9 @@ const Files: React.FC<any> = ({ fileLinks = [], onAddFileLink, onDeleteFileLink,
 
               <div className="flex space-x-3 flex-shrink-0">
                   <button onClick={() => window.open(file.url, '_blank')} className="w-12 h-12 md:w-16 md:h-16 glass text-slate-500 hover:text-white rounded-2xl transition-all flex items-center justify-center active-scale shadow-lg"><ArrowUpRight size={24}/></button>
-                  <button onClick={() => confirm('Supprimer ?') && onDeleteFileLink(file.id)} className="w-12 h-12 md:w-16 md:h-16 glass text-slate-500 hover:text-rose-400 rounded-2xl transition-all flex items-center justify-center active-scale shadow-lg"><Trash2 size={24}/></button>
+                  {canDelete && (
+                    <button onClick={() => confirm('Supprimer ce document ?') && onDeleteFileLink(file.id)} className="w-12 h-12 md:w-16 md:h-16 glass text-slate-500 hover:text-rose-400 rounded-2xl transition-all flex items-center justify-center active-scale shadow-lg"><Trash2 size={24}/></button>
+                  )}
               </div>
             </div>
           ))}
@@ -78,7 +83,7 @@ const Files: React.FC<any> = ({ fileLinks = [], onAddFileLink, onDeleteFileLink,
         title="Indexation Document"
         subtitle="Dépôt Cloud iVISION Core System"
       >
-        <form onSubmit={(e) => { e.preventDefault(); onAddFileLink(formData.name, formData.url); closeModals(); }} className="space-y-8">
+        <form onSubmit={(e) => { e.preventDefault(); onAddFileLink(formData.name, formData.url); closeModals(); }} className="space-y-8 text-left">
            <div>
               <label className="label-iv"><Type size={14} className="text-sky-400"/> Désignation de l'actif</label>
               <input required className="input-iv" placeholder="Ex: Contrat de Partenariat Q1" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />

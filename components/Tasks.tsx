@@ -1,20 +1,20 @@
 
 import React, { useState, useMemo } from 'react';
-import { Plus, X, Calendar as CalendarIcon, Trash2, GripVertical, CheckCircle2, Briefcase, User as UserIcon, Type as TypeIcon, AlertTriangle, Layers, Info } from 'lucide-react';
-import { Task, TaskStatus, User, Client, Project } from '../types';
+import { Plus, X, Calendar as CalendarIcon, Trash2, GripVertical, CheckCircle2, Briefcase, User as UserIcon, Type as TypeIcon, AlertTriangle, Layers, Info, Edit2 } from 'lucide-react';
+import { Task, TaskStatus, User, Client, Project, UserRole } from '../types';
 import Modal from './Modal';
 
-const TaskCard = ({ task, onClick, clientName, projectName, assignee, onDragStart }: any) => {
+const TaskCard = ({ task, onClick, clientName, projectName, assignee, onDragStart, canEdit }: any) => {
   return (
     <div 
-      draggable
-      onDragStart={(e) => onDragStart(e, task.id)}
+      draggable={canEdit}
+      onDragStart={(e) => canEdit && onDragStart(e, task.id)}
       onClick={onClick}
-      className="crystal-module p-6 rounded-[2rem] mb-4 group cursor-grab active:cursor-grabbing relative overflow-hidden border border-white/5"
+      className={`crystal-module p-6 rounded-[2rem] mb-4 group relative overflow-hidden border border-white/5 ${canEdit ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
     >
       <div className="flex items-start justify-between mb-5">
         <div className="flex items-center space-x-4 truncate">
-          <GripVertical size={14} className="text-slate-700 group-hover:text-sky-400 transition-colors flex-shrink-0" />
+          {canEdit && <GripVertical size={14} className="text-slate-700 group-hover:text-sky-400 transition-colors flex-shrink-0" />}
           <div className="truncate">
             <h4 className={`font-black text-white text-[13px] tracking-tight truncate leading-tight group-hover:text-sky-400 transition-colors ${task.status === TaskStatus.DONE ? 'opacity-40 line-through' : ''}`}>
               {task.title}
@@ -48,11 +48,14 @@ const TaskCard = ({ task, onClick, clientName, projectName, assignee, onDragStar
   );
 };
 
-const KanbanColumn = ({ status, tasks, users, clients, projects, onDrop, onTaskClick, onDragStart }: any) => {
+const KanbanColumn = ({ status, tasks, users, clients, projects, onDrop, onTaskClick, onDragStart, currentUser }: any) => {
   const [isOver, setIsOver] = useState(false);
   const clientMap = useMemo(() => new Map<string, Client>(clients.map((c: any) => [c.id, c])), [clients]);
   const userMap = useMemo(() => new Map<string, User>(users.map((u: any) => [u.id, u])), [users]);
   const projectMap = useMemo(() => new Map<string, Project>(projects.map((p: any) => [p.id, p])), [projects]);
+
+  const isAdmin = currentUser.role === UserRole.ADMIN;
+  const canEditAny = isAdmin || currentUser.permissions?.canEditAllTasks;
 
   const colorConfig = {
     [TaskStatus.TODO]: { color: 'text-slate-400', glow: 'shadow-slate-400/20' },
@@ -64,9 +67,18 @@ const KanbanColumn = ({ status, tasks, users, clients, projects, onDrop, onTaskC
 
   return (
     <div 
-      onDragOver={(e) => { e.preventDefault(); setIsOver(true); }}
+      onDragOver={(e) => { 
+        if (!canEditAny) return;
+        e.preventDefault(); 
+        setIsOver(true); 
+      }}
       onDragLeave={() => setIsOver(false)}
-      onDrop={(e) => { e.preventDefault(); setIsOver(false); onDrop(e.dataTransfer.getData('taskId'), status); }}
+      onDrop={(e) => { 
+        if (!canEditAny) return;
+        e.preventDefault(); 
+        setIsOver(false); 
+        onDrop(e.dataTransfer.getData('taskId'), status); 
+      }}
       className={`flex flex-col h-full min-h-[600px] rounded-[3.5rem] transition-all duration-500 relative flex-shrink-0 w-[88vw] md:w-auto overflow-hidden ${isOver ? 'bg-white/[0.04] scale-[1.02] shadow-2xl border-sky-500/30' : 'bg-slate-900/30 border border-white/5'}`}
     >
       <div className="p-8 pb-4 flex items-center justify-between sticky top-0 bg-transparent z-10">
@@ -85,6 +97,7 @@ const KanbanColumn = ({ status, tasks, users, clients, projects, onDrop, onTaskC
             clientName={clientMap.get(task.clientId || '')?.name || 'Projet Interne'} 
             projectName={projectMap.get(task.projectId || '')?.name}
             assignee={userMap.get(task.assigneeId)}
+            canEdit={canEditAny || task.assigneeId === currentUser.id}
           />
         ))}
         {tasks.length === 0 && (
@@ -119,6 +132,11 @@ const Tasks = ({ tasks, users, clients = [], projects = [], currentUser, onUpdat
   }), [tasks]);
 
   const currentTask = tasks.find((t: any) => t.id === selectedTaskId);
+  
+  const isAdmin = currentUser.role === UserRole.ADMIN;
+  const canCreate = isAdmin || currentUser.permissions?.canCreateTasks;
+  const canDelete = isAdmin || currentUser.permissions?.canDeleteTasks;
+  const canEditThisTask = isAdmin || currentUser.permissions?.canEditAllTasks || currentTask?.assigneeId === currentUser.id;
 
   const closeModals = () => {
     setViewMode('list');
@@ -126,7 +144,7 @@ const Tasks = ({ tasks, users, clients = [], projects = [], currentUser, onUpdat
   };
 
   const onOpenEdit = () => {
-    if (currentTask) {
+    if (currentTask && canEditThisTask) {
       setFormData({ ...currentTask });
       setViewMode('edit');
     }
@@ -140,12 +158,14 @@ const Tasks = ({ tasks, users, clients = [], projects = [], currentUser, onUpdat
             <p className="text-[10px] font-black uppercase tracking-[0.5em] text-sky-400 mb-3">MISSION ARCHITECTURE</p>
             <h2 className="text-4xl md:text-6xl font-black text-white uppercase tracking-tighter leading-none">Opérations</h2>
           </div>
-          <button 
-            onClick={() => { setFormData({ title: '', description: '', dueDate: new Date().toLocaleDateString('en-CA'), priority: 'medium', assigneeId: currentUser.id, type: 'content', clientId: '', projectId: '' }); setViewMode('add'); }} 
-            className="w-16 h-16 md:w-20 md:h-20 bg-sky-500 text-white rounded-3xl shadow-[0_0_40px_rgba(14,165,233,0.3)] active-scale transition-all flex items-center justify-center hover:scale-110"
-          >
-            <Plus size={36} strokeWidth={3} />
-          </button>
+          {canCreate && (
+            <button 
+              onClick={() => { setFormData({ title: '', description: '', dueDate: new Date().toLocaleDateString('en-CA'), priority: 'medium', assigneeId: currentUser.id, type: 'content', clientId: '', projectId: '' }); setViewMode('add'); }} 
+              className="w-16 h-16 md:w-20 md:h-20 bg-sky-500 text-white rounded-3xl shadow-[0_0_40px_rgba(14,165,233,0.3)] active-scale transition-all flex items-center justify-center hover:scale-110"
+            >
+              <Plus size={36} strokeWidth={3} />
+            </button>
+          )}
         </div>
 
         <div className="flex lg:grid lg:grid-cols-3 gap-6 md:gap-10 overflow-x-auto lg:overflow-x-visible no-scrollbar pb-16 px-2 snap-x">
@@ -154,6 +174,7 @@ const Tasks = ({ tasks, users, clients = [], projects = [], currentUser, onUpdat
                 <KanbanColumn 
                   status={status} tasks={tasksByStatus[status]} 
                   users={users} clients={clients} projects={projects}
+                  currentUser={currentUser}
                   onDragStart={(e: any, id: any) => { e.dataTransfer.setData('taskId', id); }} 
                   onDrop={(id: any, st: any) => onUpdateStatus(id, st)} 
                   onTaskClick={setSelectedTaskId} 
@@ -174,7 +195,7 @@ const Tasks = ({ tasks, users, clients = [], projects = [], currentUser, onUpdat
              if (viewMode === 'edit' && formData.id) onUpdateTask(formData);
              else onAddTask({ ...formData, status: TaskStatus.TODO });
              closeModals();
-         }} className="space-y-8">
+         }} className="space-y-8 text-left">
             <div className="space-y-2">
               <label className="label-iv"><TypeIcon size={14} className="text-sky-400"/> Désignation Mission</label>
               <input required className="input-iv" placeholder="Titre stratégique" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
@@ -233,7 +254,7 @@ const Tasks = ({ tasks, users, clients = [], projects = [], currentUser, onUpdat
         title={currentTask?.title}
         subtitle="Analyse Opérationnelle iVISION"
       >
-        <div className="space-y-10">
+        <div className="space-y-10 text-left">
            <div className="p-10 bg-white/5 rounded-[3rem] border border-white/10 relative overflow-hidden">
              <div className="absolute top-0 right-0 w-32 h-32 bg-sky-400/5 blur-[50px]"></div>
              <h4 className="label-iv mb-6 text-sky-400">Briefing Technique</h4>
@@ -252,8 +273,12 @@ const Tasks = ({ tasks, users, clients = [], projects = [], currentUser, onUpdat
            </div>
            
            <div className="flex flex-col sm:flex-row gap-5 pt-6">
-            <button onClick={onOpenEdit} className="flex-1 py-6 bg-white text-slate-950 font-black rounded-[2rem] shadow-2xl hover:bg-sky-400 hover:text-white transition-all uppercase text-[11px] tracking-widest">Modifier Mission</button>
-            <button onClick={() => { if(confirm('Révoquer cette mission ?')) { onDeleteTask(currentTask?.id); closeModals(); } }} className="flex-1 py-6 bg-rose-500/10 text-rose-500 font-black rounded-[2rem] hover:bg-rose-500/20 transition-all uppercase text-[11px] tracking-widest border border-rose-500/10">Révoquer</button>
+            {canEditThisTask && (
+              <button onClick={onOpenEdit} className="flex-1 py-6 bg-white text-slate-950 font-black rounded-[2rem] shadow-2xl hover:bg-sky-400 hover:text-white transition-all uppercase text-[11px] tracking-widest">Modifier Mission</button>
+            )}
+            {canDelete && (
+              <button onClick={() => { if(confirm('Révoquer cette mission ?')) { onDeleteTask(currentTask?.id); closeModals(); } }} className={`flex-1 py-6 bg-rose-500/10 text-rose-500 font-black rounded-[2rem] hover:bg-rose-500/20 transition-all uppercase text-[11px] tracking-widest border border-rose-500/10 ${!canEditThisTask ? 'w-full' : ''}`}>Révoquer</button>
+            )}
            </div>
         </div>
       </Modal>

@@ -128,13 +128,21 @@ const App: React.FC = () => {
     }
     setIsAuthProcessing(true);
     try {
+      const normalizedEmail = email.toLowerCase().trim();
       if (isSignUp) {
-        const { data: authData, error: authError } = await supabase.auth.signUp({ email, password });
+        // Vérification locale préalable
+        const { data: existingUser } = await supabase.from('users').select('id').eq('email', normalizedEmail).maybeSingle();
+        if (existingUser) {
+          throw new Error("Cette adresse email est déjà enregistrée.");
+        }
+
+        const { data: authData, error: authError } = await supabase.auth.signUp({ email: normalizedEmail, password });
         if (authError) throw authError;
+        
         if (authData.user) {
           const { error: userError } = await supabase.from('users').insert({
             id: authData.user.id,
-            email: email.toLowerCase(),
+            email: normalizedEmail,
             name: email.split('@')[0],
             role: UserRole.MEMBER,
             status: 'active',
@@ -144,7 +152,7 @@ const App: React.FC = () => {
           addNotification("Succès", "Profil créé avec succès.", "success");
         }
       } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { error } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
         if (error) throw error;
       }
     } catch (error: any) {
@@ -173,45 +181,44 @@ const App: React.FC = () => {
 
   const fetchUserData = async (userId: string) => {
     try {
-      const { data: userData, error: userError } = await supabase.from('users').select('*').eq('id', userId).single();
+      const { data: userData, error: userError } = await supabase.from('users').select('*').eq('id', userId).maybeSingle();
       if (userError) throw userError;
-      setCurrentUser(mapFromDB('users', userData));
+      
+      if (userData) {
+        setCurrentUser(mapFromDB('users', userData));
+      } else {
+        console.warn("Profil utilisateur non trouvé dans la table 'users'.");
+      }
 
-      const u = await safeFetch(supabase.from('users').select('*'), []);
+      const [u, t, c, l, ch, m, f, pr, sl, ex, ad] = await Promise.all([
+        safeFetch(supabase.from('users').select('*'), []),
+        safeFetch(supabase.from('tasks').select('*').order('created_at', { ascending: false }), []),
+        safeFetch(supabase.from('clients').select('*'), []),
+        safeFetch(supabase.from('leads').select('*').order('created_at', { ascending: false }), []),
+        safeFetch(supabase.from('channels').select('*'), []),
+        safeFetch(supabase.from('messages').select('*').order('created_at', { ascending: true }), []),
+        safeFetch(supabase.from('file_links').select('*').order('created_at', { ascending: false }), []),
+        safeFetch(supabase.from('projects').select('*').order('created_at', { ascending: false }), []),
+        safeFetch(supabase.from('salaries').select('*'), []),
+        safeFetch(supabase.from('expenses').select('*').order('created_at', { ascending: false }), []),
+        safeFetch(supabase.from('ad_campaigns').select('*').order('created_at', { ascending: false }), [])
+      ]);
+
       setUsers(u.map(i => mapFromDB('users', i)));
-
-      const t = await safeFetch(supabase.from('tasks').select('*').order('created_at', { ascending: false }), []);
       setTasks(t.map(i => mapFromDB('tasks', i)));
-
-      const c = await safeFetch(supabase.from('clients').select('*'), []);
       setClients(c);
-
-      const l = await safeFetch(supabase.from('leads').select('*').order('created_at', { ascending: false }), []);
       setLeads(l.map(i => mapFromDB('leads', i)));
-
-      const ch = await safeFetch(supabase.from('channels').select('*'), []);
       setChannels(ch.map(i => mapFromDB('channels', i)));
-
-      const m = await safeFetch(supabase.from('messages').select('*').order('created_at', { ascending: true }), []);
       setMessages(m.map(i => mapFromDB('messages', i)));
-
-      const f = await safeFetch(supabase.from('file_links').select('*').order('created_at', { ascending: false }), []);
       setFileLinks(f.map(i => mapFromDB('file_links', i)));
-
-      const pr = await safeFetch(supabase.from('projects').select('*').order('created_at', { ascending: false }), []);
       setProjects(pr.map(i => mapFromDB('projects', i)));
-
-      const sl = await safeFetch(supabase.from('salaries').select('*'), []);
       setSalaries(sl.map(i => mapFromDB('salaries', i)));
-
-      const ex = await safeFetch(supabase.from('expenses').select('*').order('created_at', { ascending: false }), []);
       setExpenses(ex.map(i => mapFromDB('expenses', i)));
-
-      const ad = await safeFetch(supabase.from('ad_campaigns').select('*').order('created_at', { ascending: false }), []);
       setAdCampaigns(ad.map(i => mapFromDB('ad_campaigns', i)));
 
     } catch (error: any) {
-      console.error('Fetch error:', error);
+      const msg = error.message || JSON.stringify(error);
+      console.error('Fetch error details:', msg);
     } finally {
       setLoading(false);
     }
@@ -401,7 +408,7 @@ const AppContent: React.FC<any> = ({
   const handleUpdateClient = async (updated: Client) => {
     const { error } = await supabase.from('clients').update(updated).eq('id', updated.id);
     if (error) {
-      addNotification("Erreur", error, "urgent");
+      addNotification("Erreur", error.message || "Impossible de mettre à jour le client.", "urgent");
     } else {
       setClients(clients.map(c => c.id === updated.id ? updated : c));
       addNotification("CRM", `Fiche ${updated.name} mise à jour.`, "success");
@@ -488,42 +495,70 @@ const AppContent: React.FC<any> = ({
             />
           </AccessGuard>} />
           <Route path="/team" element={<AccessGuard currentUser={currentUser} role={UserRole.ADMIN}><Team currentUser={currentUser} users={users} onAddUser={async (u:any)=> {
-            // Création dans Auth Supabase
-            const { data: authData, error: authError } = await supabase.auth.signUp({ email: u.email, password: u.password });
+            const normalizedEmail = u.email.toLowerCase().trim();
+            
+            // 1. Vérification locale immédiate
+            if (users.some(existingUser => existingUser.email.toLowerCase() === normalizedEmail)) {
+              addNotification("Erreur", "Cette adresse email est déjà utilisée par un membre de l'équipe.", "urgent");
+              return;
+            }
+
+            // 2. Création dans Auth Supabase avec le mot de passe fourni
+            const { data: authData, error: authError } = await supabase.auth.signUp({ 
+              email: normalizedEmail, 
+              password: u.password 
+            });
+            
             if (authError) {
               addNotification("Erreur Déploiement", authError.message, "urgent");
               return;
             }
+
             if (authData.user) {
-              // Création du profil utilisateur dans la table 'users'
+              // 3. Création du profil utilisateur dans la table 'users'
               const { error: userError } = await supabase.from('users').insert({
                 id: authData.user.id,
-                email: u.email.toLowerCase(),
+                email: normalizedEmail,
                 name: u.name,
                 role: u.role,
                 permissions: u.permissions,
                 status: 'active',
                 avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name)}&background=random`
               });
+
               if (userError) {
-                addNotification("Erreur Profil", userError.message, "urgent");
+                if (userError.code === '23505') {
+                  addNotification("Erreur Profil", "L'email est déjà utilisé.", "urgent");
+                } else {
+                  addNotification("Erreur Profil", userError.message, "urgent");
+                }
               } else {
                 addNotification("Succès", `Accès déployé pour ${u.name}.`, "success");
-                // Le rechargement automatique de fetchUserData se chargera de mettre à jour la liste
+                const u_list = await safeFetch(supabase.from('users').select('*'), []);
+                setUsers(u_list.map(i => mapFromDB('users', i)));
               }
             }
-          }} onRemoveUser={(id:string)=> {
-            setUsers(users.filter(u=>u.id!==id));
-            supabase.from('users').delete().eq('id', id);
+          }} onRemoveUser={async (id:string)=> {
+            const { error } = await supabase.from('users').delete().eq('id', id);
+            if (error) {
+              addNotification("Erreur", "Impossible de révoquer l'accès: " + error.message, "urgent");
+            } else {
+              setUsers(users.filter(u=>u.id!==id));
+              addNotification("Système", "Accès révoqué avec succès.", "success");
+            }
           }} onUpdateMember={async (id:string, up:any) => {
-             await supabase.from('users').update({
+             const { error } = await supabase.from('users').update({
                name: up.name,
-               email: up.email,
+               email: up.email.toLowerCase().trim(),
                role: up.role,
                permissions: up.permissions
              }).eq('id',id);
-             setUsers(users.map(u => u.id === id ? {...u, ...up} : u));
-             addNotification("Système", "Profil mis à jour.", "success");
+             if (error) {
+               addNotification("Erreur", error.message, "urgent");
+             } else {
+               setUsers(users.map(u => u.id === id ? {...u, ...up} : u));
+               addNotification("Système", "Profil mis à jour.", "success");
+             }
           }} /></AccessGuard>} />
           <Route path="/files" element={<AccessGuard currentUser={currentUser} permission="canViewFiles"><Files fileLinks={fileLinks} onAddFileLink={(n:string,u:string)=> {
             supabase.from('file_links').insert({id:generateUUID(), name:n, url:u, created_by:currentUser.id}).select().single().then(({data})=>{if(data) setFileLinks([mapFromDB('file_links',data),...fileLinks])});
@@ -532,8 +567,12 @@ const AppContent: React.FC<any> = ({
              supabase.from('file_links').delete().eq('id',id);
           }} currentUser={currentUser} /></AccessGuard>} />
           <Route path="/settings" element={<Settings currentUser={currentUser} onUpdateProfile={async (up:any)=>{
-            await supabase.from('users').update(up).eq('id', currentUser.id);
-            setCurrentUser({...currentUser, ...up});
+            const { error } = await supabase.from('users').update(up).eq('id', currentUser.id);
+            if (error) {
+              addNotification("Erreur", error.message, "urgent");
+            } else {
+              setCurrentUser({...currentUser, ...up});
+            }
           }} />} />
           <Route path="/reports" element={<AccessGuard currentUser={currentUser} permission="canViewReports">
             <Reports 

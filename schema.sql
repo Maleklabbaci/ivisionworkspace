@@ -1,21 +1,21 @@
 
--- iVISION AGENCY FULL SYSTEM SCHEMA v3.0
--- This script creates all necessary tables and ensures columns are synchronized.
+-- iVISION AGENCY FULL SYSTEM SCHEMA v4.0
+-- Architecture synchronisée pour la gestion automatisée des membres et des permissions.
 
 -- Enable UUID extension if not present
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 DO $$ 
 BEGIN
-    -- 1. TABLE: USERS
+    -- 1. TABLE: USERS (Table de profil public synchronisée avec Auth)
     IF NOT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'users') THEN
         CREATE TABLE public.users (
-            id UUID PRIMARY KEY, -- Linked to Supabase Auth
+            id UUID PRIMARY KEY, -- Référence à auth.users.id
             name TEXT NOT NULL,
             email TEXT UNIQUE NOT NULL,
             avatar TEXT,
-            role TEXT DEFAULT 'Membre',
-            status TEXT DEFAULT 'active',
+            role TEXT DEFAULT 'Membre' CHECK (role IN ('Admin', 'Membre', 'Chef de Projet', 'Community Manager', 'Analyste Marketing')),
+            status TEXT DEFAULT 'active' CHECK (status IN ('active', 'pending', 'suspended')),
             permissions JSONB DEFAULT '{}'::jsonb,
             phone_number TEXT,
             notification_pref TEXT DEFAULT 'all',
@@ -23,9 +23,13 @@ BEGIN
             ai_api_key TEXT,
             created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         );
+    ELSE
+        -- S'assurer que les contraintes de rôle sont à jour
+        ALTER TABLE public.users DROP CONSTRAINT IF EXISTS users_role_check;
+        ALTER TABLE public.users ADD CONSTRAINT users_role_check CHECK (role IN ('Admin', 'Membre', 'Chef de Projet', 'Community Manager', 'Analyste Marketing'));
     END IF;
 
-    -- 2. TABLE: CLIENTS
+    -- 2. TABLE: CLIENTS (CRM Core)
     IF NOT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'clients') THEN
         CREATE TABLE public.clients (
             id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -39,7 +43,7 @@ BEGIN
         );
     END IF;
 
-    -- 3. TABLE: PROJECTS (ACTIVITÉS)
+    -- 3. TABLE: PROJECTS (Management des Budgets)
     IF NOT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'projects') THEN
         CREATE TABLE public.projects (
             id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -47,13 +51,13 @@ BEGIN
             description TEXT,
             total_budget NUMERIC DEFAULT 0,
             spent_budget NUMERIC DEFAULT 0,
-            status TEXT DEFAULT 'active',
+            status TEXT DEFAULT 'active' CHECK (status IN ('active', 'completed', 'on_hold')),
             client_id UUID REFERENCES public.clients(id) ON DELETE SET NULL,
             created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         );
     END IF;
 
-    -- 4. TABLE: TASKS (MISSIONS)
+    -- 4. TABLE: TASKS (Missions Opérationnelles)
     IF NOT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'tasks') THEN
         CREATE TABLE public.tasks (
             id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -65,18 +69,13 @@ BEGIN
             due_date TEXT,
             status TEXT DEFAULT 'À faire',
             type TEXT DEFAULT 'content',
-            priority TEXT DEFAULT 'medium',
+            priority TEXT DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high')),
             attachments TEXT[] DEFAULT '{}',
             created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         );
-    ELSE
-        -- Ensure project_id exists if table was created earlier
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='tasks' AND column_name='project_id') THEN
-            ALTER TABLE public.tasks ADD COLUMN project_id UUID REFERENCES public.projects(id) ON DELETE SET NULL;
-        END IF;
     END IF;
 
-    -- 5. TABLE: CHANNELS
+    -- 5. TABLE: CHANNELS (Structure Chat)
     IF NOT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'channels') THEN
         CREATE TABLE public.channels (
             id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -89,7 +88,7 @@ BEGIN
         );
     END IF;
 
-    -- 6. TABLE: MESSAGES
+    -- 6. TABLE: MESSAGES (Communications Flux)
     IF NOT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'messages') THEN
         CREATE TABLE public.messages (
             id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -101,7 +100,7 @@ BEGIN
         );
     END IF;
 
-    -- 7. TABLE: LEADS
+    -- 7. TABLE: LEADS (Pipeline Prospect)
     IF NOT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'leads') THEN
         CREATE TABLE public.leads (
             id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -109,7 +108,7 @@ BEGIN
             company TEXT,
             email TEXT,
             phone TEXT,
-            status TEXT DEFAULT 'new',
+            status TEXT DEFAULT 'new' CHECK (status IN ('new', 'contacted', 'qualified', 'lost')),
             source TEXT,
             value_min NUMERIC DEFAULT 0,
             value_max NUMERIC DEFAULT 0,
@@ -118,7 +117,7 @@ BEGIN
         );
     END IF;
 
-    -- 8. TABLE: SALARIES (FINANCE - VOLET RH)
+    -- 8. TABLE: SALARIES (Finance RH)
     IF NOT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'salaries') THEN
         CREATE TABLE public.salaries (
             id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -126,48 +125,40 @@ BEGIN
             project_id UUID REFERENCES public.projects(id) ON DELETE SET NULL,
             amount NUMERIC NOT NULL DEFAULT 0,
             bonus NUMERIC DEFAULT 0,
-            frequency TEXT DEFAULT 'mensuel',
-            status TEXT DEFAULT 'pending',
+            frequency TEXT DEFAULT 'mensuel' CHECK (frequency IN ('hebdo', 'mensuel')),
+            status TEXT DEFAULT 'pending' CHECK (status IN ('paid', 'pending')),
             last_paid_date TIMESTAMP WITH TIME ZONE,
             created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         );
-    ELSE
-        -- Ensure project_id and bonus exist
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='salaries' AND column_name='project_id') THEN
-            ALTER TABLE public.salaries ADD COLUMN project_id UUID REFERENCES public.projects(id) ON DELETE SET NULL;
-        END IF;
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='salaries' AND column_name='bonus') THEN
-            ALTER TABLE public.salaries ADD COLUMN bonus NUMERIC DEFAULT 0;
-        END IF;
     END IF;
 
-    -- 9. TABLE: EXPENSES (FINANCE - VOLET FRAIS OPÉRATIONNELS)
+    -- 9. TABLE: EXPENSES (Frais Généraux)
     IF NOT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'expenses') THEN
         CREATE TABLE public.expenses (
             id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
             name TEXT NOT NULL,
             amount NUMERIC NOT NULL DEFAULT 0,
-            type TEXT DEFAULT 'other', -- travel, freelance, software, office, other
+            type TEXT DEFAULT 'other',
             project_id UUID REFERENCES public.projects(id) ON DELETE SET NULL,
-            status TEXT DEFAULT 'pending',
+            status TEXT DEFAULT 'pending' CHECK (status IN ('paid', 'pending')),
             created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         );
     END IF;
 
-    -- 10. TABLE: AD_CAMPAIGNS (FINANCE - VOLET ADS)
+    -- 10. TABLE: AD_CAMPAIGNS (Budgets Marketing)
     IF NOT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'ad_campaigns') THEN
         CREATE TABLE public.ad_campaigns (
             id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
             name TEXT NOT NULL,
             amount NUMERIC NOT NULL DEFAULT 0,
-            platform TEXT DEFAULT 'facebook', -- facebook, google, tiktok, instagram, other
+            platform TEXT DEFAULT 'facebook',
             project_id UUID REFERENCES public.projects(id) ON DELETE SET NULL,
-            status TEXT DEFAULT 'active',
+            status TEXT DEFAULT 'active' CHECK (status IN ('active', 'paused', 'completed')),
             created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         );
     END IF;
 
-    -- 11. TABLE: FILE_LINKS
+    -- 11. TABLE: FILE_LINKS (Asset Storage)
     IF NOT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'file_links') THEN
         CREATE TABLE public.file_links (
             id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -182,7 +173,7 @@ BEGIN
 END $$;
 
 -- 12. REALTIME PUBLICATION
--- Recreate publication to include all new tables
+-- Configuration du flux temps réel pour toutes les tables critiques.
 DROP PUBLICATION IF EXISTS supabase_realtime;
 CREATE PUBLICATION supabase_realtime FOR TABLE 
     public.users, 
@@ -197,6 +188,6 @@ CREATE PUBLICATION supabase_realtime FOR TABLE
     public.ad_campaigns,
     public.file_links;
 
--- 13. FORCE POSTGREST SCHEMA RELOAD
-COMMENT ON SCHEMA public IS 'iVISION Core Schema v3.0 - Unified Architecture';
+-- 13. COMMENTAIRE DE VERSION
+COMMENT ON SCHEMA public IS 'iVISION Core Schema v4.0 - Auto-Save & Security Enabled';
 NOTIFY pgrst, 'reload schema';
