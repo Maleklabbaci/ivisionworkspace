@@ -44,14 +44,14 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, subtitle, childre
 
           <div className="flex flex-col h-full overflow-hidden">
             <header className="px-6 md:px-12 pt-4 md:pt-10 pb-6 flex items-start justify-between border-b border-white/5 bg-gradient-to-b from-white/[0.02] to-transparent">
-              <div className="pr-6">
+              <div className="pr-6 text-left">
                 {title && (
-                  <h3 className="text-xl md:text-4xl font-black text-white uppercase tracking-tight leading-none">
+                  <h3 className="text-xl md:text-3xl font-bold text-white uppercase leading-none tracking-normal">
                     {title}
                   </h3>
                 )}
                 {subtitle && (
-                  <p className="text-[9px] md:text-[11px] font-black text-sky-400 uppercase mt-2 md:mt-4 tracking-widest opacity-70">
+                  <p className="text-[10px] md:text-[12px] font-bold text-sky-400 uppercase mt-2 md:mt-3 tracking-normal opacity-80">
                     {subtitle}
                   </p>
                 )}
@@ -65,7 +65,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, subtitle, childre
             </header>
 
             <div className="flex-1 overflow-y-auto no-scrollbar px-6 md:px-12 py-8 md:py-12 relative">
-              <div className="relative z-10">
+              <div className="relative z-10 text-left">
                 {children}
               </div>
               

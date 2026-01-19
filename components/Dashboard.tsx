@@ -40,12 +40,12 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], clients 
     <div className="space-y-8 animate-fade-in">
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <p className="text-[10px] font-black uppercase text-sky-400 mb-2 tracking-[0.3em]">iVISION ENGINE • CRYSTAL CORE</p>
+          <p className="text-[10px] font-bold uppercase text-sky-400 mb-2">iVISION ENGINE • CRYSTAL CORE</p>
           <h1 className="text-3xl md:text-5xl font-black text-white tracking-tight uppercase">Bonjour, {currentUser.name.split(' ')[0]} 👋</h1>
         </div>
         <div className="hidden md:flex items-center space-x-3 crystal-module px-6 py-3 rounded-2xl">
            <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
-           <span className="text-[11px] font-black text-slate-400 uppercase tracking-widest">{currentUser.role}</span>
+           <span className="text-[11px] font-bold text-slate-400 uppercase">{currentUser.role}</span>
         </div>
       </header>
 
@@ -56,9 +56,9 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], clients 
             <div className={`w-12 h-12 rounded-2xl ${s.bg} flex items-center justify-center ${s.color} border border-white/5`}>
               <s.icon size={22} />
             </div>
-            <div className="relative z-10">
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">{s.label}</p>
-              <p className="text-3xl md:text-4xl font-black text-white mt-1 tracking-tighter">{s.val}</p>
+            <div className="relative z-10 text-left">
+              <p className="text-[11px] font-bold text-slate-500 uppercase">{s.label}</p>
+              <p className="text-3xl md:text-4xl font-black text-white mt-1 tracking-tight">{s.val}</p>
             </div>
           </div>
         ))}
@@ -72,9 +72,9 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], clients 
                 <div className="w-16 h-16 bg-white/5 rounded-2xl flex items-center justify-center text-sky-400 border border-white/10 shadow-inner">
                   <BarChart3 size={32} />
                 </div>
-                <div>
+                <div className="text-left">
                   <h3 className="text-xl md:text-2xl font-black text-white uppercase tracking-tight">Intelligence Data</h3>
-                  <p className="text-slate-500 text-[10px] mt-2 font-black uppercase tracking-widest">Analyse globale des performances v5.0</p>
+                  <p className="text-slate-500 text-[10px] mt-2 font-bold uppercase">Analyse globale des performances v5.0</p>
                 </div>
               </div>
               <ChevronRight className="text-slate-600 group-hover:text-white group-hover:translate-x-1 transition-all" size={24} />
@@ -83,18 +83,18 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], clients 
 
           <div className="space-y-4">
             <div className="flex items-center justify-between px-4">
-              <h3 className="text-[10px] font-black uppercase text-slate-500 tracking-[0.3em]">Flux Prioritaire</h3>
-              <button onClick={() => onNavigate('tasks')} className="text-[9px] font-black text-sky-400 uppercase tracking-widest px-5 py-2.5 rounded-full crystal-module active-scale">Explorer le flux</button>
+              <h3 className="text-[11px] font-bold uppercase text-slate-500">Flux Prioritaire</h3>
+              <button onClick={() => onNavigate('tasks')} className="text-[10px] font-bold text-sky-400 uppercase px-5 py-2.5 rounded-full crystal-module active-scale">Explorer le flux</button>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {relevantTasks.filter(t => t.status !== TaskStatus.DONE).slice(0, 4).map(task => (
                 <div key={task.id} onClick={() => onNavigate('tasks')} className="crystal-module p-6 rounded-[2rem] border-l-[6px] border-l-sky-500 active-scale flex items-center justify-between group">
-                  <div className="truncate pr-6 flex-1">
-                    <h4 className="font-bold text-white text-[13px] uppercase truncate group-hover:text-sky-400 transition-colors">{task.title}</h4>
-                    <p className="text-[9px] text-slate-600 font-black mt-2 uppercase tracking-widest">{task.dueDate}</p>
+                  <div className="truncate pr-6 flex-1 text-left">
+                    <h4 className="font-bold text-white text-[13px] uppercase truncate group-hover:text-sky-400 transition-colors tracking-tight">{task.title}</h4>
+                    <p className="text-[10px] text-slate-600 font-bold mt-2 uppercase">{task.dueDate}</p>
                   </div>
-                  <div className={`px-3 py-1.5 rounded-xl text-[8px] font-black uppercase tracking-widest flex-shrink-0 border border-white/5 ${task.priority === 'high' ? 'bg-rose-500/10 text-rose-500' : 'bg-white/5 text-slate-400'}`}>
+                  <div className={`px-3 py-1.5 rounded-xl text-[9px] font-bold uppercase flex-shrink-0 border border-white/5 ${task.priority === 'high' ? 'bg-rose-500/10 text-rose-500' : 'bg-white/5 text-slate-400'}`}>
                     {task.priority || 'MED'}
                   </div>
                 </div>
@@ -102,7 +102,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], clients 
               {relevantTasks.filter(t => t.status !== TaskStatus.DONE).length === 0 && (
                 <div className="crystal-module p-16 rounded-[3rem] text-center border-dashed border-2 border-white/5 w-full flex flex-col items-center col-span-2">
                   <Activity size={32} className="text-slate-800 mb-4" />
-                  <p className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-700">Aucune émission de donnée</p>
+                  <p className="text-[11px] font-bold uppercase text-slate-700">Aucune émission de donnée</p>
                 </div>
               )}
             </div>
@@ -119,7 +119,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], clients 
           </div>
           <div>
             <h4 className="text-2xl font-black text-white uppercase tracking-tight">Rendement iV</h4>
-            <p className="text-slate-600 text-[10px] mt-3 font-black uppercase tracking-[0.2em]">Efficacité opérationnelle calculée</p>
+            <p className="text-slate-600 text-[11px] mt-3 font-bold uppercase">Efficacité opérationnelle calculée</p>
           </div>
           <button onClick={() => onNavigate('reports')} className="w-full py-5 bg-white text-slate-950 rounded-2xl font-black text-[11px] uppercase active-scale shadow-2xl hover:bg-sky-400 hover:text-white transition-all">Audit complet système</button>
         </div>
