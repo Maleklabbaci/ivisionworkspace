@@ -220,7 +220,7 @@ const App: React.FC = () => {
   if (loading) return (
     <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-950">
       <Loader2 className="animate-spin text-sky-400 mb-4" size={48} />
-      <p className="text-slate-500 font-bold uppercase text-[11px] tracking-widest">iVISION System...</p>
+      <p className="text-slate-500 font-bold uppercase text-[11px] tracking-normal">Chargement iVISION...</p>
     </div>
   );
 
@@ -228,7 +228,7 @@ const App: React.FC = () => {
     <HashRouter>
       <div className="min-h-screen bg-slate-950 text-slate-200 selection:bg-sky-400 selection:text-white">
         {isOffline && (
-          <div className="fixed top-0 left-0 right-0 bg-rose-500 text-white text-[10px] font-black uppercase py-2 text-center z-[10000] flex items-center justify-center">
+          <div className="fixed top-0 left-0 right-0 bg-rose-500 text-white text-[10px] font-bold uppercase py-2 text-center z-[10000] flex items-center justify-center">
             <WifiOff size={14} className="mr-3" /> CONNEXION INTERROMPUE
           </div>
         )}
@@ -265,119 +265,90 @@ const App: React.FC = () => {
   );
 };
 
-/**
- * Interface de connexion iVISION - Version "Clarté Maximale"
- * Sans espacements excessifs et parfaitement responsive
- */
 const AuthUI = ({ handleAuth, email, setEmail, password, setPassword, isAuthProcessing, isSignUp, setIsSignUp }: any) => {
   return (
-    <div className="fixed inset-0 bg-slate-950 flex flex-col md:items-center md:justify-center overflow-y-auto no-scrollbar">
-      {/* Dynamic Background FX */}
+    <div className="fixed inset-0 bg-slate-950 flex flex-col items-center md:justify-center overflow-y-auto no-scrollbar">
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-sky-500/10 blur-[100px] rounded-full animate-pulse"></div>
-        <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-indigo-600/10 blur-[120px] rounded-full animate-pulse" style={{ animationDelay: '2s' }}></div>
+        <div className="absolute top-[-10%] left-[-10%] w-[60%] h-[60%] bg-sky-500/10 blur-[100px] rounded-full animate-pulse"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] bg-indigo-600/10 blur-[120px] rounded-full animate-pulse" style={{ animationDelay: '2s' }}></div>
       </div>
       
-      {/* Container Adaptatif */}
-      <div className="relative z-10 w-full md:max-w-md md:px-4 flex flex-col min-h-full md:min-h-0 md:h-auto">
-        
-        {/* Logo Section - Espacement réduit */}
-        <div className="flex-shrink-0 flex flex-col items-center justify-center pt-20 pb-10 md:pt-0 md:mb-10 animate-fade-in">
-          <div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center text-slate-950 shadow-[0_20px_60px_rgba(255,255,255,0.12)] mb-6 transform transition-all hover:scale-105">
-              <Fingerprint size={38} strokeWidth={2.5} />
+      <div className="relative z-10 w-full md:max-w-md p-6 flex flex-col md:h-auto">
+        <div className="flex flex-col items-center justify-center pt-12 pb-8 md:pt-0 animate-fade-in text-center">
+          <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-slate-950 shadow-2xl mb-6 transform transition-transform hover:scale-110">
+              <Fingerprint size={32} strokeWidth={2.5} />
           </div>
-          <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-white uppercase leading-none">iVISION</h1>
-          <p className="text-sky-400 font-bold text-[11px] uppercase tracking-wider mt-3 opacity-80">Security Protocol 3.4</p>
+          <h1 className="text-4xl md:text-5xl font-black tracking-tight text-white uppercase leading-none">iVISION</h1>
+          <p className="text-sky-400 font-bold text-xs uppercase mt-3 tracking-normal">Security Access Protocol</p>
         </div>
 
-        {/* Card Formulaire - Contrasté et Clair */}
-        <div className="flex-1 md:flex-none w-full flex items-end md:items-center">
-          <div className="w-full bg-slate-900/90 backdrop-blur-2xl border-t md:border border-white/10 rounded-t-[3rem] md:rounded-[2.5rem] px-8 py-10 md:p-12 shadow-[0_40px_100px_rgba(0,0,0,0.6)] animate-slide-up relative overflow-hidden">
-            
-            {/* Header Form */}
-            <div className="mb-10 text-center md:text-left">
+        <div className="w-full bg-slate-900/95 backdrop-blur-3xl border border-white/10 rounded-3xl p-8 md:p-12 shadow-[0_40px_100px_rgba(0,0,0,0.6)] animate-slide-up relative overflow-hidden">
+            <div className="mb-10">
               <h2 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tight leading-none">
-                {isSignUp ? 'Créer un accès' : 'Identification'}
+                {isSignUp ? 'Nouvel Accès' : 'Connexion'}
               </h2>
-              <div className="flex items-center justify-center md:justify-start mt-3 space-x-2 text-slate-500">
+              <div className="flex items-center mt-3 space-x-2 text-slate-500">
                 <ShieldCheck size={14} className="text-sky-400" />
-                <span className="text-[10px] font-bold uppercase tracking-wider">Gate Access Secure</span>
+                <span className="text-[11px] font-bold uppercase tracking-normal">Système iV Sécurisé</span>
               </div>
             </div>
 
             <form onSubmit={handleAuth} className="space-y-4">
-              <div className="space-y-1.5">
-                <div className="relative group/input">
-                  <div className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within/input:text-sky-400 transition-colors">
-                     <Mail size={18} />
-                  </div>
-                  <input 
-                    type="email" 
-                    required 
-                    value={email} 
-                    onChange={(e) => setEmail(e.target.value)} 
-                    placeholder="Votre email" 
-                    className="w-full pl-16 pr-6 py-5 bg-white/[0.04] border border-white/5 rounded-2xl font-bold text-white outline-none focus:bg-white/[0.06] focus:border-sky-400/50 transition-all text-sm placeholder-slate-600" 
-                  />
+              <div className="relative group/input">
+                <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within/input:text-sky-400 transition-colors">
+                    <Mail size={18} />
                 </div>
+                <input 
+                  type="email" 
+                  required 
+                  value={email} 
+                  onChange={(e) => setEmail(e.target.value)} 
+                  placeholder="Votre email" 
+                  className="w-full pl-14 pr-6 py-5 bg-white/[0.04] border border-white/5 rounded-2xl font-bold text-white outline-none focus:bg-white/[0.08] focus:border-sky-400/50 transition-all text-sm placeholder-slate-600" 
+                />
               </div>
 
-              <div className="space-y-1.5">
-                <div className="relative group/input">
-                  <div className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within/input:text-sky-400 transition-colors">
-                     <Key size={18} />
-                  </div>
-                  <input 
-                    type="password" 
-                    required 
-                    value={password} 
-                    onChange={(e) => setPassword(e.target.value)} 
-                    placeholder="Code d'accès" 
-                    className="w-full pl-16 pr-6 py-5 bg-white/[0.04] border border-white/5 rounded-2xl font-bold text-white outline-none focus:bg-white/[0.06] focus:border-sky-400/50 transition-all text-sm placeholder-slate-600" 
-                  />
+              <div className="relative group/input">
+                <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within/input:text-sky-400 transition-colors">
+                    <Key size={18} />
                 </div>
+                <input 
+                  type="password" 
+                  required 
+                  value={password} 
+                  onChange={(e) => setPassword(e.target.value)} 
+                  placeholder="Code secret" 
+                  className="w-full pl-14 pr-6 py-5 bg-white/[0.04] border border-white/5 rounded-2xl font-bold text-white outline-none focus:bg-white/[0.08] focus:border-sky-400/50 transition-all text-sm placeholder-slate-600" 
+                />
               </div>
 
               <button 
                 type="submit" 
                 disabled={isAuthProcessing} 
-                className="w-full py-6 bg-white text-slate-950 font-black rounded-2xl active-scale uppercase text-[11px] tracking-widest mt-6 flex items-center justify-center shadow-xl hover:bg-sky-400 hover:text-white transition-all duration-300 disabled:opacity-50"
+                className="w-full py-5 bg-white text-slate-950 font-black rounded-2xl active-scale uppercase text-xs mt-6 flex items-center justify-center shadow-xl hover:bg-sky-400 hover:text-white transition-all duration-300 disabled:opacity-50"
               >
                 {isAuthProcessing ? <Loader2 className="animate-spin" size={20} /> : (
                   <div className="flex items-center space-x-3">
-                    <span>{isSignUp ? "LANCER L'INDEXATION" : "ENTRER DANS LE NOYAU"}</span>
+                    <span>{isSignUp ? "DÉPLOYER L'ACCÈS" : "DÉVERROUILLER"}</span>
                     {isSignUp ? <UserPlus size={16} /> : <LogIn size={16} />}
                   </div>
                 )}
               </button>
 
-              <div className="pt-6 flex flex-col items-center">
-                 <button 
-                  type="button" 
-                  onClick={() => setIsSignUp(!isSignUp)} 
-                  className="px-6 py-2 text-slate-500 hover:text-white font-bold text-[10px] uppercase tracking-wide transition-all"
-                >
-                  {isSignUp ? "DÉJÀ MEMBRE ? CONNEXION" : "BESOIN D'UN ACCÈS ? S'INSCRIRE"}
-                </button>
-              </div>
+              <button 
+                type="button" 
+                onClick={() => setIsSignUp(!isSignUp)} 
+                className="w-full pt-6 text-slate-500 hover:text-white font-bold text-[11px] uppercase transition-all tracking-normal"
+              >
+                {isSignUp ? "Déjà un compte ? Se connecter" : "Besoin d'un accès ? S'inscrire"}
+              </button>
             </form>
-          </div>
         </div>
         
-        {/* Footer simple */}
-        <div className="flex-shrink-0 py-8 md:py-10 text-center opacity-30 text-[9px] font-bold uppercase tracking-widest text-slate-600">
-           © 2025 iVISION CRYSTAL • AES-256
+        <div className="py-12 text-center opacity-30 text-[10px] font-bold uppercase text-slate-600 tracking-normal">
+           © 2025 iVISION CRYSTAL CORE
         </div>
       </div>
-
-      <style>{`
-        @keyframes slideUp {
-          from { transform: translateY(60px); opacity: 0; }
-          to { transform: translateY(0); opacity: 1; }
-        }
-        .animate-slide-up { animation: slideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-      `}</style>
     </div>
   );
 };
@@ -399,9 +370,9 @@ const AccessGuard: React.FC<{
 
   return (
     <div className="h-full flex flex-col items-center justify-center text-center p-8 pt-20">
-      <div className="bg-rose-500/10 p-10 rounded-full mb-6 flex items-center justify-center text-rose-500 shadow-[0_0_50px_rgba(244,63,94,0.1)]"><Lock size={48} /></div>
-      <h2 className="text-3xl font-black text-white mb-2 uppercase tracking-tighter text-center">Accès Restreint</h2>
-      <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px] text-center">Vous n'avez pas les autorisations iVISION nécessaires.</p>
+      <div className="bg-rose-500/10 p-10 rounded-full mb-6 flex items-center justify-center text-rose-500"><Lock size={48} /></div>
+      <h2 className="text-3xl font-black text-white mb-2 uppercase tracking-tight">Accès Restreint</h2>
+      <p className="text-slate-500 font-bold uppercase text-[11px] tracking-normal">Autorisations iVISION insuffisantes.</p>
     </div>
   );
 };
