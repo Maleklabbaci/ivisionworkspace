@@ -18,23 +18,17 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, onLogout }) => {
 
   const hasAccess = (permissionKey?: keyof UserPermissions, requiredRole?: UserRole): boolean => {
     if (!currentUser) return false;
-    // L'admin a toujours accès à tout
     if (currentUser.role === UserRole.ADMIN) return true;
-    
-    // Si un rôle spécifique est requis (ex: ADMIN pour la gestion d'équipe)
     if (requiredRole && currentUser.role !== requiredRole) return false;
-
-    // Si une permission spécifique est requise
     if (permissionKey) {
       const perms = currentUser.permissions || {};
       return !!(perms as any)[permissionKey];
     }
-    
     return true;
   };
 
   const navItems = [
-    { id: 'dashboard', label: 'Tableau de bord', icon: LayoutIcon, color: 'text-sky-400', bg: 'bg-sky-400', allowed: true },
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutIcon, color: 'text-sky-400', bg: 'bg-sky-400', allowed: true },
     { id: 'projects', label: 'Projets', icon: Layers, color: 'text-emerald-400', bg: 'bg-emerald-400', allowed: true },
     { id: 'tasks', label: 'Missions', icon: TaskIcon, color: 'text-violet-400', bg: 'bg-violet-400', allowed: true },
     { id: 'chat', label: 'Chat', icon: ChatIcon, color: 'text-indigo-400', bg: 'bg-indigo-400', allowed: hasAccess('canManageChat') },
@@ -51,6 +45,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, onLogout }) => {
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-slate-950">
+      {/* Sidebar PC */}
       <aside className="hidden lg:flex flex-col w-64 glass border-r border-white/5 z-20">
         <div className="p-8 flex items-center space-x-3 mb-4">
           <div className="w-10 h-10 bg-sky-500 rounded-xl flex items-center justify-center text-white font-black shadow-lg">iV</div>
@@ -76,47 +71,72 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, onLogout }) => {
         </div>
       </aside>
 
+      {/* Main Content */}
       <div className="flex-1 flex flex-col h-full overflow-hidden">
         <header className="lg:hidden flex items-center justify-between px-6 py-4 glass border-b border-white/5 z-20">
           <div className="flex items-center space-x-3">
             <div className="w-8 h-8 bg-sky-500 rounded-lg flex items-center justify-center text-white font-black">iV</div>
             <span className="text-sm font-black text-white uppercase tracking-tighter">iVISION</span>
           </div>
-          <button onClick={() => navigate('/settings')} className="w-8 h-8 rounded-full overflow-hidden border border-white/10">
+          <button onClick={() => navigate('/settings')} className="w-8 h-8 rounded-full overflow-hidden border border-white/10 active-scale">
             <img src={currentUser.avatar} alt="" className="w-full h-full object-cover" />
           </button>
         </header>
-        <main className="flex-1 overflow-y-auto no-scrollbar p-4 md:p-6 lg:p-10 pb-28">
+
+        <main className="flex-1 overflow-y-auto no-scrollbar p-5 md:p-10 pb-32">
           <div className="max-w-7xl mx-auto">{children}</div>
         </main>
         
-        <nav className="lg:hidden fixed bottom-6 left-6 right-6 h-16 glass rounded-full px-2 flex justify-between items-center z-50 shadow-2xl border border-white/10">
+        {/* Navigation Mobile Premium */}
+        <nav className="lg:hidden fixed bottom-8 left-1/2 -translate-x-1/2 w-[90%] max-w-sm h-16 bg-white/5 backdrop-blur-2xl rounded-3xl flex justify-between items-center px-4 z-[100] shadow-[0_20px_50px_rgba(0,0,0,0.5)] border border-white/10">
           {visibleNavItems.slice(0, 4).map(item => (
-            <button key={item.id} onClick={() => navigate(`/${item.id}`)} className={`flex-1 h-12 rounded-full flex flex-col items-center justify-center transition-all ${currentPath === item.id ? `${item.bg} text-white shadow-lg` : 'text-slate-500'}`}>
-              <item.icon size={18} />
+            <button 
+              key={item.id} 
+              onClick={() => navigate(`/${item.id}`)} 
+              className={`relative flex items-center justify-center w-12 h-12 rounded-2xl transition-all active-scale ${currentPath === item.id ? `${item.bg} text-white shadow-xl` : 'text-slate-500 hover:text-slate-200'}`}
+            >
+              <item.icon size={20} strokeWidth={2.5} />
+              {currentPath === item.id && <div className="absolute -bottom-1 w-1 h-1 bg-white rounded-full"></div>}
             </button>
           ))}
-          <button onClick={() => setIsMoreMenuOpen(true)} className="flex-1 h-12 rounded-full flex items-center justify-center text-slate-500 hover:text-white transition-colors">
-            <Plus size={22} />
+          <button 
+            onClick={() => setIsMoreMenuOpen(true)} 
+            className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center text-white active-scale border border-white/10"
+          >
+            <Plus size={22} strokeWidth={3} />
           </button>
         </nav>
       </div>
 
+      {/* Full-Screen Mobile More Menu */}
       {isMoreMenuOpen && (
-        <div className="fixed inset-0 z-[100] flex flex-col justify-end p-4 animate-fade-in">
-          <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-lg" onClick={() => setIsMoreMenuOpen(false)}></div>
-          <div className="relative glass border border-white/10 rounded-[2.5rem] p-8 space-y-6 shadow-2xl">
+        <div className="fixed inset-0 z-[1000] flex flex-col justify-end animate-fade-in lg:hidden">
+          <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-xl" onClick={() => setIsMoreMenuOpen(false)}></div>
+          <div className="relative glass border-t border-white/10 rounded-t-[3rem] p-10 space-y-8 shadow-2xl pb-safe-bottom">
+            <div className="w-12 h-1 bg-white/10 rounded-full mx-auto -mt-4 mb-6"></div>
             <div className="flex justify-between items-center">
-              <h3 className="text-xs font-black text-white uppercase tracking-[0.2em]">Autres sections</h3>
-              <button onClick={() => setIsMoreMenuOpen(false)} className="w-10 h-10 glass rounded-full flex items-center justify-center text-slate-500 hover:text-white"><X size={20}/></button>
+              <h3 className="text-xs font-black text-slate-500 uppercase tracking-[0.4em]">Section Core</h3>
+              <button onClick={() => setIsMoreMenuOpen(false)} className="w-10 h-10 glass rounded-full flex items-center justify-center text-slate-500"><X size={20}/></button>
             </div>
-            <div className="grid grid-cols-3 gap-4 pb-4">
+            <div className="grid grid-cols-3 gap-4 pb-8">
               {visibleNavItems.slice(4).map(item => (
-                <button key={item.id} onClick={() => { navigate(`/${item.id}`); setIsMoreMenuOpen(false); }} className="flex flex-col items-center space-y-3 p-5 rounded-2xl glass hover:bg-white/10 transition-all">
-                  <item.icon size={22} className={item.color} />
-                  <span className="text-[8px] font-bold text-slate-400 uppercase text-center tracking-widest">{item.label}</span>
+                <button 
+                  key={item.id} 
+                  onClick={() => { navigate(`/${item.id}`); setIsMoreMenuOpen(false); }} 
+                  className="flex flex-col items-center space-y-3 p-4 rounded-[2rem] glass active-scale"
+                >
+                  <div className={`w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center ${item.color}`}>
+                    <item.icon size={22} />
+                  </div>
+                  <span className="text-[8px] font-black text-slate-400 uppercase text-center tracking-widest">{item.label}</span>
                 </button>
               ))}
+              <button onClick={onLogout} className="flex flex-col items-center space-y-3 p-4 rounded-[2rem] glass active-scale text-rose-400">
+                <div className="w-12 h-12 rounded-2xl bg-rose-400/10 flex items-center justify-center">
+                  <LogOut size={22} />
+                </div>
+                <span className="text-[8px] font-black uppercase text-center tracking-widest">Logout</span>
+              </button>
             </div>
           </div>
         </div>
