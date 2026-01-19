@@ -3,11 +3,6 @@ import { createClient } from '@supabase/supabase-js';
 
 // Configuration du projet Supabase iVISION
 const supabaseUrl = 'https://cfpyrdcybgnefaqdyumb.supabase.co';
-
-/**
- * Clé API active fournie : sb_publishable_9_MVHdIusXmJ_awvZdAl_w_2sTgGqoE
- * Note : L'erreur RLS indique que la clé est acceptée mais que l'opération est bloquée par la base.
- */
 const supabaseAnonKey = 'sb_publishable_9_MVHdIusXmJ_awvZdAl_w_2sTgGqoE';
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
@@ -15,20 +10,36 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
-    storageKey: 'ivision-auth-token'
+    storage: window.localStorage, // Utilisation explicite du localStorage
+    flowType: 'pkce'
+  },
+  global: {
+    headers: { 'x-application-name': 'ivision-crystal' }
   }
 });
 
 /**
- * Vérifie si la connexion à Supabase est opérationnelle.
+ * Utilitaire pour effectuer des requêtes sans planter en cas d'erreur réseau
  */
+// Fix: Use any for the promise parameter to avoid strict Type checking issues with Supabase builders (PostgrestFilterBuilder)
+export const safeFetch = async <T>(promise: any, fallback: T): Promise<T> => {
+  try {
+    const { data, error } = await promise;
+    if (error) {
+      console.warn('Supabase partial error:', error);
+      return fallback;
+    }
+    return data || fallback;
+  } catch (err) {
+    console.error('Network failure (Failed to fetch):', err);
+    return fallback;
+  }
+};
+
 export const checkSupabaseConnection = async (): Promise<boolean> => {
   try {
-    const { error } = await supabase.from('configs').select('key').limit(1);
-    if (error && (error.code === 'PGRST301' || error.message.includes('API key'))) {
-      return false;
-    }
-    return true;
+    const { error } = await supabase.from('users').select('id').limit(1);
+    return !error;
   } catch {
     return false;
   }

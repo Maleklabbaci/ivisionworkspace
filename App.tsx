@@ -1,11 +1,11 @@
 
 import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
-import { supabase } from './services/supabaseClient';
+import { supabase, safeFetch } from './services/supabaseClient';
 import { HashRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import Layout from './components/Layout';
 import ToastContainer from './components/Toast';
 import { User, UserRole, Task, TaskStatus, Channel, ToastNotification, Message, Client, FileLink, Lead, UserPermissions, ViewState, Project, SalaryRecord, Expense, AdCampaignExpense } from './types';
-import { Loader2, Zap, Lock } from 'lucide-react';
+import { Loader2, Zap, Lock, WifiOff } from 'lucide-react';
 
 const Dashboard = lazy(() => import('./components/Dashboard'));
 const Tasks = lazy(() => import('./components/Tasks'));
@@ -96,6 +96,7 @@ const App: React.FC = () => {
   const [password, setPassword] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
 
   const addNotification = useCallback((title: string, message: any, type: 'info' | 'success' | 'urgent' = 'info') => {
     let displayMessage = typeof message === 'string' ? message : (message?.message || JSON.stringify(message));
@@ -103,8 +104,28 @@ const App: React.FC = () => {
     setNotifications(prev => [...prev, { id, title, message: displayMessage, type }]);
   }, []);
 
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => {
+      setIsOffline(true);
+      addNotification("Mode Hors Ligne", "Connexion réseau perdue. Certaines données peuvent être obsolètes.", "urgent");
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [addNotification]);
+
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isOffline) {
+      addNotification("Erreur", "Vérifiez votre connexion internet.", "urgent");
+      return;
+    }
     setIsAuthProcessing(true);
     try {
       if (isSignUp) {
@@ -123,7 +144,7 @@ const App: React.FC = () => {
           addNotification("Succès", "Profil créé avec succès.", "success");
         }
       } else {
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
       }
     } catch (error: any) {
@@ -152,38 +173,52 @@ const App: React.FC = () => {
 
   const fetchUserData = async (userId: string) => {
     try {
+      // Étape 1 : Récupérer le profil utilisateur (Critique)
       const { data: userData, error: userError } = await supabase.from('users').select('*').eq('id', userId).single();
-      if (userError) throw userError;
+      if (userError) {
+        if (userError.message.includes('Failed to fetch')) {
+          addNotification("Erreur Réseau", "Impossible de contacter le serveur. Mode hors ligne activé.", "urgent");
+        }
+        throw userError;
+      }
       setCurrentUser(mapFromDB('users', userData));
 
-      const [u, t, c, l, ch, m, f, pr, sl, ex, ad] = await Promise.all([
-        supabase.from('users').select('*'),
-        supabase.from('tasks').select('*').order('created_at', { ascending: false }),
-        supabase.from('clients').select('*'),
-        supabase.from('leads').select('*').order('created_at', { ascending: false }),
-        supabase.from('channels').select('*'),
-        supabase.from('messages').select('*').order('created_at', { ascending: true }),
-        supabase.from('file_links').select('*').order('created_at', { ascending: false }),
-        supabase.from('projects').select('*').order('created_at', { ascending: false }),
-        supabase.from('salaries').select('*'),
-        supabase.from('expenses').select('*').order('created_at', { ascending: false }),
-        supabase.from('ad_campaigns').select('*').order('created_at', { ascending: false })
-      ]);
+      // Étape 2 : Chargement sécurisé des autres tables (Non-bloquant)
+      const u = await safeFetch(supabase.from('users').select('*'), []);
+      setUsers(u.map(i => mapFromDB('users', i)));
 
-      setUsers(u.data?.map(i => mapFromDB('users', i)) || []);
-      setTasks(t.data?.map(i => mapFromDB('tasks', i)) || []);
-      setClients(c.data || []);
-      setLeads(l.data?.map(i => mapFromDB('leads', i)) || []);
-      setChannels(ch.data?.map(i => mapFromDB('channels', i)) || []);
-      setMessages(m.data?.map(i => mapFromDB('messages', i)) || []);
-      setFileLinks(f.data?.map(i => mapFromDB('file_links', i)) || []);
-      setProjects(pr.data?.map(i => mapFromDB('projects', i)) || []);
-      setSalaries(sl.data?.map(i => mapFromDB('salaries', i)) || []);
-      setExpenses(ex.data?.map(i => mapFromDB('expenses', i)) || []);
-      setAdCampaigns(ad.data?.map(i => mapFromDB('ad_campaigns', i)) || []);
+      const t = await safeFetch(supabase.from('tasks').select('*').order('created_at', { ascending: false }), []);
+      setTasks(t.map(i => mapFromDB('tasks', i)));
 
-    } catch (error) {
-      console.error(error);
+      const c = await safeFetch(supabase.from('clients').select('*'), []);
+      setClients(c);
+
+      const l = await safeFetch(supabase.from('leads').select('*').order('created_at', { ascending: false }), []);
+      setLeads(l.map(i => mapFromDB('leads', i)));
+
+      const ch = await safeFetch(supabase.from('channels').select('*'), []);
+      setChannels(ch.map(i => mapFromDB('channels', i)));
+
+      const m = await safeFetch(supabase.from('messages').select('*').order('created_at', { ascending: true }), []);
+      setMessages(m.map(i => mapFromDB('messages', i)));
+
+      const f = await safeFetch(supabase.from('file_links').select('*').order('created_at', { ascending: false }), []);
+      setFileLinks(f.map(i => mapFromDB('file_links', i)));
+
+      const pr = await safeFetch(supabase.from('projects').select('*').order('created_at', { ascending: false }), []);
+      setProjects(pr.map(i => mapFromDB('projects', i)));
+
+      const sl = await safeFetch(supabase.from('salaries').select('*'), []);
+      setSalaries(sl.map(i => mapFromDB('salaries', i)));
+
+      const ex = await safeFetch(supabase.from('expenses').select('*').order('created_at', { ascending: false }), []);
+      setExpenses(ex.map(i => mapFromDB('expenses', i)));
+
+      const ad = await safeFetch(supabase.from('ad_campaigns').select('*').order('created_at', { ascending: false }), []);
+      setAdCampaigns(ad.map(i => mapFromDB('ad_campaigns', i)));
+
+    } catch (error: any) {
+      console.error('Fetch error:', error);
     } finally {
       setLoading(false);
     }
@@ -199,6 +234,11 @@ const App: React.FC = () => {
   return (
     <HashRouter>
       <div className="min-h-screen bg-slate-950 text-slate-200 selection:bg-sky-400 selection:text-white">
+        {isOffline && (
+          <div className="fixed top-0 left-0 right-0 bg-rose-500 text-white text-[10px] font-black uppercase tracking-[0.4em] py-2 text-center z-[10000] flex items-center justify-center">
+            <WifiOff size={14} className="mr-3" /> Mode Hors Ligne Actif
+          </div>
+        )}
         {!currentUser ? (
           <div className="min-h-screen flex items-center justify-center p-4">
             <AuthUI 
@@ -265,14 +305,12 @@ const AuthUI = ({ handleAuth, email, setEmail, password, setPassword, isAuthProc
   </div>
 );
 
-// Composant AccessGuard pour sécuriser les routes selon le rôle ou les permissions
 const AccessGuard: React.FC<{
   currentUser: User;
   permission?: keyof UserPermissions;
   role?: UserRole;
   children: React.ReactNode;
 }> = ({ currentUser, permission, role, children }) => {
-  // L'admin a toujours accès à tout
   if (currentUser.role === UserRole.ADMIN) return <>{children}</>;
   
   const hasRole = role ? currentUser.role === role : true;
@@ -333,7 +371,18 @@ const AppContent: React.FC<any> = ({
              const newTask = {...t, id:generateUUID(), created_at: new Date().toISOString()};
              supabase.from('tasks').insert({id:newTask.id, title:t.title, description:t.description, assignee_id:t.assigneeId, client_id:t.clientId, project_id:t.projectId, due_date:t.dueDate, status:t.status, type:t.type, priority:t.priority}).then(()=>setTasks([mapFromDB('tasks', newTask), ...tasks]));
           }} onUpdateTask={(t:any)=> {
-             supabase.from('tasks').update({title:t.title, description:t.description, assignee_id:t.assigneeId, client_id:t.clientId, project_id:t.projectId, due_date:t.dueDate, status:t.status, type:t.type, priority:t.priority}).eq('id',t.id).then(()=>setTasks(tasks.map(tk=>tk.id===t.id?{...tk,...t}:tk)));
+             // Fix: Map correct properties from the 't' object to Supabase schema names
+             supabase.from('tasks').update({
+               title: t.title, 
+               description: t.description, 
+               assignee_id: t.assigneeId, 
+               client_id: t.clientId, 
+               project_id: t.projectId, 
+               due_date: t.dueDate, 
+               status: t.status, 
+               type: t.type, 
+               priority: t.priority
+             }).eq('id', t.id).then(()=>setTasks(tasks.map(tk=>tk.id===t.id?{...tk,...t}:tk)));
           }} onDeleteTask={(id:string)=> {
              supabase.from('tasks').delete().eq('id',id).then(()=>setTasks(tasks.filter(t=>t.id!==id)));
           }} />} />
@@ -343,7 +392,14 @@ const AppContent: React.FC<any> = ({
           }} onDeleteProject={(id:string)=> {
             supabase.from('projects').delete().eq('id',id).then(()=>setProjects(projects.filter(p=>p.id!==id)));
           }} onUpdateProject={(p:Project)=>{
-             supabase.from('projects').update({name:p.name, description:p.description, total_budget:p.totalBudget, status:p.status, client_id:p.clientId}).eq('id',p.id).then(()=>setProjects(projects.map(pr=>pr.id===p.id?p:pr)));
+             // Fix: Use correct camelCase property names from the Project type (totalBudget, clientId)
+             supabase.from('projects').update({
+               name: p.name, 
+               description: p.description, 
+               total_budget: p.totalBudget, 
+               status: p.status, 
+               client_id: p.clientId
+             }).eq('id', p.id).then(()=>setProjects(projects.map(pr=>pr.id===p.id?p:pr)));
           }} />} />
           <Route path="/finance" element={<AccessGuard currentUser={currentUser} permission="canManageFinances" role={UserRole.ADMIN}>
             <Finances 
