@@ -32,7 +32,7 @@
         --safe-top: env(safe-area-inset-top);
         --safe-bottom: env(safe-area-inset-bottom);
         --crystal-border: rgba(255, 255, 255, 0.1);
-        --crystal-bg: rgba(30, 41, 59, 0.45); /* Verre dépoli plus clair */
+        --crystal-bg: rgba(30, 41, 59, 0.45);
       }
       body {
         background-color: #020617;
@@ -46,7 +46,6 @@
         -webkit-font-smoothing: antialiased;
       }
 
-      /* CRYSTAL MODULE SYSTEM */
       .crystal-module {
         background: var(--crystal-bg);
         backdrop-filter: blur(24px);
@@ -56,7 +55,6 @@
         transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       }
 
-      /* MODAL SYSTEM v7.0 - CRYSTAL SHEETS */
       .modal-overlay {
         position: fixed;
         inset: 0;
@@ -79,7 +77,7 @@
       }
 
       .modal-content-glass {
-        background: rgba(30, 41, 59, 0.8); /* Fond modale plus clair */
+        background: rgba(30, 41, 59, 0.8);
         backdrop-filter: blur(40px);
         -webkit-backdrop-filter: blur(40px);
         border: 1px solid rgba(255, 255, 255, 0.15);
@@ -112,19 +110,30 @@
       .input-iv {
         width: 100%;
         padding: 1.25rem 1.5rem;
-        background: rgba(255, 255, 255, 0.05);
+        background: rgba(15, 23, 42, 0.8); /* Fond plus sombre pour le contraste */
         border: 1px solid rgba(255, 255, 255, 0.1);
         border-radius: 1.5rem;
         color: white;
         font-weight: 600;
         outline: none;
         transition: all 0.2s;
+        appearance: none; /* Supprime le style natif */
       }
+      
+      /* Style spécifique pour les options des listes déroulantes */
+      .input-iv option {
+        background-color: #0f172a; /* Slate 900 */
+        color: white;
+        font-weight: 500;
+        padding: 12px;
+      }
+
       .input-iv:focus {
         border-color: #0EA5E9;
-        background: rgba(14, 165, 233, 0.12);
+        background: rgba(15, 23, 42, 1);
         box-shadow: 0 0 20px rgba(14, 165, 233, 0.1);
       }
+
       .label-iv {
         display: flex;
         align-items: center;

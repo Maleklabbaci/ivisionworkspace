@@ -209,13 +209,13 @@ const Tasks = ({ tasks, users, clients = [], projects = [], currentUser, onUpdat
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <label className="label-iv"><UserIcon size={14} className="text-sky-400"/> Responsable Assigné</label>
-                <select className="w-full p-5 bg-slate-900 border border-white/10 rounded-2xl font-bold text-white outline-none focus:border-sky-400 transition-all text-sm appearance-none cursor-pointer" value={formData.assigneeId} onChange={e => setFormData({...formData, assigneeId: e.target.value})}>
+                <select className="input-iv cursor-pointer" value={formData.assigneeId} onChange={e => setFormData({...formData, assigneeId: e.target.value})}>
                     {users.map((u: User) => <option key={u.id} value={u.id}>{u.name}</option>)}
                 </select>
               </div>
               <div className="space-y-2">
                 <label className="label-iv"><Briefcase size={14} className="text-sky-400"/> Partenaire CRM</label>
-                <select className="w-full p-5 bg-slate-900 border border-white/10 rounded-2xl font-bold text-white outline-none focus:border-sky-400 transition-all text-sm appearance-none cursor-pointer" value={formData.clientId} onChange={e => setFormData({...formData, clientId: e.target.value})}>
+                <select className="input-iv cursor-pointer" value={formData.clientId} onChange={e => setFormData({...formData, clientId: e.target.value})}>
                     <option value="">Projet Interne iVISION</option>
                     {clients.map((c: Client) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
@@ -225,7 +225,7 @@ const Tasks = ({ tasks, users, clients = [], projects = [], currentUser, onUpdat
             <div className="grid grid-cols-2 gap-6">
               <div className="space-y-2">
                 <label className="label-iv"><AlertTriangle size={14} className="text-sky-400"/> Niveau Priorité</label>
-                <select className="w-full p-5 bg-slate-900 border border-white/10 rounded-2xl font-bold text-white outline-none focus:border-sky-400 transition-all text-sm appearance-none cursor-pointer" value={formData.priority} onChange={e => setFormData({...formData, priority: e.target.value as any})}>
+                <select className="input-iv cursor-pointer" value={formData.priority} onChange={e => setFormData({...formData, priority: e.target.value as any})}>
                     <option value="low">Basse (Std)</option>
                     <option value="medium">Moyenne (Core)</option>
                     <option value="high">Haute (Urgent)</option>
@@ -233,7 +233,7 @@ const Tasks = ({ tasks, users, clients = [], projects = [], currentUser, onUpdat
               </div>
               <div className="space-y-2">
                 <label className="label-iv"><Layers size={14} className="text-sky-400"/> Type Flux</label>
-                <select className="w-full p-5 bg-slate-900 border border-white/10 rounded-2xl font-bold text-white outline-none focus:border-sky-400 transition-all text-sm appearance-none cursor-pointer" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value as any})}>
+                <select className="input-iv cursor-pointer" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value as any})}>
                     <option value="content">Marketing Contenu</option>
                     <option value="ads">Performance Ads</option>
                     <option value="social">Engagement Social</option>
