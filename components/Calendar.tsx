@@ -3,7 +3,8 @@ import React, { useState, useMemo } from 'react';
 import { Task, TaskStatus, User, Client } from '../types';
 import { ChevronLeft, ChevronRight, Plus, X, Calendar as CalendarIcon, Clock, Check, Briefcase, User as UserIcon, Type as TypeIcon, AlertTriangle, Layers, Info } from 'lucide-react';
 
-const Calendar: React.FC<any> = ({ tasks = [], onAddTask, onUpdateStatus, currentUser, users = [], clients = [] }) => {
+// Fixed: Component converted to direct default function export to avoid issues with React.lazy and property 'default'
+export default function Calendar({ tasks = [], onAddTask, onUpdateStatus, currentUser, users = [], clients = [] }: any) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
   const [showAddModal, setShowAddModal] = useState(false);
@@ -156,70 +157,71 @@ const Calendar: React.FC<any> = ({ tasks = [], onAddTask, onUpdateStatus, curren
         </div>
       </div>
 
-      {/* MODAL PLANIFICATION MISSION */}
+      {/* MODAL PLANIFICATION MISSION - UNIFIED */}
       {showAddModal && (
         <div className="modal-overlay">
           <div className="fixed inset-0 cursor-pointer" onClick={closeModals}></div>
-          <div className="modal-container max-w-2xl">
-            <div className="relative glass w-full transform rounded-[2.5rem] md:rounded-[3.5rem] border border-white/10 shadow-[0_0_120px_rgba(0,0,0,0.9)] p-8 md:p-14 animate-fade-in">
-               <div className="flex justify-between items-start mb-8">
-                  <div>
-                    <h3 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight uppercase leading-none">Planification</h3>
-                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-3">Mission du {selectedDate?.toLocaleDateString('fr-FR')}</p>
-                  </div>
-                  <button onClick={closeModals} className="w-12 h-12 glass text-slate-500 hover:text-white rounded-xl flex items-center justify-center transition-all flex-shrink-0 active-scale"><X size={24}/></button>
-               </div>
-               
-               <form onSubmit={handleAddSubmit} className="space-y-6">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center"><TypeIcon size={12} className="mr-2 text-rose-400"/> Objet de la mission</label>
-                    <input required className="w-full p-5 bg-white/5 border border-white/10 rounded-2xl font-bold text-white outline-none focus:border-rose-400 transition-all text-sm" placeholder="Titre stratégique" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center"><Info size={12} className="mr-2 text-rose-400"/> Spécifications</label>
-                    <textarea className="w-full p-5 bg-white/5 border border-white/10 rounded-2xl font-medium text-white outline-none focus:border-rose-400 transition-all text-sm h-32 resize-none" placeholder="Briefing détaillé..." value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center"><UserIcon size={12} className="mr-2 text-rose-400"/> Responsable iV</label>
-                      <select className="w-full p-5 bg-slate-900 border border-white/10 rounded-2xl font-bold text-slate-300 outline-none text-sm appearance-none cursor-pointer" value={formData.assigneeId} onChange={e => setFormData({...formData, assigneeId: e.target.value})}>
-                          {users.map((u: User) => <option key={u.id} value={u.id}>{u.name}</option>)}
-                      </select>
+          <div className="modal-center-wrapper">
+            <div className="modal-container">
+              <div className="modal-content-glass animate-fade-in">
+                 <div className="flex justify-between items-start mb-8">
+                    <div>
+                      <h3 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight uppercase leading-none">Planification</h3>
+                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-3">Mission du {selectedDate?.toLocaleDateString('fr-FR')}</p>
                     </div>
+                    <button onClick={closeModals} className="w-12 h-12 glass text-slate-500 hover:text-white rounded-xl flex items-center justify-center transition-all flex-shrink-0 active-scale"><X size={24}/></button>
+                 </div>
+                 
+                 <form onSubmit={handleAddSubmit} className="space-y-6">
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center"><Briefcase size={12} className="mr-2 text-rose-400"/> Partenaire CRM</label>
-                      <select className="w-full p-5 bg-slate-900 border border-white/10 rounded-2xl font-bold text-slate-300 outline-none text-sm appearance-none cursor-pointer" value={formData.clientId} onChange={e => setFormData({...formData, clientId: e.target.value})}>
-                          <option value="">Interne iVISION</option>
-                          {clients.map((c: Client) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                      </select>
+                      <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center leading-none"><TypeIcon size={12} className="mr-2 text-rose-400"/> Objet de la mission</label>
+                      <input required className="w-full p-5 bg-white/5 border border-white/10 rounded-2xl font-bold text-white outline-none focus:border-rose-400 transition-all text-sm" placeholder="Titre stratégique" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
                     </div>
-                  </div>
 
-                  <div className="grid grid-cols-2 gap-5">
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center"><AlertTriangle size={12} className="mr-2 text-rose-400"/> Priorité</label>
-                      <select className="w-full p-5 bg-slate-900 border border-white/10 rounded-2xl font-bold text-slate-300 outline-none text-sm appearance-none cursor-pointer" value={formData.priority} onChange={e => setFormData({...formData, priority: e.target.value as any})}>
-                          <option value="low">Basse</option>
-                          <option value="medium">Moyenne</option>
-                          <option value="high">Haute</option>
-                      </select>
+                      <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center leading-none"><Info size={12} className="mr-2 text-rose-400"/> Spécifications</label>
+                      <textarea className="w-full p-5 bg-white/5 border border-white/10 rounded-2xl font-medium text-white outline-none focus:border-rose-400 transition-all text-sm h-32 resize-none" placeholder="Briefing détaillé..." value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
                     </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center"><Layers size={12} className="mr-2 text-rose-400"/> Type Flux</label>
-                      <select className="w-full p-5 bg-slate-900 border border-white/10 rounded-2xl font-bold text-slate-300 outline-none text-sm appearance-none cursor-pointer" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value as any})}>
-                          <option value="content">Contenu</option>
-                          <option value="ads">Publicité</option>
-                          <option value="social">Social</option>
-                          <option value="seo">SEO</option>
-                      </select>
-                    </div>
-                  </div>
 
-                  <button type="submit" className="w-full py-6 bg-rose-400 text-white font-black rounded-3xl shadow-2xl active-scale uppercase text-[11px] tracking-[0.3em] mt-4 hover:bg-rose-500 shadow-rose-400/20 transition-all">
-                    Confirmer l'Indexation
-                  </button>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center leading-none"><UserIcon size={12} className="mr-2 text-rose-400"/> Responsable iV</label>
+                        <select className="w-full p-5 bg-slate-900 border border-white/10 rounded-2xl font-bold text-slate-300 outline-none text-sm appearance-none cursor-pointer" value={formData.assigneeId} onChange={e => setFormData({...formData, assigneeId: e.target.value})}>
+                            {users.map((u: User) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center leading-none"><Briefcase size={12} className="mr-2 text-rose-400"/> Partenaire CRM</label>
+                        <select className="w-full p-5 bg-slate-900 border border-white/10 rounded-2xl font-bold text-slate-300 outline-none text-sm appearance-none cursor-pointer" value={formData.clientId} onChange={e => setFormData({...formData, clientId: e.target.value})}>
+                            <option value="">Interne iVISION</option>
+                            {clients.map((c: Client) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-5">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center leading-none"><AlertTriangle size={12} className="mr-2 text-rose-400"/> Priorité</label>
+                        <select className="w-full p-5 bg-slate-900 border border-white/10 rounded-2xl font-bold text-slate-300 outline-none text-sm appearance-none cursor-pointer" value={formData.priority} onChange={e => setFormData({...formData, priority: e.target.value as any})}>
+                            <option value="low">Basse</option>
+                            <option value="medium">Moyenne</option>
+                            <option value="high">Haute</option>
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center leading-none"><Layers size={12} className="mr-2 text-rose-400"/> Type Flux</label>
+                        <select className="w-full p-5 bg-slate-900 border border-white/10 rounded-2xl font-bold text-slate-300 outline-none text-sm appearance-none cursor-pointer" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value as any})}>
+                            <option value="content">Contenu</option>
+                            <option value="ads">Publicité</option>
+                            <option value="social">Social</option>
+                            <option value="seo">SEO</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <button type="submit" className="w-full py-6 bg-rose-400 text-white font-black rounded-3xl shadow-2xl active-scale uppercase text-[11px] tracking-[0.3em] mt-4 hover:bg-rose-500 shadow-rose-400/20 transition-all">
+                      Confirmer l'Indexation
+                    </button>
                </form>
             </div>
           </div>
@@ -227,6 +229,4 @@ const Calendar: React.FC<any> = ({ tasks = [], onAddTask, onUpdateStatus, curren
       )}
     </div>
   );
-};
-
-export default Calendar;
+}

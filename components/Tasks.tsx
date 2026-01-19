@@ -1,7 +1,8 @@
 
 import React, { useState, useMemo } from 'react';
-import { Plus, X, Calendar as CalendarIcon, Trash2, GripVertical, CheckCircle2, MoreHorizontal, Briefcase, User as UserIcon, Type as TypeIcon, AlertTriangle, Layers, Info } from 'lucide-react';
+import { Plus, X, Calendar as CalendarIcon, Trash2, GripVertical, CheckCircle2, Briefcase, User as UserIcon, Type as TypeIcon, AlertTriangle, Layers, Info } from 'lucide-react';
 import { Task, TaskStatus, User, Client, Project } from '../types';
+import Modal from './Modal';
 
 const TaskCard = ({ task, onClick, clientName, projectName, assignee, onDragStart }: any) => {
   return (
@@ -122,6 +123,13 @@ const Tasks = ({ tasks, users, clients = [], projects = [], currentUser, onUpdat
     setSelectedTaskId(null);
   };
 
+  const onOpenEdit = () => {
+    if (currentTask) {
+      setFormData({ ...currentTask });
+      setViewMode('edit');
+    }
+  };
+
   return (
     <div className="relative">
       <div className="space-y-6 md:space-y-10 animate-fade-in">
@@ -153,133 +161,113 @@ const Tasks = ({ tasks, users, clients = [], projects = [], currentUser, onUpdat
         </div>
       </div>
 
-      {(viewMode === 'add' || viewMode === 'edit') && (
-        <div className="modal-overlay">
-          <div className="fixed inset-0 cursor-pointer" onClick={closeModals}></div>
-          <div className="modal-container max-w-2xl">
-            <div className="relative glass w-full transform rounded-[2rem] md:rounded-[3.5rem] border border-white/10 shadow-[0_0_120px_rgba(0,0,0,0.9)] p-6 md:p-14 animate-fade-in">
-               <div className="flex justify-between items-start mb-6 md:mb-10">
-                  <div>
-                    <h3 className="text-xl md:text-3xl font-extrabold text-white tracking-tight uppercase leading-none">{viewMode === 'add' ? 'Déployer Mission' : 'Configuration'}</h3>
-                    <p className="text-[8px] md:text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-2 md:mt-3">Paramètres opérationnels iVISION</p>
-                  </div>
-                  <button onClick={closeModals} className="w-10 h-10 md:w-12 md:h-12 glass text-slate-500 hover:text-white rounded-lg md:rounded-xl flex items-center justify-center transition-all flex-shrink-0"><X size={20} className="md:w-6 md:h-6"/></button>
-               </div>
-               
-               <form onSubmit={(e) => {
-                   e.preventDefault();
-                   if (viewMode === 'edit' && formData.id) onUpdateTask(formData);
-                   else onAddTask({ ...formData, status: TaskStatus.TODO });
-                   closeModals();
-               }} className="space-y-4 md:space-y-6">
-                  <div className="space-y-1 md:space-y-2">
-                    <label className="text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center"><TypeIcon size={12} className="mr-2 text-violet-400"/> Titre</label>
-                    <input required className="w-full p-4 md:p-5 bg-white/5 border border-white/10 rounded-xl md:rounded-2xl font-bold text-white outline-none focus:border-violet-400 transition-all text-xs md:text-sm" placeholder="Ex: Campagne Display Q4" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
-                  </div>
-
-                  <div className="space-y-1 md:space-y-2">
-                    <label className="text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center"><Info size={12} className="mr-2 text-violet-400"/> Brief</label>
-                    <textarea className="w-full p-4 md:p-5 bg-white/5 border border-white/10 rounded-xl md:rounded-2xl font-medium text-white outline-none focus:border-violet-400 transition-all text-xs md:text-sm h-24 md:h-32 resize-none" placeholder="Détails stratégiques..." value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
-                    <div className="space-y-1 md:space-y-2">
-                      <label className="text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center"><Layers size={12} className="mr-2 text-violet-400"/> Activité (Projet)</label>
-                      <select className="w-full p-4 md:p-5 bg-slate-900 border border-white/10 rounded-xl md:rounded-2xl font-bold text-slate-300 outline-none text-xs md:text-sm appearance-none cursor-pointer" value={formData.projectId} onChange={e => setFormData({...formData, projectId: e.target.value})}>
-                          <option value="">Mission Indépendante</option>
-                          {projects.map((p: Project) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                      </select>
-                    </div>
-                    <div className="space-y-1 md:space-y-2">
-                      <label className="text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center"><Briefcase size={12} className="mr-2 text-violet-400"/> Client CRM</label>
-                      <select className="w-full p-4 md:p-5 bg-slate-900 border border-white/10 rounded-xl md:rounded-2xl font-bold text-slate-300 outline-none text-xs md:text-sm appearance-none cursor-pointer" value={formData.clientId} onChange={e => setFormData({...formData, clientId: e.target.value})}>
-                          <option value="">Interne iVISION</option>
-                          {clients.map((c: Client) => <option key={c.id} value={c.id}>{c.name} {c.company ? `(${c.company})` : ''}</option>)}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
-                    <div className="space-y-1 md:space-y-2">
-                      <label className="text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center"><UserIcon size={12} className="mr-2 text-violet-400"/> Responsable</label>
-                      <select className="w-full p-4 md:p-5 bg-slate-900 border border-white/10 rounded-xl md:rounded-2xl font-bold text-slate-300 outline-none text-xs md:text-sm appearance-none cursor-pointer" value={formData.assigneeId} onChange={e => setFormData({...formData, assigneeId: e.target.value})}>
-                          {users.map((u: User) => <option key={u.id} value={u.id}>{u.name}</option>)}
-                      </select>
-                    </div>
-                    <div className="space-y-1 md:space-y-2">
-                      <label className="text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center"><CalendarIcon size={12} className="mr-2 text-violet-400"/> Échéance</label>
-                      <input type="date" className="w-full p-4 md:p-5 bg-white/5 border border-white/10 rounded-xl md:rounded-2xl font-bold text-white outline-none focus:border-violet-400 text-xs md:text-sm" value={formData.dueDate} onChange={e => setFormData({...formData, dueDate: e.target.value})} />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3 md:gap-4">
-                    <div className="space-y-1 md:space-y-2">
-                      <label className="text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center"><AlertTriangle size={12} className="mr-2 text-violet-400"/> Priorité</label>
-                      <select className="w-full p-4 md:p-5 bg-slate-900 border border-white/10 rounded-xl md:rounded-2xl font-bold text-slate-300 outline-none text-xs md:text-sm appearance-none cursor-pointer" value={formData.priority} onChange={e => setFormData({...formData, priority: e.target.value as any})}>
-                          <option value="low">Basse</option>
-                          <option value="medium">Moyenne</option>
-                          <option value="high">Haute</option>
-                      </select>
-                    </div>
-                    <div className="space-y-1 md:space-y-2">
-                      <label className="text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center"><Layers size={12} className="mr-2 text-violet-400"/> Type Flux</label>
-                      <select className="w-full p-4 md:p-5 bg-slate-900 border border-white/10 rounded-xl md:rounded-2xl font-bold text-slate-300 outline-none text-xs md:text-sm appearance-none cursor-pointer" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value as any})}>
-                          <option value="content">Contenu</option>
-                          <option value="ads">Publicité</option>
-                          <option value="social">Social</option>
-                          <option value="seo">SEO</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <button type="submit" className="w-full py-5 md:py-6 bg-violet-400 text-white font-black rounded-2xl md:rounded-3xl shadow-xl active-scale uppercase text-[10px] md:text-[11px] tracking-[0.2em] md:tracking-[0.3em] mt-2 md:mt-4 transition-all hover:bg-violet-500">
-                    Confirmer
-                  </button>
-               </form>
+      <Modal 
+        isOpen={viewMode === 'add' || viewMode === 'edit'} 
+        onClose={closeModals}
+        title={viewMode === 'add' ? 'Déployer Mission' : 'Configuration'}
+        subtitle="Paramètres opérationnels iVISION"
+      >
+        <form onSubmit={(e) => {
+             e.preventDefault();
+             if (viewMode === 'edit' && formData.id) onUpdateTask(formData);
+             else onAddTask({ ...formData, status: TaskStatus.TODO });
+             closeModals();
+         }} className="space-y-4 md:space-y-6">
+            <div className="space-y-1 md:space-y-2">
+              <label className="text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center leading-none"><TypeIcon size={12} className="mr-2 text-violet-400"/> Titre</label>
+              <input required className="w-full p-4 md:p-5 bg-white/5 border border-white/10 rounded-xl md:rounded-2xl font-bold text-white outline-none focus:border-violet-400 transition-all text-xs md:text-sm" placeholder="Ex: Campagne Display Q4" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
             </div>
-          </div>
-        </div>
-      )}
 
-      {selectedTaskId && currentTask && viewMode === 'list' && (
-        <div className="modal-overlay">
-          <div className="fixed inset-0 cursor-pointer" onClick={closeModals}></div>
-          <div className="modal-container max-w-xl">
-            <div className="relative glass w-full transform rounded-[2rem] md:rounded-[3.5rem] border border-white/10 shadow-[0_0_120px_rgba(0,0,0,0.9)] p-6 md:p-14 animate-fade-in">
-              <div className="flex justify-between items-start mb-6 md:mb-10">
-                <div className="min-w-0">
-                  <h3 className="text-xl md:text-2xl font-extrabold text-white tracking-tight uppercase leading-tight truncate">{currentTask.title}</h3>
-                  <p className="text-[8px] md:text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-2 md:mt-3">Détails de la mission iVISION</p>
-                </div>
-                <button onClick={closeModals} className="w-10 h-10 md:w-12 md:h-12 glass text-slate-500 hover:text-white rounded-xl flex items-center justify-center transition-all flex-shrink-0 active-scale"><X size={20} className="md:w-6 md:h-6"/></button>
+            <div className="space-y-1 md:space-y-2">
+              <label className="text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center leading-none"><Info size={12} className="mr-2 text-violet-400"/> Brief</label>
+              <textarea className="w-full p-4 md:p-5 bg-white/5 border border-white/10 rounded-xl md:rounded-2xl font-medium text-white outline-none focus:border-violet-400 transition-all text-xs md:text-sm h-24 md:h-32 resize-none" placeholder="Détails stratégiques..." value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
+              <div className="space-y-1 md:space-y-2">
+                <label className="text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center leading-none"><Layers size={12} className="mr-2 text-violet-400"/> Activité (Projet)</label>
+                <select className="w-full p-4 md:p-5 bg-slate-900 border border-white/10 rounded-xl md:rounded-2xl font-bold text-slate-300 outline-none text-xs md:text-sm appearance-none cursor-pointer" value={formData.projectId} onChange={e => setFormData({...formData, projectId: e.target.value})}>
+                    <option value="">Mission Indépendante</option>
+                    {projects.map((p: Project) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
               </div>
-              
-              <div className="space-y-6 md:space-y-8">
-                 <div className="p-4 md:p-6 bg-white/5 rounded-2xl md:rounded-3xl border border-white/5">
-                   <h4 className="text-[8px] md:text-[10px] font-black text-violet-400 uppercase tracking-widest mb-3 md:mb-4">Briefing</h4>
-                   <p className="text-xs md:text-sm text-slate-300 leading-relaxed font-medium">{currentTask.description || "Aucun brief spécifique."}</p>
-                 </div>
-                 
-                 <div className="grid grid-cols-2 gap-3 md:gap-4">
-                    <div className="p-4 md:p-5 glass-card rounded-xl md:rounded-2xl border border-white/5 text-center">
-                      <p className="text-[7px] md:text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Échéance</p>
-                      <p className="text-[10px] md:text-xs font-bold text-white uppercase">{currentTask.dueDate}</p>
-                    </div>
-                    <div className="p-4 md:p-5 glass-card rounded-xl md:rounded-2xl border border-white/5 text-center">
-                      <p className="text-[7px] md:text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Priorité</p>
-                      <p className={`text-[10px] md:text-xs font-black uppercase ${currentTask.priority === 'high' ? 'text-urgent' : 'text-white'}`}>{currentTask.priority || 'Medium'}</p>
-                    </div>
-                 </div>
-                 
-                 <div className="space-y-3 md:space-y-4 pt-2 md:pt-4">
-                  <button onClick={() => { setFormData({ ...currentTask }); setViewMode('edit'); }} className="w-full py-4 md:py-5 bg-white text-slate-950 font-black rounded-xl md:rounded-2xl shadow-xl hover:bg-violet-400 hover:text-white transition-all uppercase text-[9px] md:text-[10px] tracking-widest">Modifier</button>
-                  <button onClick={() => { if(confirm('Révoquer cette mission ?')) { onDeleteTask(currentTask.id); closeModals(); } }} className="w-full py-4 md:py-5 bg-urgent/10 text-urgent font-black rounded-xl md:rounded-2xl hover:bg-urgent/20 transition-all uppercase text-[9px] md:text-[10px] tracking-widest">Révoquer</button>
-                 </div>
+              <div className="space-y-1 md:space-y-2">
+                <label className="text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center leading-none"><Briefcase size={12} className="mr-2 text-violet-400"/> Client CRM</label>
+                <select className="w-full p-4 md:p-5 bg-slate-900 border border-white/10 rounded-xl md:rounded-2xl font-bold text-slate-300 outline-none text-xs md:text-sm appearance-none cursor-pointer" value={formData.clientId} onChange={e => setFormData({...formData, clientId: e.target.value})}>
+                    <option value="">Interne iVISION</option>
+                    {clients.map((c: Client) => <option key={c.id} value={c.id}>{c.name} {c.company ? `(${c.company})` : ''}</option>)}
+                </select>
               </div>
             </div>
-          </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
+              <div className="space-y-1 md:space-y-2">
+                <label className="text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center leading-none"><UserIcon size={12} className="mr-2 text-violet-400"/> Responsable</label>
+                <select className="w-full p-4 md:p-5 bg-slate-900 border border-white/10 rounded-xl md:rounded-2xl font-bold text-slate-300 outline-none text-xs md:text-sm appearance-none cursor-pointer" value={formData.assigneeId} onChange={e => setFormData({...formData, assigneeId: e.target.value})}>
+                    {users.map((u: User) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                </select>
+              </div>
+              <div className="space-y-1 md:space-y-2">
+                <label className="text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center leading-none"><CalendarIcon size={12} className="mr-2 text-violet-400"/> Échéance</label>
+                <input type="date" className="w-full p-4 md:p-5 bg-white/5 border border-white/10 rounded-xl md:rounded-2xl font-bold text-white outline-none focus:border-violet-400 text-xs md:text-sm" value={formData.dueDate} onChange={e => setFormData({...formData, dueDate: e.target.value})} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 md:gap-4">
+              <div className="space-y-1 md:space-y-2">
+                <label className="text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center leading-none"><AlertTriangle size={12} className="mr-2 text-violet-400"/> Priorité</label>
+                <select className="w-full p-4 md:p-5 bg-slate-900 border border-white/10 rounded-xl md:rounded-2xl font-bold text-slate-300 outline-none text-xs md:text-sm appearance-none cursor-pointer" value={formData.priority} onChange={e => setFormData({...formData, priority: e.target.value as any})}>
+                    <option value="low">Basse</option>
+                    <option value="medium">Moyenne</option>
+                    <option value="high">Haute</option>
+                </select>
+              </div>
+              <div className="space-y-1 md:space-y-2">
+                <label className="text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center leading-none"><Layers size={12} className="mr-2 text-violet-400"/> Type Flux</label>
+                <select className="w-full p-4 md:p-5 bg-slate-900 border border-white/10 rounded-xl md:rounded-2xl font-bold text-slate-300 outline-none text-xs md:text-sm appearance-none cursor-pointer" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value as any})}>
+                    <option value="content">Contenu</option>
+                    <option value="ads">Publicité</option>
+                    <option value="social">Social</option>
+                    <option value="seo">SEO</option>
+                </select>
+              </div>
+            </div>
+
+            <button type="submit" className="w-full py-5 md:py-6 bg-violet-400 text-white font-black rounded-2xl md:rounded-3xl shadow-xl active-scale uppercase text-[10px] md:text-[11px] tracking-[0.2em] md:tracking-[0.3em] mt-2 md:mt-4 transition-all hover:bg-violet-500">
+              Confirmer
+            </button>
+         </form>
+      </Modal>
+
+      <Modal 
+        isOpen={!!selectedTaskId && !!currentTask && viewMode === 'list'} 
+        onClose={closeModals}
+        title={currentTask?.title}
+        subtitle="Détails de la mission iVISION"
+      >
+        <div className="space-y-6 md:space-y-8">
+           <div className="p-4 md:p-6 bg-white/5 rounded-2xl md:rounded-3xl border border-white/5">
+             <h4 className="text-[8px] md:text-[10px] font-black text-violet-400 uppercase tracking-widest mb-3 md:mb-4">Briefing</h4>
+             <p className="text-xs md:text-sm text-slate-300 leading-relaxed font-medium">{currentTask?.description || "Aucun brief spécifique."}</p>
+           </div>
+           
+           <div className="grid grid-cols-2 gap-3 md:gap-4">
+              <div className="p-4 md:p-5 glass-card rounded-xl md:rounded-2xl border border-white/5 text-center">
+                <p className="text-[7px] md:text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Échéance</p>
+                <p className="text-[10px] md:text-xs font-bold text-white uppercase">{currentTask?.dueDate}</p>
+              </div>
+              <div className="p-4 md:p-5 glass-card rounded-xl md:rounded-2xl border border-white/5 text-center">
+                <p className="text-[7px] md:text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Priorité</p>
+                <p className={`text-[10px] md:text-xs font-black uppercase ${currentTask?.priority === 'high' ? 'text-urgent' : 'text-white'}`}>{currentTask?.priority || 'Medium'}</p>
+              </div>
+           </div>
+           
+           <div className="space-y-3 md:space-y-4 pt-2 md:pt-4">
+            <button onClick={onOpenEdit} className="w-full py-4 md:py-5 bg-white text-slate-950 font-black rounded-xl md:rounded-2xl shadow-xl hover:bg-violet-400 hover:text-white transition-all uppercase text-[9px] md:text-[10px] tracking-widest">Modifier</button>
+            <button onClick={() => { if(confirm('Révoquer cette mission ?')) { onDeleteTask(currentTask?.id); closeModals(); } }} className="w-full py-4 md:py-5 bg-urgent/10 text-urgent font-black rounded-xl md:rounded-2xl hover:bg-urgent/20 transition-all uppercase text-[9px] md:text-[10px] tracking-widest">Révoquer</button>
+           </div>
         </div>
-      )}
+      </Modal>
     </div>
   );
 };

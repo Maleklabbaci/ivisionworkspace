@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
-import { TrendingUp, Sparkles, Target, Zap, Clock, Loader2, ChevronRight, Activity, Users } from 'lucide-react';
-import { generateMarketingInsight } from '../services/geminiService';
+
+import React, { useMemo } from 'react';
+import { TrendingUp, Target, Zap, Clock, ChevronRight, Activity, BarChart3 } from 'lucide-react';
 import { Task, User, ViewState, TaskStatus, UserRole, Client } from '../types';
 
 interface DashboardProps {
@@ -11,9 +11,6 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], clients = [], onNavigate }) => {
-  const [aiInsight, setAiInsight] = useState<string>("");
-  const [loadingAi, setLoadingAi] = useState(false);
-
   const today = useMemo(() => new Date().toLocaleDateString('en-CA'), []);
   const isAdminOrManager = currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.PROJECT_MANAGER;
   
@@ -24,12 +21,17 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], clients 
 
   const overdueCount = useMemo(() => relevantTasks.filter(t => t.dueDate < today && t.status !== TaskStatus.DONE).length, [relevantTasks, today]);
   
-  // Correction: Calculer le score réel de productivité
   const productivityScore = useMemo(() => {
     if (relevantTasks.length === 0) return 0;
     const completed = relevantTasks.filter(t => t.status === TaskStatus.DONE).length;
     return Math.round((completed / relevantTasks.length) * 100);
   }, [relevantTasks]);
+
+  const performanceInsight = useMemo(() => {
+    if (overdueCount > 0) return `Alerte : ${overdueCount} missions en retard. Nécessite une réallocation des ressources.`;
+    if (productivityScore > 80) return "Excellente vélocité. Le flux opérationnel est optimal.";
+    return "Système stable. Continuez le suivi des objectifs trimestriels.";
+  }, [overdueCount, productivityScore]);
 
   const stats = [
     { label: 'En retard', val: overdueCount, color: 'text-urgent', icon: Clock, bg: 'bg-urgent/10', allowed: true },
@@ -40,25 +42,16 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], clients 
 
   const visibleStats = stats.filter(s => s.allowed);
 
-  const handleGetInsights = async () => {
-    if (loadingAi) return;
-    setLoadingAi(true);
-    try {
-      const insight = await generateMarketingInsight(`Role: ${currentUser.role}, Missions: ${relevantTasks.length}, Score Prod: ${productivityScore}%.`);
-      setAiInsight(insight);
-    } catch (err) { console.error(err); } finally { setLoadingAi(false); }
-  };
-
   return (
     <div className="space-y-6 md:space-y-10 animate-fade-in">
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-3 px-1">
         <div>
-          <p className="text-[8px] md:text-[10px] font-black uppercase tracking-[0.4em] text-sky-400 mb-1 md:mb-2">iVISION INTELLIGENCE CORE</p>
+          <p className="text-[8px] md:text-[10px] font-black uppercase tracking-[0.4em] text-sky-400 mb-1 md:mb-2">iVISION PERFORMANCE ENGINE</p>
           <h1 className="text-2xl md:text-4xl font-extrabold text-white tracking-tight leading-tight">Bonjour, {currentUser.name.split(' ')[0]} 👋</h1>
         </div>
         <div className="hidden md:flex items-center space-x-3 glass px-4 py-2 rounded-2xl border-white/10">
            <Activity size={14} className="text-emerald-400 animate-pulse" />
-           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Système Opérationnel - {currentUser.role}</span>
+           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Flux Réel - {currentUser.role}</span>
         </div>
       </header>
 
@@ -78,16 +71,16 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], clients 
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 md:gap-6">
         <div className="lg:col-span-2 space-y-5 md:space-y-6">
-          <div onClick={handleGetInsights} className="relative group cursor-pointer overflow-hidden rounded-[1.8rem] md:rounded-[2.5rem] p-[1px] bg-gradient-to-br from-sky-400/40 via-violet-500/40 to-indigo-500/40 shadow-2xl">
+          <div onClick={() => onNavigate('reports')} className="relative group cursor-pointer overflow-hidden rounded-[1.8rem] md:rounded-[2.5rem] p-[1px] bg-gradient-to-br from-sky-400/20 via-slate-800 to-indigo-500/20 shadow-2xl">
             <div className="bg-slate-950/40 backdrop-blur-3xl p-5 md:p-8 rounded-[1.75rem] md:rounded-[2.45rem] flex items-center justify-between">
               <div className="flex items-center space-x-4 md:space-x-6 min-w-0">
-                <div className="w-12 h-12 md:w-16 md:h-16 bg-white rounded-xl md:rounded-2xl flex items-center justify-center text-slate-950 shadow-2xl group-hover:rotate-6 transition-all duration-500 flex-shrink-0">
-                  {loadingAi ? <Loader2 className="animate-spin text-sky-500" size={20} /> : <Sparkles className="text-sky-500" size={20} />}
+                <div className="w-12 h-12 md:w-16 md:h-16 bg-white/5 rounded-xl md:rounded-2xl flex items-center justify-center text-sky-400 shadow-2xl transition-all duration-500 flex-shrink-0">
+                  <BarChart3 size={24} />
                 </div>
                 <div className="min-w-0">
-                  <h3 className="text-base md:text-xl font-extrabold text-white tracking-tight">Analyse Stratégique</h3>
+                  <h3 className="text-base md:text-xl font-extrabold text-white tracking-tight">Analyse de Performance</h3>
                   <p className="text-slate-400 text-[10px] md:text-sm mt-0.5 md:mt-1 font-medium leading-snug max-w-md truncate md:whitespace-normal">
-                    {aiInsight || "Générez un conseil iVISION basé sur vos missions actuelles."}
+                    {performanceInsight}
                   </p>
                 </div>
               </div>
@@ -133,10 +126,10 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], clients 
             </div>
           </div>
           <div>
-            <h4 className="text-sm md:text-lg font-extrabold text-white uppercase tracking-tight">Efficacité Système</h4>
-            <p className="text-slate-500 text-[10px] md:text-xs mt-2 md:mt-3 leading-relaxed font-medium px-2 md:px-4">Score basé sur vos missions clôturées vs actives.</p>
+            <h4 className="text-sm md:text-lg font-extrabold text-white uppercase tracking-tight">Efficacité Globale</h4>
+            <p className="text-slate-500 text-[10px] md:text-xs mt-2 md:mt-3 leading-relaxed font-medium px-2 md:px-4">Indicateur de complétion mathématique des flux assignés.</p>
           </div>
-          <button onClick={() => onNavigate('reports')} className="w-full py-3.5 md:py-4.5 bg-white text-slate-950 rounded-xl md:rounded-2xl font-black text-[9px] md:text-[10px] uppercase tracking-[0.2em] hover:bg-sky-400 hover:text-white transition-all shadow-xl active-scale">Détails Analytiques</button>
+          <button onClick={() => onNavigate('reports')} className="w-full py-3.5 md:py-4.5 bg-white text-slate-950 rounded-xl md:rounded-2xl font-black text-[9px] md:text-[10px] uppercase tracking-[0.2em] hover:bg-sky-400 hover:text-white transition-all shadow-xl active-scale">Détails de la Donnée</button>
         </div>
       </div>
     </div>

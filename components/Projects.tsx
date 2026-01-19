@@ -1,21 +1,9 @@
 
 import React, { useState, useMemo } from 'react';
-import { Plus, X, Briefcase, DollarSign, Activity, Calendar, MoreVertical, Search, Layers, TrendingUp, Filter, TrendingDown, Target, Wallet, Edit3 } from 'lucide-react';
+import { Plus, X, Briefcase, DollarSign, Activity, Calendar, MoreVertical, Search, Layers, TrendingUp, Filter, TrendingDown, Target, Wallet, Edit3, Type, Info, User as UserIcon } from 'lucide-react';
 import { Project, Client, UserRole, User, SalaryRecord, Expense, AdCampaignExpense } from '../types';
 
-interface ProjectsProps {
-  projects: Project[];
-  clients: Client[];
-  salaries: SalaryRecord[];
-  expenses: Expense[];
-  adCampaigns: AdCampaignExpense[];
-  currentUser: User;
-  onAddProject: (project: any) => void;
-  onDeleteProject: (id: string) => void;
-  onUpdateProject: (project: Project) => void;
-}
-
-const Projects: React.FC<ProjectsProps> = ({ 
+const Projects: React.FC<any> = ({ 
   projects = [], clients = [], salaries = [], expenses = [], adCampaigns = [], 
   currentUser, onAddProject, onDeleteProject, onUpdateProject 
 }) => {
@@ -32,12 +20,11 @@ const Projects: React.FC<ProjectsProps> = ({
 
   const isAdmin = currentUser.role === UserRole.ADMIN;
 
-  const filteredProjects = projects.filter(p => 
+  const filteredProjects = projects.filter((p: Project) => 
     p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     p.description.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Dynamic Calculation of Project Costs
   const projectsWithFinancials = useMemo(() => {
     return filteredProjects.map(project => {
       const projSalaries = salaries.filter(s => s.projectId === project.id).reduce((acc, s) => acc + (s.amount + (s.bonus || 0)), 0);
@@ -98,7 +85,7 @@ const Projects: React.FC<ProjectsProps> = ({
             <Search size={18} className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-500" />
             <input 
               type="text" 
-              placeholder="RECHERCHER UN PROJET..." 
+              placeholder="RECHERCHER..." 
               value={searchTerm} 
               onChange={e => setSearchTerm(e.target.value)}
               className="w-full lg:w-72 pl-14 pr-6 py-4 bg-white/5 border border-white/10 rounded-full text-[11px] font-black uppercase tracking-widest text-white outline-none focus:border-emerald-400 transition-all placeholder-slate-700" 
@@ -188,63 +175,64 @@ const Projects: React.FC<ProjectsProps> = ({
             </div>
           );
         })}
-
-        {projects.length === 0 && (
-          <div className="col-span-full py-32 glass rounded-[4rem] border-dashed border-2 border-white/5 flex flex-col items-center justify-center opacity-20">
-            <Layers size={64} className="mb-6" />
-            <p className="text-[12px] font-black uppercase tracking-[0.4em]">Aucun Projet Répertorié</p>
-          </div>
-        )}
       </div>
 
+      {/* MODAL PROJET - UNIFIED DESIGN */}
       {(viewMode === 'add' || viewMode === 'edit') && (
         <div className="modal-overlay">
           <div className="fixed inset-0 cursor-pointer" onClick={closeModal}></div>
-          <div className="modal-container max-w-2xl">
-            <div className="relative glass w-full transform rounded-[3.5rem] p-10 md:p-14 border border-white/10 shadow-[0_0_120px_rgba(0,0,0,0.9)] animate-fade-in">
-              <div className="flex justify-between items-start mb-10">
-                <div>
-                  <h3 className="text-2xl md:text-3xl font-extrabold text-white uppercase tracking-tight">
-                    {viewMode === 'add' ? 'Nouveau Projet' : 'Modifier Projet'}
-                  </h3>
-                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-2">Initialisation Flux iVISION</p>
+          <div className="modal-center-wrapper">
+            <div className="modal-container">
+              <div className="modal-content-glass animate-fade-in">
+                <div className="flex justify-between items-start mb-10">
+                  <div>
+                    <h3 className="text-3xl font-extrabold text-white uppercase tracking-tight leading-none">
+                      {viewMode === 'add' ? 'Architecture Projet' : 'Configuration Projet'}
+                    </h3>
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-3">Initialisation Flux Opérationnel iVISION</p>
+                  </div>
+                  <button onClick={closeModal} className="w-12 h-12 glass text-slate-500 hover:text-white rounded-xl flex items-center justify-center transition-all flex-shrink-0 active-scale"><X size={24}/></button>
                 </div>
-                <button onClick={closeModal} className="w-12 h-12 glass text-slate-500 hover:text-white rounded-xl flex items-center justify-center transition-all active-scale"><X size={24}/></button>
-              </div>
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="space-y-2">
-                  <label className="text-[11px] font-black uppercase tracking-widest text-slate-500 px-2">Nom du Projet</label>
-                  <input required className="w-full p-6 bg-white/5 border border-white/10 rounded-2xl text-white font-bold outline-none focus:border-emerald-400 transition-all text-sm" placeholder="Ex: Audit Stratégique Q4" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[11px] font-black uppercase tracking-widest text-slate-500 px-2">Description</label>
-                  <textarea className="w-full p-6 bg-white/5 border border-white/10 rounded-2xl text-white font-medium outline-none focus:border-emerald-400 transition-all text-sm h-32 resize-none" placeholder="Objectifs et livrables..." value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
-                </div>
-                <div className="grid grid-cols-2 gap-5">
+
+                <form onSubmit={handleSubmit} className="space-y-6">
                   <div className="space-y-2">
-                    <label className="text-[11px] font-black uppercase tracking-widest text-slate-500 px-2">Partenaire CRM</label>
-                    <select className="w-full p-6 bg-slate-900 border border-white/10 rounded-2xl font-bold text-slate-300 outline-none text-sm appearance-none cursor-pointer" value={formData.clientId} onChange={e => setFormData({...formData, clientId: e.target.value})}>
-                      <option value="">Structure Interne</option>
-                      {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center leading-none"><Type size={12} className="mr-2 text-emerald-400"/> Désignation du Projet</label>
+                    <input required className="w-full p-5 bg-slate-900 border border-white/10 rounded-2xl text-white font-bold outline-none focus:border-emerald-400 transition-all text-sm" placeholder="Ex: Audit Stratégique Q4" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center leading-none"><Info size={12} className="mr-2 text-emerald-400"/> Briefing de Mission</label>
+                    <textarea className="w-full p-5 bg-slate-900 border border-white/10 rounded-2xl text-white font-medium outline-none focus:border-emerald-400 transition-all text-sm h-28 resize-none" placeholder="Objectifs et spécifications..." value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center leading-none"><UserIcon size={12} className="mr-2 text-emerald-400"/> Partenaire CRM</label>
+                      <select className="w-full p-5 bg-slate-900 border border-white/10 rounded-2xl font-bold text-slate-300 outline-none text-sm appearance-none cursor-pointer" value={formData.clientId} onChange={e => setFormData({...formData, clientId: e.target.value})}>
+                        <option value="">Structure Interne iVISION</option>
+                        {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center leading-none"><DollarSign size={12} className="mr-2 text-emerald-400"/> Budget (DZD)</label>
+                      <input type="number" required className="w-full p-5 bg-slate-900 border border-white/10 rounded-2xl text-white font-bold outline-none focus:border-emerald-400 transition-all text-sm" placeholder="0" value={formData.totalBudget} onChange={e => setFormData({...formData, totalBudget: Number(e.target.value)})} />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center leading-none"><Activity size={12} className="mr-2 text-emerald-400"/> Statut Actif</label>
+                    <select className="w-full p-5 bg-slate-900 border border-white/10 rounded-2xl font-bold text-slate-300 outline-none text-sm appearance-none cursor-pointer" value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as any})}>
+                      <option value="active">Flux en Cours</option>
+                      <option value="completed">Mission Clôturée</option>
+                      <option value="on_hold">En Pause Stratégique</option>
                     </select>
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-[11px] font-black uppercase tracking-widest text-slate-500 px-2">Budget (DZD)</label>
-                    <input type="number" required className="w-full p-6 bg-white/5 border border-white/10 rounded-2xl text-white font-bold outline-none focus:border-emerald-400 transition-all text-sm" placeholder="0" value={formData.totalBudget} onChange={e => setFormData({...formData, totalBudget: Number(e.target.value)})} />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[11px] font-black uppercase tracking-widest text-slate-500 px-2">Statut</label>
-                  <select className="w-full p-6 bg-slate-900 border border-white/10 rounded-2xl font-bold text-slate-300 outline-none text-sm appearance-none cursor-pointer" value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as any})}>
-                    <option value="active">En Cours</option>
-                    <option value="completed">Clôturé</option>
-                    <option value="on_hold">En Pause</option>
-                  </select>
-                </div>
-                <button className="w-full py-7 bg-emerald-400 text-slate-950 font-black rounded-3xl shadow-2xl active-scale uppercase text-[12px] tracking-[0.4em] mt-4 hover:bg-emerald-300 transition-all">
-                  {viewMode === 'add' ? 'Déployer le Projet' : 'Enregistrer les Modifications'}
-                </button>
-              </form>
+
+                  <button type="submit" className="w-full py-7 bg-emerald-400 text-slate-950 font-black rounded-3xl shadow-2xl active-scale uppercase text-xs tracking-[0.4em] mt-6 transition-all hover:bg-emerald-300 shadow-emerald-500/20">
+                    {viewMode === 'add' ? 'Déployer le Projet' : 'Confirmer les Modifications'}
+                  </button>
+                </form>
+              </div>
             </div>
           </div>
         </div>

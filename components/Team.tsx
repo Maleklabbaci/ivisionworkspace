@@ -27,7 +27,6 @@ const PERMISSION_LABELS: Record<keyof UserPermissions, string> = {
   canManageClients: "Gérer le CRM",
   canManageLeads: "Gérer les leads",
   canManageCampaigns: "Gérer les campagnes",
-  // Fix: added missing canManageFinances label
   canManageFinances: "Gérer les finances",
 };
 
@@ -119,7 +118,7 @@ const Team: React.FC<any> = ({ currentUser, users, onAddUser, onRemoveUser, onUp
         <div className="flex justify-between items-end px-2">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.4em] text-emerald-400 mb-2">TEAM CORE SYSTEM</p>
-            <h2 className="text-4xl font-extrabold text-white tracking-tight uppercase">Équipe</h2>
+            <h2 className="text-4xl font-extrabold text-white tracking-tight uppercase leading-none">Équipe</h2>
           </div>
           {isAdmin && (
             <button onClick={() => setShowModal('add')} className="w-14 h-14 bg-emerald-400 text-white rounded-2xl shadow-xl shadow-emerald-400/20 active-scale hover:scale-105 transition-all flex items-center justify-center">
@@ -131,9 +130,8 @@ const Team: React.FC<any> = ({ currentUser, users, onAddUser, onRemoveUser, onUp
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {users.map((user: User) => (
             <div key={user.id} className="glass-card p-6 rounded-[2.5rem] border-white/5 flex items-center justify-between group relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-20 h-20 bg-emerald-400/5 blur-2xl rounded-full translate-x-10 -translate-y-10"></div>
               <div className="flex items-center space-x-5 relative z-10">
-                <div className="w-16 h-16 rounded-[1.5rem] bg-slate-800 flex items-center justify-center text-emerald-400 font-black text-xl border border-white/10 shadow-lg overflow-hidden">
+                <div className="w-16 h-16 rounded-[1.5rem] bg-slate-800 flex items-center justify-center text-emerald-400 font-black text-xl border border-white/10 shadow-lg overflow-hidden flex-shrink-0">
                   {user.avatar ? <img src={user.avatar} className="w-full h-full object-cover" alt="" /> : user.name.charAt(0)}
                 </div>
                 <div className="truncate pr-2">
@@ -143,9 +141,9 @@ const Team: React.FC<any> = ({ currentUser, users, onAddUser, onRemoveUser, onUp
               </div>
               {isAdmin && (
                 <div className="flex space-x-2 relative z-10">
-                  <button onClick={() => { setEditingUser(user); setShowModal('edit'); }} className="p-3 glass rounded-xl text-slate-500 hover:text-white transition-colors"><Edit2 size={16}/></button>
+                  <button onClick={() => { setEditingUser(user); setShowModal('edit'); }} className="p-3 glass rounded-xl text-slate-500 hover:text-white transition-colors active-scale"><Edit2 size={16}/></button>
                   {user.id !== currentUser.id && (
-                    <button onClick={() => confirm('Révoquer cet accès ?') && onRemoveUser(user.id)} className="p-3 glass rounded-xl text-slate-500 hover:text-rose-400 transition-colors"><Trash2 size={16}/></button>
+                    <button onClick={() => confirm('Révoquer cet accès ?') && onRemoveUser(user.id)} className="p-3 glass rounded-xl text-slate-500 hover:text-rose-400 transition-colors active-scale"><Trash2 size={16}/></button>
                   )}
                 </div>
               )}
@@ -157,59 +155,61 @@ const Team: React.FC<any> = ({ currentUser, users, onAddUser, onRemoveUser, onUp
       {showModal && (
         <div className="modal-overlay">
           <div className="fixed inset-0 cursor-pointer" onClick={closeModals}></div>
-          <div className="modal-container max-w-2xl">
-            <div className="relative glass w-full transform rounded-[2.5rem] md:rounded-[3.5rem] p-8 md:p-14 border border-white/10 shadow-[0_0_120px_rgba(0,0,0,0.9)] animate-fade-in">
-              <div className="flex justify-between items-start mb-10">
-                <div>
-                  <h3 className="text-2xl md:text-3xl font-extrabold text-white uppercase tracking-tight leading-none">
-                    {showModal === 'add' ? 'Ajout Équipier' : 'Configuration Accès'}
-                  </h3>
-                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-2">Privilèges Opérationnels iVISION</p>
+          <div className="modal-center-wrapper">
+            <div className="modal-container">
+              <div className="modal-content-glass animate-fade-in">
+                <div className="flex justify-between items-start mb-6 md:mb-10">
+                  <div>
+                    <h3 className="text-xl md:text-3xl font-extrabold text-white uppercase tracking-tight leading-none">
+                      {showModal === 'add' ? 'Ajout Équipier' : 'Configuration Accès'}
+                    </h3>
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-2">Privilèges Opérationnels iVISION</p>
+                  </div>
+                  <button onClick={closeModals} className="w-10 h-10 md:w-12 md:h-12 glass text-slate-500 hover:text-white rounded-xl flex items-center justify-center transition-all flex-shrink-0 active-scale"><X size={24}/></button>
                 </div>
-                <button onClick={closeModals} className="w-12 h-12 glass text-slate-500 hover:text-white rounded-xl flex items-center justify-center transition-all flex-shrink-0"><X size={24}/></button>
+
+                <form onSubmit={handleSubmit} className="space-y-4 md:space-y-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 leading-none">Nom Complet</label>
+                      <input required className="w-full p-4 md:p-5 bg-white/5 border border-white/10 rounded-xl md:rounded-2xl text-white font-bold outline-none focus:border-emerald-400 text-xs md:text-sm transition-all" placeholder="Marc L." value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 leading-none">Email Pro</label>
+                      <input required type="email" className="w-full p-4 md:p-5 bg-white/5 border border-white/10 rounded-xl md:rounded-2xl text-white font-bold outline-none focus:border-emerald-400 text-xs md:text-sm transition-all" placeholder="marc@ivision.pro" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 leading-none">Rôle Opérationnel</label>
+                    <select className="w-full p-4 md:p-5 bg-slate-900 border border-white/10 rounded-xl md:rounded-2xl font-bold text-slate-300 outline-none text-xs md:text-sm appearance-none cursor-pointer" value={formData.role} onChange={e => setFormData({...formData, role: e.target.value as UserRole})}>
+                      {Object.values(UserRole).map(role => <option key={role} value={role}>{role}</option>)}
+                    </select>
+                  </div>
+
+                  <div className="pt-2 md:pt-4 border-t border-white/5">
+                    <div className="flex items-center space-x-3 mb-4 md:mb-6">
+                      <ShieldCheck size={16} className="text-emerald-400" />
+                      <h4 className="text-[9px] font-black text-white uppercase tracking-[0.3em] leading-none">Permissions iV</h4>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[25vh] overflow-y-auto no-scrollbar p-1">
+                      {(Object.keys(PERMISSION_LABELS) as Array<keyof UserPermissions>).map((key) => (
+                        <div key={key} className="h-full">
+                          <PermissionToggle 
+                            label={PERMISSION_LABELS[key]}
+                            isActive={!!formData.permissions[key]}
+                            onChange={(val) => handlePermissionChange(key, val)}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <button disabled={isSubmitting} className="w-full py-5 md:py-6 bg-emerald-400 text-slate-950 font-black rounded-2xl md:rounded-3xl shadow-xl active-scale disabled:opacity-50 uppercase text-[10px] md:text-[11px] tracking-[0.3em] transition-all hover:bg-emerald-300 shadow-emerald-400/20 mt-2">
+                    {isSubmitting ? <Loader2 className="animate-spin mx-auto" size={20}/> : showModal === 'add' ? "Activer l'Accès" : "Confirmer"}
+                  </button>
+                </form>
               </div>
-
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2">Nom Complet</label>
-                    <input required className="w-full p-5 bg-white/5 border border-white/10 rounded-2xl text-white font-bold outline-none focus:border-emerald-400 text-sm transition-all" placeholder="Marc L." value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2">Email Pro</label>
-                    <input required type="email" className="w-full p-5 bg-white/5 border border-white/10 rounded-2xl text-white font-bold outline-none focus:border-emerald-400 text-sm transition-all" placeholder="marc@ivision.pro" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2">Rôle Opérationnel</label>
-                  <select className="w-full p-5 bg-slate-900 border border-white/10 rounded-2xl font-bold text-slate-300 outline-none text-sm appearance-none cursor-pointer" value={formData.role} onChange={e => setFormData({...formData, role: e.target.value as UserRole})}>
-                    {Object.values(UserRole).map(role => <option key={role} value={role}>{role}</option>)}
-                  </select>
-                </div>
-
-                <div className="pt-4 border-t border-white/5">
-                  <div className="flex items-center space-x-3 mb-6">
-                    <ShieldCheck size={18} className="text-emerald-400" />
-                    <h4 className="text-[10px] font-black text-white uppercase tracking-[0.3em]">Permissions iV</h4>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[30vh] overflow-y-auto no-scrollbar p-1">
-                    {(Object.keys(PERMISSION_LABELS) as Array<keyof UserPermissions>).map((key) => (
-                      <div key={key} className="h-full">
-                        <PermissionToggle 
-                          label={PERMISSION_LABELS[key]}
-                          isActive={!!formData.permissions[key]}
-                          onChange={(val) => handlePermissionChange(key, val)}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <button disabled={isSubmitting} className="w-full py-6 bg-emerald-400 text-slate-950 font-black rounded-3xl shadow-xl active-scale disabled:opacity-50 uppercase text-[11px] tracking-[0.3em] transition-all hover:bg-emerald-300 shadow-emerald-400/20">
-                  {isSubmitting ? <Loader2 className="animate-spin mx-auto" size={20}/> : showModal === 'add' ? "Activer l'Accès Équipier" : "Mettre à jour"}
-                </button>
-              </form>
             </div>
           </div>
         </div>
