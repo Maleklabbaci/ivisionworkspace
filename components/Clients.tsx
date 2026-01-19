@@ -1,13 +1,15 @@
 
 import React, { useState } from 'react';
-import { Client, Task, User } from '../types';
-import { Plus, Search, Mail, Phone, MapPin, X, Briefcase, ChevronRight, Trash2, Edit2, Globe, Activity, Info } from 'lucide-react';
+import { Client, Task, User, UserRole } from '../types';
+import { Plus, Search, Mail, Phone, MapPin, X, Briefcase, ChevronRight, Trash2, Edit2, Globe, Activity, Info, Lock } from 'lucide-react';
 
 const Clients: React.FC<any> = ({ clients = [], tasks = [], onAddClient, onUpdateClient, onDeleteClient, currentUser }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'add' | 'view'>('list');
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [formData, setFormData] = useState<Partial<Client>>({ name: '', company: '', email: '', phone: '', address: '', description: '' });
+
+  const canManage = currentUser.role === UserRole.ADMIN || !!currentUser.permissions?.canManageClients;
 
   const filteredClients = clients.filter((c: Client) => 
     c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -38,12 +40,14 @@ const Clients: React.FC<any> = ({ clients = [], tasks = [], onAddClient, onUpdat
                  className="w-full pl-14 pr-6 py-4 bg-white/5 border border-white/10 rounded-full text-[11px] font-black uppercase tracking-widest text-white outline-none focus:border-emerald-400/50 focus:bg-white/10 transition-all placeholder-slate-700" 
                />
              </div>
-             <button 
-               onClick={() => { setFormData({ name: '', company: '', email: '', phone: '', address: '', description: '' }); setViewMode('add'); }} 
-               className="w-14 h-14 bg-emerald-400 text-slate-950 rounded-2xl shadow-xl shadow-emerald-500/20 active-scale flex items-center justify-center transition-all hover:scale-105 hover:bg-emerald-300"
-             >
-               <Plus size={32} strokeWidth={3} />
-             </button>
+             {canManage && (
+               <button 
+                 onClick={() => { setFormData({ name: '', company: '', email: '', phone: '', address: '', description: '' }); setViewMode('add'); }} 
+                 className="w-14 h-14 bg-emerald-400 text-slate-950 rounded-2xl shadow-xl shadow-emerald-500/20 active-scale flex items-center justify-center transition-all hover:scale-105 hover:bg-emerald-300"
+               >
+                 <Plus size={32} strokeWidth={3} />
+               </button>
+             )}
           </div>
         </div>
 
@@ -71,7 +75,7 @@ const Clients: React.FC<any> = ({ clients = [], tasks = [], onAddClient, onUpdat
         </div>
       </div>
 
-      {/* MODAL VIEW CLIENT - OPTIMISÉ PHONE */}
+      {/* MODAL VIEW CLIENT */}
       {viewMode === 'view' && selectedClient && (
         <div className="modal-overlay">
           <div className="fixed inset-0 cursor-pointer" onClick={closeModals}></div>
@@ -123,12 +127,20 @@ const Clients: React.FC<any> = ({ clients = [], tasks = [], onAddClient, onUpdat
                   <button className="flex-1 py-4 md:py-6 px-6 md:px-8 bg-emerald-400 text-slate-950 font-black rounded-2xl md:rounded-3xl shadow-2xl active-scale uppercase text-[10px] md:text-[11px] tracking-[0.2em] transition-all hover:bg-emerald-300 flex items-center justify-center text-center">
                     Paramètres Partenaire iV
                   </button>
-                  <button 
-                    onClick={() => { if(confirm('Révoquer ce compte CRM ?')) { onDeleteClient(selectedClient.id); closeModals(); } }} 
-                    className="w-full sm:w-20 h-auto py-4 sm:py-0 glass text-slate-500 rounded-2xl md:rounded-3xl flex items-center justify-center hover:text-urgent hover:bg-urgent/10 transition-all shadow-xl active-scale border border-white/5"
-                  >
-                    <Trash2 size={22}/>
-                  </button>
+                  {canManage && (
+                    <button 
+                      onClick={() => { if(confirm('Révoquer ce compte CRM ?')) { onDeleteClient(selectedClient.id); closeModals(); } }} 
+                      className="w-full sm:w-20 h-auto py-4 sm:py-0 glass text-slate-500 rounded-2xl md:rounded-3xl flex items-center justify-center hover:text-urgent hover:bg-urgent/10 transition-all shadow-xl active-scale border border-white/5"
+                    >
+                      <Trash2 size={22}/>
+                    </button>
+                  )}
+                  {!canManage && (
+                     <div className="flex items-center space-x-2 text-slate-500 glass px-6 py-4 rounded-2xl">
+                        <Lock size={16}/>
+                        <span className="text-[8px] font-black uppercase tracking-widest">Modification restreinte</span>
+                     </div>
+                  )}
                </div>
             </div>
           </div>
@@ -136,7 +148,7 @@ const Clients: React.FC<any> = ({ clients = [], tasks = [], onAddClient, onUpdat
       )}
 
       {/* MODAL AJOUT CLIENT */}
-      {viewMode === 'add' && (
+      {viewMode === 'add' && canManage && (
         <div className="modal-overlay">
           <div className="fixed inset-0 cursor-pointer" onClick={closeModals}></div>
           <div className="modal-container max-w-2xl">

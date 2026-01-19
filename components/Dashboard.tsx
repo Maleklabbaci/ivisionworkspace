@@ -1,8 +1,8 @@
 
 import React, { useState, useMemo } from 'react';
-import { TrendingUp, Sparkles, Target, Zap, Clock, Loader2, ChevronRight, Activity } from 'lucide-react';
+import { TrendingUp, Sparkles, Target, Zap, Clock, Loader2, ChevronRight, Activity, Users } from 'lucide-react';
 import { generateMarketingInsight } from '../services/geminiService';
-import { Task, User, ViewState, TaskStatus } from '../types';
+import { Task, User, ViewState, TaskStatus, UserRole } from '../types';
 
 interface DashboardProps {
   currentUser: User;
@@ -15,20 +15,31 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], onNaviga
   const [loadingAi, setLoadingAi] = useState(false);
 
   const today = useMemo(() => new Date().toLocaleDateString('en-CA'), []);
-  const overdueCount = useMemo(() => tasks.filter(t => t.dueDate < today && t.status !== TaskStatus.DONE).length, [tasks, today]);
+  const isAdminOrManager = currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.PROJECT_MANAGER;
+  
+  // Tâches assignées à l'utilisateur courant (si membre) ou toutes (si manager)
+  const relevantTasks = useMemo(() => {
+    if (isAdminOrManager) return tasks;
+    return tasks.filter(t => t.assigneeId === currentUser.id);
+  }, [tasks, currentUser, isAdminOrManager]);
+
+  const overdueCount = useMemo(() => relevantTasks.filter(t => t.dueDate < today && t.status !== TaskStatus.DONE).length, [relevantTasks, today]);
   
   const stats = [
-    { label: 'Retards', val: overdueCount, color: 'text-urgent', icon: Clock, bg: 'bg-urgent/10' },
-    { label: 'Flux Actif', val: tasks.filter(t => t.status === TaskStatus.IN_PROGRESS).length, color: 'text-sky-400', icon: TrendingUp, bg: 'bg-sky-400/10' },
-    { label: 'Comptes CRM', val: new Set(tasks.map(t => t.clientId)).size, color: 'text-emerald-400', icon: Target, bg: 'bg-emerald-400/10' },
-    { label: 'Réussites', val: tasks.filter(t => t.status === TaskStatus.DONE).length, color: 'text-amber-400', icon: Zap, bg: 'bg-amber-400/10' }
+    { label: 'En retard', val: overdueCount, color: 'text-urgent', icon: Clock, bg: 'bg-urgent/10', allowed: true },
+    { label: 'Flux Actif', val: relevantTasks.filter(t => t.status === TaskStatus.IN_PROGRESS).length, color: 'text-sky-400', icon: TrendingUp, bg: 'bg-sky-400/10', allowed: true },
+    { label: 'Clients CRM', val: new Set(tasks.map(t => t.clientId)).size, color: 'text-emerald-400', icon: Target, bg: 'bg-emerald-400/10', allowed: isAdminOrManager || !!currentUser.permissions?.canManageClients },
+    { label: 'Terminées', val: relevantTasks.filter(t => t.status === TaskStatus.DONE).length, color: 'text-amber-400', icon: Zap, bg: 'bg-amber-400/10', allowed: true },
+    { label: 'Equipe', val: 'Actif', color: 'text-slate-400', icon: Users, bg: 'bg-slate-400/10', allowed: !isAdminOrManager }
   ];
+
+  const visibleStats = stats.filter(s => s.allowed).slice(0, 4);
 
   const handleGetInsights = async () => {
     if (loadingAi) return;
     setLoadingAi(true);
     try {
-      const insight = await generateMarketingInsight(`Context: ${tasks.length} missions, ${overdueCount} overdue.`);
+      const insight = await generateMarketingInsight(`Role: ${currentUser.role}, Missions: ${relevantTasks.length}, Retard: ${overdueCount}.`);
       setAiInsight(insight);
     } catch (err) { console.error(err); } finally { setLoadingAi(false); }
   };
@@ -42,13 +53,13 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], onNaviga
         </div>
         <div className="hidden md:flex items-center space-x-3 glass px-4 py-2 rounded-2xl border-white/10">
            <Activity size={14} className="text-emerald-400 animate-pulse" />
-           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Système Opérationnel</span>
+           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Système Opérationnel - {currentUser.role}</span>
         </div>
       </header>
 
-      {/* Grid Stats - Compact on mobile */}
+      {/* Grid Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-        {stats.map((s, i) => (
+        {visibleStats.map((s, i) => (
           <div key={i} className="glass-card p-4 md:p-6 rounded-[1.5rem] md:rounded-[2rem] flex flex-col justify-between h-32 md:h-44 group">
             <div className={`w-8 h-8 md:w-11 md:h-11 rounded-lg md:rounded-xl ${s.bg} flex items-center justify-center ${s.color} transition-transform group-hover:scale-110`}>
               <s.icon size={16} className="md:w-[20px]" />
@@ -63,7 +74,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], onNaviga
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 md:gap-6">
         <div className="lg:col-span-2 space-y-5 md:space-y-6">
-          {/* AI Banner - Tighter on mobile */}
+          {/* AI Banner */}
           <div onClick={handleGetInsights} className="relative group cursor-pointer overflow-hidden rounded-[1.8rem] md:rounded-[2.5rem] p-[1px] bg-gradient-to-br from-sky-400/40 via-violet-500/40 to-indigo-500/40 shadow-2xl">
             <div className="bg-slate-950/40 backdrop-blur-3xl p-5 md:p-8 rounded-[1.75rem] md:rounded-[2.45rem] flex items-center justify-between">
               <div className="flex items-center space-x-4 md:space-x-6 min-w-0">
@@ -71,9 +82,9 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], onNaviga
                   {loadingAi ? <Loader2 className="animate-spin text-sky-500" size={20} /> : <Sparkles className="text-sky-500" size={20} />}
                 </div>
                 <div className="min-w-0">
-                  <h3 className="text-base md:text-xl font-extrabold text-white tracking-tight">iVISION Analyst</h3>
+                  <h3 className="text-base md:text-xl font-extrabold text-white tracking-tight">Analyse Stratégique</h3>
                   <p className="text-slate-400 text-[10px] md:text-sm mt-0.5 md:mt-1 font-medium leading-snug max-w-md truncate md:whitespace-normal">
-                    {aiInsight || "Analysez instantanément votre flux de travail."}
+                    {aiInsight || "Générez un conseil iVISION basé sur vos missions actuelles."}
                   </p>
                 </div>
               </div>
@@ -89,7 +100,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], onNaviga
               <button onClick={() => onNavigate('tasks')} className="text-[8px] md:text-[10px] font-bold text-sky-400 hover:text-white transition-colors uppercase tracking-widest px-3 py-1 rounded-full glass">Flux complet</button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
-              {tasks.filter(t => t.status !== TaskStatus.DONE).slice(0, 4).map(task => (
+              {relevantTasks.filter(t => t.status !== TaskStatus.DONE).slice(0, 4).map(task => (
                 <div key={task.id} onClick={() => onNavigate('tasks')} className="glass-card p-4 md:p-5 rounded-xl md:rounded-2xl flex items-center justify-between border-l-2 md:border-l-4 border-l-violet-400/50 cursor-pointer group">
                   <div className="truncate pr-3">
                     <h4 className="font-bold text-white text-[12px] md:text-sm truncate group-hover:text-sky-400 transition-colors uppercase md:normal-case">{task.title}</h4>
@@ -100,11 +111,16 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], onNaviga
                   </div>
                 </div>
               ))}
+              {relevantTasks.filter(t => t.status !== TaskStatus.DONE).length === 0 && (
+                <div className="col-span-2 glass p-8 rounded-2xl text-center opacity-30">
+                  <p className="text-[10px] font-black uppercase tracking-widest">Toutes les missions sont complétées</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Efficacité Chart - Optimized for mobile presence */}
+        {/* Efficacité Chart */}
         <div className="glass p-6 md:p-8 rounded-[2rem] md:rounded-[2.5rem] flex flex-col items-center justify-center text-center space-y-6 md:space-y-8 relative overflow-hidden group">
           <div className="absolute top-0 right-0 w-24 h-24 md:w-32 md:h-32 bg-sky-400/5 blur-[40px] md:blur-[60px] rounded-full"></div>
           <div className="relative">
@@ -115,10 +131,10 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], onNaviga
             </div>
           </div>
           <div>
-            <h4 className="text-sm md:text-lg font-extrabold text-white uppercase tracking-tight">Efficacité Globale</h4>
-            <p className="text-slate-500 text-[10px] md:text-xs mt-2 md:mt-3 leading-relaxed font-medium px-2 md:px-4">Performance opérationnelle iV.</p>
+            <h4 className="text-sm md:text-lg font-extrabold text-white uppercase tracking-tight">Score de Productivité</h4>
+            <p className="text-slate-500 text-[10px] md:text-xs mt-2 md:mt-3 leading-relaxed font-medium px-2 md:px-4">Performance opérationnelle calculée par l'IA iV.</p>
           </div>
-          <button onClick={() => onNavigate('reports')} className="w-full py-3.5 md:py-4.5 bg-white text-slate-950 rounded-xl md:rounded-2xl font-black text-[9px] md:text-[10px] uppercase tracking-[0.2em] hover:bg-sky-400 hover:text-white transition-all shadow-xl active-scale">Détails</button>
+          <button onClick={() => onNavigate('reports')} className="w-full py-3.5 md:py-4.5 bg-white text-slate-950 rounded-xl md:rounded-2xl font-black text-[9px] md:text-[10px] uppercase tracking-[0.2em] hover:bg-sky-400 hover:text-white transition-all shadow-xl active-scale">Détails Analytiques</button>
         </div>
       </div>
     </div>

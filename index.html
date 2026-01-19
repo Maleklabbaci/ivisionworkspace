@@ -74,7 +74,6 @@
         box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
       }
 
-      /* Fix pour les popups afin qu'elles ne soient jamais coupées */
       .modal-overlay {
         position: fixed;
         inset: 0;
@@ -82,8 +81,8 @@
         overflow-y: auto;
         display: flex;
         justify-content: center;
-        align-items: flex-start; /* Start pour permettre le défilement naturel */
-        padding: 0.75rem; /* Réduit sur mobile pour gagner de la place */
+        align-items: flex-start;
+        padding: 0.75rem;
         background: rgba(2, 6, 23, 0.9);
         backdrop-filter: blur(20px);
         -webkit-backdrop-filter: blur(20px);
@@ -91,7 +90,7 @@
       @media (min-width: 768px) {
         .modal-overlay {
           padding: 3rem;
-          align-items: center; /* Centrage sur desktop si le contenu rentre */
+          align-items: center;
         }
       }
       .modal-container {
@@ -99,6 +98,26 @@
         position: relative;
         margin-top: auto;
         margin-bottom: auto;
+      }
+
+      /* Styles spécifique pour l'export PDF via Impression */
+      @media print {
+        body { background: white !important; color: black !important; }
+        aside, nav, header, button, .no-print { display: none !important; }
+        main { padding: 0 !important; margin: 0 !important; }
+        .max-w-7xl { max-width: 100% !important; }
+        .glass, .glass-card { 
+          background: white !important; 
+          border: 1px solid #eee !important; 
+          backdrop-filter: none !important;
+          box-shadow: none !important;
+          color: black !important;
+        }
+        .text-white { color: #0f172a !important; }
+        .text-slate-500, .text-slate-400 { color: #64748b !important; }
+        .bg-slate-950, .bg-slate-900 { background: white !important; }
+        .printable-report { display: block !important; padding: 2rem !important; }
+        .page-break { page-break-after: always; }
       }
     </style>
     <script type="importmap">

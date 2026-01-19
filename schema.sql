@@ -1,114 +1,40 @@
+-- REPARATION SYSTEME CHAT iVISION
+-- Assure que les colonnes member_ids, created_by et is_private existent
+-- et force Supabase à rafraîchir son cache de colonnes.
 
--- TABLE: USERS (Profils étendus connectés à Auth Supabase)
-CREATE TABLE IF NOT EXISTS public.users (
-    id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
-    name TEXT NOT NULL,
-    email TEXT UNIQUE NOT NULL,
-    avatar TEXT,
-    role TEXT DEFAULT 'Membre',
-    phone_number TEXT,
-    notification_pref TEXT DEFAULT 'all',
-    status TEXT DEFAULT 'active',
-    permissions JSONB DEFAULT '{}'::jsonb,
-    ai_api_key TEXT,
-    last_seen TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
+DO $$ 
+BEGIN
+    -- 1. Table channels
+    IF NOT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'channels') THEN
+        CREATE TABLE public.channels (
+            id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+            name TEXT NOT NULL,
+            type TEXT DEFAULT 'project',
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+    END IF;
 
--- TABLE: CLIENTS (Le CRM principal)
-CREATE TABLE IF NOT EXISTS public.clients (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    name TEXT NOT NULL,
-    company TEXT,
-    email TEXT,
-    phone TEXT,
-    address TEXT,
-    description TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
+    -- 2. Colonne created_by
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='channels' AND column_name='created_by') THEN
+        ALTER TABLE public.channels ADD COLUMN created_by UUID REFERENCES public.users(id) ON DELETE SET NULL;
+    END IF;
 
--- TABLE: LEADS (Prospection et Acquisition)
-CREATE TABLE IF NOT EXISTS public.leads (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    name TEXT NOT NULL,
-    company TEXT,
-    email TEXT,
-    phone TEXT,
-    status TEXT DEFAULT 'new', -- 'new', 'contacted', 'qualified', 'lost'
-    source TEXT,
-    value_min NUMERIC DEFAULT 0,
-    value_max NUMERIC DEFAULT 0,
-    description TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
+    -- 3. Colonne member_ids (Tableau d'UUID)
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='channels' AND column_name='member_ids') THEN
+        ALTER TABLE public.channels ADD COLUMN member_ids UUID[] DEFAULT '{}';
+    END IF;
 
--- TABLE: TASKS (Gestion des Missions)
-CREATE TABLE IF NOT EXISTS public.tasks (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    title TEXT NOT NULL,
-    description TEXT,
-    assignee_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
-    client_id UUID REFERENCES public.clients(id) ON DELETE SET NULL,
-    status TEXT DEFAULT 'À faire', -- 'À faire', 'En cours', 'Bloqué', 'Terminé'
-    due_date DATE,
-    priority TEXT DEFAULT 'medium', -- 'low', 'medium', 'high'
-    type TEXT DEFAULT 'content', -- 'content', 'ads', 'social', 'seo', 'admin'
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
+    -- 4. Colonne is_private
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='channels' AND column_name='is_private') THEN
+        ALTER TABLE public.channels ADD COLUMN is_private BOOLEAN DEFAULT false;
+    END IF;
+END $$;
 
--- TABLE: CHANNELS (Canaux de communication)
-CREATE TABLE IF NOT EXISTS public.channels (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    name TEXT NOT NULL,
-    type TEXT DEFAULT 'project', -- 'global', 'project'
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
+-- 5. Publication temps réel
+DROP PUBLICATION IF EXISTS supabase_realtime;
+CREATE PUBLICATION supabase_realtime FOR TABLE public.users, public.tasks, public.leads, public.clients, public.messages, public.channels;
 
--- TABLE: MESSAGES (Chat interne)
-CREATE TABLE IF NOT EXISTS public.messages (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
-    channel_id UUID REFERENCES public.channels(id) ON DELETE CASCADE,
-    content TEXT NOT NULL,
-    attachments TEXT[], -- Tableau d'URLs de fichiers
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- TABLE: FILE_LINKS (Documents et Assets)
-CREATE TABLE IF NOT EXISTS public.file_links (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    name TEXT NOT NULL,
-    url TEXT NOT NULL,
-    client_id UUID REFERENCES public.clients(id) ON DELETE SET NULL,
-    created_by UUID REFERENCES public.users(id) ON DELETE SET NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- TABLE: CONFIGS (Pour la vérification de connexion du client)
-CREATE TABLE IF NOT EXISTS public.configs (
-    key TEXT PRIMARY KEY,
-    value TEXT
-);
-
--- INITIALISATION DATA (Exemple de canal global)
-INSERT INTO public.channels (name, type) VALUES ('Général', 'global') ON CONFLICT DO NOTHING;
-
--- ROW LEVEL SECURITY (RLS)
--- Activez la sécurité sur toutes les tables
-ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.clients ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.leads ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.tasks ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.channels ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.file_links ENABLE ROW LEVEL SECURITY;
-
--- POLITIQUES PAR DÉFAUT (Accès complet aux utilisateurs authentifiés pour l'instant)
--- Note : En production, affinez ces politiques selon le rôle (Admin vs Membre)
-CREATE POLICY "Allow all for authenticated users" ON public.users FOR ALL TO authenticated USING (true);
-CREATE POLICY "Allow all for authenticated users" ON public.clients FOR ALL TO authenticated USING (true);
-CREATE POLICY "Allow all for authenticated users" ON public.leads FOR ALL TO authenticated USING (true);
-CREATE POLICY "Allow all for authenticated users" ON public.tasks FOR ALL TO authenticated USING (true);
-CREATE POLICY "Allow all for authenticated users" ON public.channels FOR ALL TO authenticated USING (true);
-CREATE POLICY "Allow all for authenticated users" ON public.messages FOR ALL TO authenticated USING (true);
-CREATE POLICY "Allow all for authenticated users" ON public.file_links FOR ALL TO authenticated USING (true);
+-- 6. FORCE LE RECHARGEMENT DU CACHE PostgREST
+-- Crucial pour corriger l'erreur "Could not find column"
+COMMENT ON TABLE public.channels IS 'iVISION Channels v2.5 - Schema Verified';
+NOTIFY pgrst, 'reload schema';

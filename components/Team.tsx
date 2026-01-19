@@ -51,24 +51,21 @@ const PermissionToggle: React.FC<{
 const Team: React.FC<any> = ({ currentUser, users, onAddUser, onRemoveUser, onUpdateMember }) => {
   const [showModal, setShowModal] = useState<'add' | 'edit' | null>(null);
   const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState<any>({ 
     name: '', 
     email: '', 
-    password: '',
     role: UserRole.MEMBER, 
     permissions: { ...DEFAULT_PERMISSIONS } 
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const isAdmin = currentUser.role === UserRole.ADMIN;
+  const isAdmin = currentUser.role?.toLowerCase() === UserRole.ADMIN.toLowerCase();
 
   useEffect(() => {
     if (showModal === 'edit' && editingUser) {
       setFormData({
         name: editingUser.name,
         email: editingUser.email,
-        password: '', // On ne touche pas au mot de passe en édition ici
         role: editingUser.role,
         permissions: editingUser.permissions || { ...DEFAULT_PERMISSIONS }
       });
@@ -76,7 +73,6 @@ const Team: React.FC<any> = ({ currentUser, users, onAddUser, onRemoveUser, onUp
       setFormData({
         name: '',
         email: '',
-        password: '',
         role: UserRole.MEMBER,
         permissions: { ...DEFAULT_PERMISSIONS }
       });
@@ -93,6 +89,8 @@ const Team: React.FC<any> = ({ currentUser, users, onAddUser, onRemoveUser, onUp
         await onUpdateMember(editingUser.id, formData);
       }
       closeModals();
+    } catch (err) {
+      console.error(err);
     } finally {
       setIsSubmitting(false);
     }
@@ -111,7 +109,6 @@ const Team: React.FC<any> = ({ currentUser, users, onAddUser, onRemoveUser, onUp
   const closeModals = () => {
     setShowModal(null);
     setEditingUser(null);
-    setShowPassword(false);
   };
 
   return (
@@ -137,8 +134,8 @@ const Team: React.FC<any> = ({ currentUser, users, onAddUser, onRemoveUser, onUp
                 <div className="w-16 h-16 rounded-[1.5rem] bg-slate-800 flex items-center justify-center text-emerald-400 font-black text-xl border border-white/10 shadow-lg overflow-hidden">
                   {user.avatar ? <img src={user.avatar} className="w-full h-full object-cover" alt="" /> : user.name.charAt(0)}
                 </div>
-                <div>
-                  <h3 className="font-extrabold text-white text-[15px] uppercase tracking-tight">{user.name}</h3>
+                <div className="truncate pr-2">
+                  <h3 className="font-extrabold text-white text-[15px] uppercase tracking-tight truncate">{user.name}</h3>
                   <p className="text-[9px] text-emerald-400 font-black uppercase tracking-[0.2em] mt-1.5">{user.role}</p>
                 </div>
               </div>
@@ -155,7 +152,6 @@ const Team: React.FC<any> = ({ currentUser, users, onAddUser, onRemoveUser, onUp
         </div>
       </div>
 
-      {/* MODAL AJOUT/EDITION TEAM */}
       {showModal && (
         <div className="modal-overlay">
           <div className="fixed inset-0 cursor-pointer" onClick={closeModals}></div>
@@ -182,29 +178,6 @@ const Team: React.FC<any> = ({ currentUser, users, onAddUser, onRemoveUser, onUp
                     <input required type="email" className="w-full p-5 bg-white/5 border border-white/10 rounded-2xl text-white font-bold outline-none focus:border-emerald-400 text-sm transition-all" placeholder="marc@ivision.pro" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
                   </div>
                 </div>
-
-                {showModal === 'add' && (
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center"><Lock size={12} className="mr-2 text-emerald-400"/> Définir le Mot de Passe</label>
-                    <div className="relative">
-                      <input 
-                        required 
-                        type={showPassword ? "text" : "password"} 
-                        className="w-full p-5 bg-white/5 border border-white/10 rounded-2xl text-white font-bold outline-none focus:border-emerald-400 text-sm transition-all" 
-                        placeholder="••••••••" 
-                        value={formData.password} 
-                        onChange={e => setFormData({...formData, password: e.target.value})} 
-                      />
-                      <button 
-                        type="button" 
-                        onClick={() => setShowPassword(!showPassword)} 
-                        className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors"
-                      >
-                        {showPassword ? <EyeOff size={20}/> : <Eye size={20}/>}
-                      </button>
-                    </div>
-                  </div>
-                )}
 
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2">Rôle Opérationnel</label>

@@ -61,37 +61,11 @@ export interface Lead {
   createdAt: string;
 }
 
-export interface ActivityLog {
-  id: string;
-  userId: string;
-  userName?: string;
-  userAvatar?: string;
-  action: string;
-  target: string;
-  timestamp: string;
-}
-
 export enum TaskStatus {
   TODO = 'À faire',
   IN_PROGRESS = 'En cours',
   BLOCKED = 'Bloqué',
   DONE = 'Terminé',
-}
-
-export interface Comment {
-  id: string;
-  userId: string;
-  content: string;
-  timestamp: string;
-  fullTimestamp?: string;
-  attachments?: string[];
-}
-
-export interface Subtask {
-  id: string;
-  taskId: string;
-  title: string;
-  isCompleted: boolean;
 }
 
 export interface Task {
@@ -104,8 +78,6 @@ export interface Task {
   status: TaskStatus;
   type: 'content' | 'ads' | 'social' | 'seo' | 'admin'; 
   priority?: 'low' | 'medium' | 'high';
-  comments?: Comment[];
-  subtasks?: Subtask[];
   attachments?: string[];
 }
 
@@ -113,8 +85,9 @@ export interface Channel {
   id: string;
   name: string;
   type: 'global' | 'project';
-  unread?: number;
-  members?: string[];
+  created_by?: string;
+  member_ids?: string[];
+  is_private?: boolean;
 }
 
 export interface Message {

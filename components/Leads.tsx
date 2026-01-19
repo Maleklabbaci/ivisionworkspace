@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
-import { Lead, User } from '../types';
-import { Search, Plus, Target, X, Mail, Phone, Trash2, ChevronRight, Zap, Target as TargetIcon, UserCheck, PhoneCall, Sparkles, Wand2, Loader2, ArrowUpRight, DollarSign, Info, TrendingDown, TrendingUp } from 'lucide-react';
+import { Lead, User, UserRole } from '../types';
+import { Search, Plus, Target, X, Mail, Phone, Trash2, ChevronRight, Zap, Target as TargetIcon, UserCheck, PhoneCall, Sparkles, Wand2, Loader2, ArrowUpRight, DollarSign, Info, TrendingDown, TrendingUp, Lock } from 'lucide-react';
 import { parseLeadFromText } from '../services/geminiService';
 
 const Leads: React.FC<any> = ({ leads = [], onAddLead, onUpdateLead, onDeleteLead, onConvertToClient, currentUser, addNotification }) => {
@@ -21,6 +21,8 @@ const Leads: React.FC<any> = ({ leads = [], onAddLead, onUpdateLead, onDeleteLea
     valueMax: 0, 
     description: '' 
   });
+
+  const canManage = currentUser.role === UserRole.ADMIN || !!currentUser.permissions?.canManageLeads;
 
   const getStatusStyle = (status: string) => {
     switch(status) {
@@ -55,9 +57,11 @@ const Leads: React.FC<any> = ({ leads = [], onAddLead, onUpdateLead, onDeleteLea
             <p className="text-[10px] font-black uppercase tracking-[0.4em] text-orange-400 mb-2">PROSPECT ACQUISITION</p>
             <h2 className="text-4xl font-extrabold text-white tracking-tight uppercase">Leads</h2>
           </div>
-          <button onClick={() => { setFormData({ name: '', company: '', email: '', phone: '', status: 'new', valueMin: 0, valueMax: 0, description: '' }); setViewMode('add'); }} className="w-14 h-14 bg-orange-400 text-slate-950 rounded-2xl shadow-xl shadow-orange-500/20 active-scale flex items-center justify-center hover:scale-105 transition-transform">
-            <Plus size={32} strokeWidth={3} />
-          </button>
+          {canManage && (
+            <button onClick={() => { setFormData({ name: '', company: '', email: '', phone: '', status: 'new', valueMin: 0, valueMax: 0, description: '' }); setViewMode('add'); }} className="w-14 h-14 bg-orange-400 text-slate-950 rounded-2xl shadow-xl shadow-orange-500/20 active-scale flex items-center justify-center hover:scale-105 transition-transform">
+              <Plus size={32} strokeWidth={3} />
+            </button>
+          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -93,7 +97,7 @@ const Leads: React.FC<any> = ({ leads = [], onAddLead, onUpdateLead, onDeleteLea
       </div>
 
       {/* MODAL AJOUT LEAD */}
-      {viewMode === 'add' && (
+      {viewMode === 'add' && canManage && (
         <div className="modal-overlay">
           <div className="fixed inset-0 cursor-pointer" onClick={closeModals}></div>
           <div className="modal-container max-w-2xl">
@@ -144,7 +148,6 @@ const Leads: React.FC<any> = ({ leads = [], onAddLead, onUpdateLead, onDeleteLea
                       </div>
                    </div>
 
-                   {/* Champs Budget Min/Max */}
                    <div className="grid grid-cols-2 gap-4 md:gap-5 pt-2">
                       <div className="space-y-1.5 md:space-y-2">
                          <label className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center"><TrendingDown size={12} className="mr-2 text-orange-400"/> Budget Min (DZD)</label>
@@ -164,7 +167,7 @@ const Leads: React.FC<any> = ({ leads = [], onAddLead, onUpdateLead, onDeleteLea
         </div>
       )}
 
-      {/* MODAL VIEW LEAD - OPTIMISÉ PHONE */}
+      {/* MODAL VIEW LEAD */}
       {viewMode === 'view' && selectedLead && (
         <div className="modal-overlay">
           <div className="fixed inset-0 cursor-pointer" onClick={closeModals}></div>
@@ -199,18 +202,28 @@ const Leads: React.FC<any> = ({ leads = [], onAddLead, onUpdateLead, onDeleteLea
                   </div>
 
                   <div className="pt-4 md:pt-8 flex flex-col sm:flex-row items-stretch gap-3 md:gap-4">
-                     <button 
-                       onClick={() => { if(confirm('Convertir ce lead en compte CRM ?')) onConvertToClient(selectedLead); }} 
-                       className="flex-1 py-4 md:py-6 px-6 md:px-8 bg-white text-slate-950 font-black rounded-2xl md:rounded-3xl shadow-xl active-scale uppercase text-[10px] md:text-[11px] tracking-[0.2em] transition-all hover:bg-orange-400 hover:text-white"
-                     >
-                       Convertir en Client
-                     </button>
-                     <button 
-                       onClick={() => { if(confirm('Supprimer définitivement ce lead ?')) { onDeleteLead(selectedLead.id); closeModals(); } }} 
-                       className="w-full sm:w-20 h-auto py-4 sm:py-0 glass text-slate-500 font-black rounded-2xl md:rounded-3xl hover:text-urgent hover:bg-urgent/10 transition-all uppercase text-[9px] md:text-[10px] tracking-widest shadow-xl active-scale border border-white/5 flex items-center justify-center"
-                     >
-                       <Trash2 size={22}/>
-                     </button>
+                     {canManage && (
+                       <button 
+                         onClick={() => { if(confirm('Convertir ce lead en compte CRM ?')) onConvertToClient(selectedLead); }} 
+                         className="flex-1 py-4 md:py-6 px-6 md:px-8 bg-white text-slate-950 font-black rounded-2xl md:rounded-3xl shadow-xl active-scale uppercase text-[10px] md:text-[11px] tracking-[0.2em] transition-all hover:bg-orange-400 hover:text-white"
+                       >
+                         Convertir en Client
+                       </button>
+                     )}
+                     {canManage && (
+                       <button 
+                         onClick={() => { if(confirm('Supprimer définitivement ce lead ?')) { onDeleteLead(selectedLead.id); closeModals(); } }} 
+                         className="w-full sm:w-20 h-auto py-4 sm:py-0 glass text-slate-500 font-black rounded-2xl md:rounded-3xl hover:text-urgent hover:bg-urgent/10 transition-all uppercase text-[9px] md:text-[10px] tracking-widest shadow-xl active-scale border border-white/5 flex items-center justify-center"
+                       >
+                         <Trash2 size={22}/>
+                       </button>
+                     )}
+                     {!canManage && (
+                       <div className="w-full p-6 glass rounded-2xl flex items-center justify-center space-x-3 text-slate-500">
+                          <Lock size={18}/>
+                          <span className="text-[10px] font-bold uppercase tracking-widest">Actions réservées aux gestionnaires</span>
+                       </div>
+                     )}
                   </div>
                </div>
             </div>
