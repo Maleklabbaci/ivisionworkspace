@@ -1,23 +1,22 @@
-
 import React, { useState, useMemo } from 'react';
 import { TrendingUp, Sparkles, Target, Zap, Clock, Loader2, ChevronRight, Activity, Users } from 'lucide-react';
 import { generateMarketingInsight } from '../services/geminiService';
-import { Task, User, ViewState, TaskStatus, UserRole } from '../types';
+import { Task, User, ViewState, TaskStatus, UserRole, Client } from '../types';
 
 interface DashboardProps {
   currentUser: User;
   tasks: Task[];
+  clients: Client[];
   onNavigate: (view: ViewState) => void;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], onNavigate }) => {
+const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], clients = [], onNavigate }) => {
   const [aiInsight, setAiInsight] = useState<string>("");
   const [loadingAi, setLoadingAi] = useState(false);
 
   const today = useMemo(() => new Date().toLocaleDateString('en-CA'), []);
   const isAdminOrManager = currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.PROJECT_MANAGER;
   
-  // Tâches assignées à l'utilisateur courant (si membre) ou toutes (si manager)
   const relevantTasks = useMemo(() => {
     if (isAdminOrManager) return tasks;
     return tasks.filter(t => t.assigneeId === currentUser.id);
@@ -25,21 +24,27 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], onNaviga
 
   const overdueCount = useMemo(() => relevantTasks.filter(t => t.dueDate < today && t.status !== TaskStatus.DONE).length, [relevantTasks, today]);
   
+  // Correction: Calculer le score réel de productivité
+  const productivityScore = useMemo(() => {
+    if (relevantTasks.length === 0) return 0;
+    const completed = relevantTasks.filter(t => t.status === TaskStatus.DONE).length;
+    return Math.round((completed / relevantTasks.length) * 100);
+  }, [relevantTasks]);
+
   const stats = [
     { label: 'En retard', val: overdueCount, color: 'text-urgent', icon: Clock, bg: 'bg-urgent/10', allowed: true },
     { label: 'Flux Actif', val: relevantTasks.filter(t => t.status === TaskStatus.IN_PROGRESS).length, color: 'text-sky-400', icon: TrendingUp, bg: 'bg-sky-400/10', allowed: true },
-    { label: 'Clients CRM', val: new Set(tasks.map(t => t.clientId)).size, color: 'text-emerald-400', icon: Target, bg: 'bg-emerald-400/10', allowed: isAdminOrManager || !!currentUser.permissions?.canManageClients },
-    { label: 'Terminées', val: relevantTasks.filter(t => t.status === TaskStatus.DONE).length, color: 'text-amber-400', icon: Zap, bg: 'bg-amber-400/10', allowed: true },
-    { label: 'Equipe', val: 'Actif', color: 'text-slate-400', icon: Users, bg: 'bg-slate-400/10', allowed: !isAdminOrManager }
+    { label: 'Partenaires CRM', val: clients.length, color: 'text-emerald-400', icon: Target, bg: 'bg-emerald-400/10', allowed: isAdminOrManager || !!currentUser.permissions?.canManageClients },
+    { label: 'Terminées', val: relevantTasks.filter(t => t.status === TaskStatus.DONE).length, color: 'text-amber-400', icon: Zap, bg: 'bg-amber-400/10', allowed: true }
   ];
 
-  const visibleStats = stats.filter(s => s.allowed).slice(0, 4);
+  const visibleStats = stats.filter(s => s.allowed);
 
   const handleGetInsights = async () => {
     if (loadingAi) return;
     setLoadingAi(true);
     try {
-      const insight = await generateMarketingInsight(`Role: ${currentUser.role}, Missions: ${relevantTasks.length}, Retard: ${overdueCount}.`);
+      const insight = await generateMarketingInsight(`Role: ${currentUser.role}, Missions: ${relevantTasks.length}, Score Prod: ${productivityScore}%.`);
       setAiInsight(insight);
     } catch (err) { console.error(err); } finally { setLoadingAi(false); }
   };
@@ -57,7 +62,6 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], onNaviga
         </div>
       </header>
 
-      {/* Grid Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
         {visibleStats.map((s, i) => (
           <div key={i} className="glass-card p-4 md:p-6 rounded-[1.5rem] md:rounded-[2rem] flex flex-col justify-between h-32 md:h-44 group">
@@ -74,7 +78,6 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], onNaviga
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 md:gap-6">
         <div className="lg:col-span-2 space-y-5 md:space-y-6">
-          {/* AI Banner */}
           <div onClick={handleGetInsights} className="relative group cursor-pointer overflow-hidden rounded-[1.8rem] md:rounded-[2.5rem] p-[1px] bg-gradient-to-br from-sky-400/40 via-violet-500/40 to-indigo-500/40 shadow-2xl">
             <div className="bg-slate-950/40 backdrop-blur-3xl p-5 md:p-8 rounded-[1.75rem] md:rounded-[2.45rem] flex items-center justify-between">
               <div className="flex items-center space-x-4 md:space-x-6 min-w-0">
@@ -120,19 +123,18 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], onNaviga
           </div>
         </div>
 
-        {/* Efficacité Chart */}
         <div className="glass p-6 md:p-8 rounded-[2rem] md:rounded-[2.5rem] flex flex-col items-center justify-center text-center space-y-6 md:space-y-8 relative overflow-hidden group">
           <div className="absolute top-0 right-0 w-24 h-24 md:w-32 md:h-32 bg-sky-400/5 blur-[40px] md:blur-[60px] rounded-full"></div>
           <div className="relative">
             <div className="w-32 h-32 md:w-44 md:h-44 rounded-full border-[8px] md:border-[12px] border-white/5 border-t-sky-400 flex items-center justify-center rotate-[-45deg] group-hover:rotate-0 transition-transform duration-1000">
                <div className="rotate-[45deg] group-hover:rotate-0 transition-transform duration-1000">
-                  <span className="text-3xl md:text-5xl font-extrabold text-white tracking-tighter">84<span className="text-xl md:text-2xl text-sky-400">%</span></span>
+                  <span className="text-3xl md:text-5xl font-extrabold text-white tracking-tighter">{productivityScore}<span className="text-xl md:text-2xl text-sky-400">%</span></span>
                </div>
             </div>
           </div>
           <div>
-            <h4 className="text-sm md:text-lg font-extrabold text-white uppercase tracking-tight">Score de Productivité</h4>
-            <p className="text-slate-500 text-[10px] md:text-xs mt-2 md:mt-3 leading-relaxed font-medium px-2 md:px-4">Performance opérationnelle calculée par l'IA iV.</p>
+            <h4 className="text-sm md:text-lg font-extrabold text-white uppercase tracking-tight">Efficacité Système</h4>
+            <p className="text-slate-500 text-[10px] md:text-xs mt-2 md:mt-3 leading-relaxed font-medium px-2 md:px-4">Score basé sur vos missions clôturées vs actives.</p>
           </div>
           <button onClick={() => onNavigate('reports')} className="w-full py-3.5 md:py-4.5 bg-white text-slate-950 rounded-xl md:rounded-2xl font-black text-[9px] md:text-[10px] uppercase tracking-[0.2em] hover:bg-sky-400 hover:text-white transition-all shadow-xl active-scale">Détails Analytiques</button>
         </div>

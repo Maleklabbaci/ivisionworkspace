@@ -1,11 +1,10 @@
-
 import React, { useState } from 'react';
 import { Client, Task, User, UserRole } from '../types';
 import { Plus, Search, Mail, Phone, MapPin, X, Briefcase, ChevronRight, Trash2, Edit2, Globe, Activity, Info, Lock } from 'lucide-react';
 
 const Clients: React.FC<any> = ({ clients = [], tasks = [], onAddClient, onUpdateClient, onDeleteClient, currentUser }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState<'list' | 'add' | 'view'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'add' | 'view' | 'edit'>('list');
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [formData, setFormData] = useState<Partial<Client>>({ name: '', company: '', email: '', phone: '', address: '', description: '' });
 
@@ -19,6 +18,12 @@ const Clients: React.FC<any> = ({ clients = [], tasks = [], onAddClient, onUpdat
   const closeModals = () => {
     setViewMode('list');
     setSelectedClient(null);
+  };
+
+  const handleOpenEdit = (client: Client) => {
+    setSelectedClient(client);
+    setFormData({ ...client });
+    setViewMode('edit');
   };
 
   return (
@@ -124,9 +129,14 @@ const Clients: React.FC<any> = ({ clients = [], tasks = [], onAddClient, onUpdat
                </div>
 
                <div className="flex flex-col sm:flex-row items-stretch gap-3 md:gap-4">
-                  <button className="flex-1 py-4 md:py-6 px-6 md:px-8 bg-emerald-400 text-slate-950 font-black rounded-2xl md:rounded-3xl shadow-2xl active-scale uppercase text-[10px] md:text-[11px] tracking-[0.2em] transition-all hover:bg-emerald-300 flex items-center justify-center text-center">
-                    Paramètres Partenaire iV
-                  </button>
+                  {canManage && (
+                    <button 
+                      onClick={() => handleOpenEdit(selectedClient)}
+                      className="flex-1 py-4 md:py-6 px-6 md:px-8 bg-emerald-400 text-slate-950 font-black rounded-2xl md:rounded-3xl shadow-2xl active-scale uppercase text-[10px] md:text-[11px] tracking-[0.2em] transition-all hover:bg-emerald-300 flex items-center justify-center text-center"
+                    >
+                      <Edit2 size={18} className="mr-2"/> Modifier la Fiche
+                    </button>
+                  )}
                   {canManage && (
                     <button 
                       onClick={() => { if(confirm('Révoquer ce compte CRM ?')) { onDeleteClient(selectedClient.id); closeModals(); } }} 
@@ -135,32 +145,31 @@ const Clients: React.FC<any> = ({ clients = [], tasks = [], onAddClient, onUpdat
                       <Trash2 size={22}/>
                     </button>
                   )}
-                  {!canManage && (
-                     <div className="flex items-center space-x-2 text-slate-500 glass px-6 py-4 rounded-2xl">
-                        <Lock size={16}/>
-                        <span className="text-[8px] font-black uppercase tracking-widest">Modification restreinte</span>
-                     </div>
-                  )}
                </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* MODAL AJOUT CLIENT */}
-      {viewMode === 'add' && canManage && (
+      {/* MODAL AJOUT / ÉDITION CLIENT */}
+      {(viewMode === 'add' || viewMode === 'edit') && canManage && (
         <div className="modal-overlay">
           <div className="fixed inset-0 cursor-pointer" onClick={closeModals}></div>
           <div className="modal-container max-w-2xl">
             <div className="relative glass w-full transform rounded-[2rem] md:rounded-[3rem] p-6 md:p-14 border border-white/10 shadow-[0_0_120px_rgba(0,0,0,0.9)] animate-fade-in">
                <div className="flex justify-between items-start mb-8 md:mb-10">
                  <div>
-                   <h3 className="text-xl md:text-3xl font-extrabold text-white uppercase tracking-tight leading-none">Ouverture CRM</h3>
+                   <h3 className="text-xl md:text-3xl font-extrabold text-white uppercase tracking-tight leading-none">{viewMode === 'add' ? 'Ouverture CRM' : 'Modification CRM'}</h3>
                    <p className="text-[9px] md:text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-2 md:mt-3">Partenariat Stratégique iVISION</p>
                  </div>
                  <button onClick={closeModals} className="w-10 h-10 md:w-12 md:h-12 glass text-slate-500 hover:text-white rounded-xl md:rounded-2xl flex items-center justify-center transition-all flex-shrink-0 active-scale"><X size={20}/></button>
                </div>
-               <form onSubmit={(e) => { e.preventDefault(); onAddClient(formData); closeModals(); }} className="space-y-4 md:space-y-6">
+               <form onSubmit={(e) => { 
+                 e.preventDefault(); 
+                 if (viewMode === 'add') onAddClient(formData);
+                 else onUpdateClient(formData);
+                 closeModals(); 
+               }} className="space-y-4 md:space-y-6">
                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-5">
                     <div className="space-y-1.5 md:space-y-2">
                         <label className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2">Contact Principal</label>
@@ -185,7 +194,13 @@ const Clients: React.FC<any> = ({ clients = [], tasks = [], onAddClient, onUpdat
                     <label className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center"><MapPin size={12} className="mr-2 text-emerald-400"/> Adresse Siège</label>
                     <input className="w-full p-4 md:p-5 bg-white/5 border border-white/10 rounded-xl md:rounded-2xl text-white font-bold outline-none focus:border-emerald-400 text-xs md:text-sm transition-all" placeholder="Localisation géographique" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} />
                  </div>
-                 <button className="w-full py-5 md:py-6 bg-emerald-400 text-slate-950 font-black rounded-2xl md:rounded-3xl shadow-xl active-scale uppercase text-[10px] md:text-[11px] tracking-[0.3em] mt-2 md:mt-6 hover:bg-emerald-300 transition-all shadow-emerald-500/30">Activer le Compte Partenaire</button>
+                 <div className="space-y-1.5 md:space-y-2">
+                    <label className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center"><Info size={12} className="mr-2 text-emerald-400"/> Notes / Briefing</label>
+                    <textarea className="w-full p-4 md:p-5 bg-white/5 border border-white/10 rounded-xl md:rounded-2xl text-white font-bold outline-none focus:border-emerald-400 text-xs md:text-sm transition-all h-24 resize-none" placeholder="Détails du client..." value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
+                 </div>
+                 <button className="w-full py-5 md:py-6 bg-emerald-400 text-slate-950 font-black rounded-2xl md:rounded-3xl shadow-xl active-scale uppercase text-[10px] md:text-[11px] tracking-[0.3em] mt-2 md:mt-6 hover:bg-emerald-300 transition-all shadow-emerald-500/30">
+                   {viewMode === 'add' ? 'Activer le Compte Partenaire' : 'Confirmer les Modifications'}
+                 </button>
                </form>
             </div>
           </div>

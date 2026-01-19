@@ -74,7 +74,6 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   const addNotification = useCallback((title: string, message: any, type: 'info' | 'success' | 'urgent' = 'info') => {
-    // Fix: Handle cases where message is an error object
     let displayMessage = typeof message === 'string' ? message : (message?.message || JSON.stringify(message));
     const id = generateUUID();
     setNotifications(prev => [...prev, { id, title, message: displayMessage, type }]);
@@ -151,7 +150,6 @@ const App: React.FC = () => {
       setMessages(m.data?.map(i => mapFromDB('messages', i)) || []);
       setFileLinks(f.data?.map(i => mapFromDB('file_links', i)) || []);
 
-      // Realtime - deduplicate on insert to prevent double adds
       const channel = supabase.channel('global-sync')
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
           setMessages(prev => prev.some(m => m.id === payload.new.id) ? prev : [...prev, mapFromDB('messages', payload.new)]);
@@ -263,13 +261,22 @@ const AppContent: React.FC<any> = ({
     navigate('/');
   };
 
+  const handleUpdateClient = async (updated: Client) => {
+    const { error } = await supabase.from('clients').update(updated).eq('id', updated.id);
+    if (error) {
+      addNotification("Erreur", error, "urgent");
+    } else {
+      setClients(clients.map(c => c.id === updated.id ? updated : c));
+      addNotification("CRM", `Fiche ${updated.name} mise à jour.`, "success");
+    }
+  };
+
   const handleAddChannel = async (c: any) => {
     const { data, error } = await supabase.from('channels').insert({ id: generateUUID(), ...c }).select().single();
     if (error) {
       addNotification("Erreur", error, "urgent");
       console.error(error);
     } else if (data) {
-      // Trust the realtime listener or update locally with check
       setChannels(prev => prev.some(ch => ch.id === data.id) ? prev : [...prev, mapFromDB('channels', data)]);
       addNotification("Chat", `Canal #${data.name} déployé.`, "success");
     }
@@ -302,7 +309,7 @@ const AppContent: React.FC<any> = ({
     <Layout currentUser={currentUser} onLogout={handleLogout}>
       <Suspense fallback={<div className="h-full w-full flex items-center justify-center"><Loader2 className="animate-spin text-primary" size={40} /></div>}>
         <Routes>
-          <Route path="/dashboard" element={<Dashboard currentUser={currentUser} tasks={tasks} onNavigate={(v:ViewState)=>navigate(`/${v}`)} />} />
+          <Route path="/dashboard" element={<Dashboard currentUser={currentUser} tasks={tasks} clients={clients} onNavigate={(v:ViewState)=>navigate(`/${v}`)} />} />
           <Route path="/tasks" element={<Tasks tasks={tasks} users={users} clients={clients} currentUser={currentUser} onUpdateStatus={(id:string,st:any)=> {
             supabase.from('tasks').update({status:st}).eq('id',id).then(()=>setTasks(tasks.map(t=>t.id===id?{...t,status:st}:t)));
           }} onAddTask={(t:any)=> {
@@ -343,10 +350,10 @@ const AppContent: React.FC<any> = ({
             await supabase.from('users').update(up).eq('id', currentUser.id);
             setCurrentUser({...currentUser, ...up});
           }} />} />
-          <Route path="/reports" element={<AccessGuard currentUser={currentUser} permission="canViewReports"><Reports tasks={tasks} leads={leads} currentUser={currentUser} /></AccessGuard>} />
+          <Route path="/reports" element={<AccessGuard currentUser={currentUser} permission="canViewReports"><Reports tasks={tasks} leads={leads} messages={messages} currentUser={currentUser} /></AccessGuard>} />
           <Route path="/clients" element={<AccessGuard currentUser={currentUser} permission="canManageClients"><Clients clients={clients} tasks={tasks} onAddClient={(c:any)=> {
             supabase.from('clients').insert({id:generateUUID(), ...c}).select().single().then(({data})=>{if(data) setClients([data,...clients])});
-          }} onDeleteClient={(id:string)=> {
+          }} onUpdateClient={handleUpdateClient} onDeleteClient={(id:string)=> {
             supabase.from('clients').delete().eq('id',id).then(()=>setClients(clients.filter(c=>c.id!==id)));
           }} currentUser={currentUser} /></AccessGuard>} />
           <Route path="/calendar" element={<Calendar tasks={tasks} onAddTask={(t:any)=> {
