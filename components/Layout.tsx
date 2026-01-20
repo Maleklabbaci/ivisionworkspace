@@ -83,58 +83,58 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, onLogout }) => {
           </button>
         </header>
 
-        <main className="flex-1 overflow-y-auto no-scrollbar p-5 md:p-10 pb-32">
+        <main className="flex-1 overflow-y-auto no-scrollbar p-4 md:p-10 pb-40 lg:pb-10">
           <div className="max-w-7xl mx-auto">{children}</div>
         </main>
         
-        {/* Navigation Mobile */}
-        <nav className="lg:hidden fixed bottom-6 left-1/2 -translate-x-1/2 w-[92%] max-w-sm h-16 bg-white/10 backdrop-blur-3xl rounded-3xl flex justify-between items-center px-4 z-[100] shadow-2xl border border-white/10">
+        {/* Navigation Mobile Optimisée */}
+        <nav className="lg:hidden fixed bottom-5 left-1/2 -translate-x-1/2 w-[90%] max-w-sm h-16 bg-white/10 backdrop-blur-3xl rounded-[2rem] flex justify-between items-center px-4 z-[100] shadow-2xl border border-white/10">
           {visibleNavItems.slice(0, 4).map(item => (
             <button 
               key={item.id} 
               onClick={() => navigate(`/${item.id}`)} 
-              className={`relative flex items-center justify-center w-12 h-12 rounded-2xl transition-all active-scale ${currentPath === item.id ? `${item.bg} text-white shadow-xl` : 'text-slate-500'}`}
+              className={`relative flex items-center justify-center w-11 h-11 rounded-[1.25rem] transition-all active-scale ${currentPath === item.id ? `${item.bg} text-white shadow-xl` : 'text-slate-500'}`}
             >
-              <item.icon size={22} strokeWidth={2.5} />
+              <item.icon size={20} strokeWidth={2.5} />
             </button>
           ))}
           <button 
             onClick={() => setIsMoreMenuOpen(true)} 
-            className="w-12 h-12 bg-white/15 rounded-2xl flex items-center justify-center text-white active-scale border border-white/10"
+            className="w-11 h-11 bg-white/15 rounded-[1.25rem] flex items-center justify-center text-white active-scale border border-white/10"
           >
-            <Plus size={24} strokeWidth={3} />
+            <Plus size={22} strokeWidth={3} />
           </button>
         </nav>
       </div>
 
-      {/* Full-Screen Mobile Menu */}
+      {/* Full-Screen Mobile Menu Optimisé */}
       {isMoreMenuOpen && (
         <div className="fixed inset-0 z-[1000] flex flex-col justify-end animate-fade-in lg:hidden">
-          <div className="absolute inset-0 bg-slate-950/95 backdrop-blur-2xl" onClick={() => setIsMoreMenuOpen(false)}></div>
-          <div className="relative glass border-t border-white/10 rounded-t-[3rem] p-8 space-y-6 shadow-2xl pb-safe-bottom">
-            <div className="w-12 h-1.5 bg-white/10 rounded-full mx-auto mb-4"></div>
+          <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-3xl" onClick={() => setIsMoreMenuOpen(false)}></div>
+          <div className="relative glass border-t border-white/10 rounded-t-[2.5rem] p-6 md:p-8 space-y-6 shadow-2xl pb-safe-bottom">
+            <div className="w-10 h-1 bg-white/10 rounded-full mx-auto mb-2"></div>
             <div className="flex justify-between items-center px-2">
-              <h3 className="text-xs font-black text-slate-500 uppercase tracking-tight">Navigation</h3>
-              <button onClick={() => setIsMoreMenuOpen(false)} className="w-8 h-8 glass rounded-full flex items-center justify-center text-slate-400"><X size={18}/></button>
+              <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Navigation Étendue</h3>
+              <button onClick={() => setIsMoreMenuOpen(false)} className="w-8 h-8 glass rounded-xl flex items-center justify-center text-slate-400"><X size={16}/></button>
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-3 gap-2">
               {visibleNavItems.slice(4).map(item => (
                 <button 
                   key={item.id} 
                   onClick={() => { navigate(`/${item.id}`); setIsMoreMenuOpen(false); }} 
-                  className="flex flex-col items-center space-y-2 p-4 rounded-3xl bg-white/[0.03] border border-white/5 active-scale"
+                  className="flex flex-col items-center space-y-2.5 p-4 rounded-[1.5rem] bg-white/[0.03] border border-white/5 active-scale"
                 >
                   <div className={`w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center ${item.color}`}>
-                    <item.icon size={20} />
+                    <item.icon size={18} />
                   </div>
-                  <span className="text-[9px] font-black text-slate-400 uppercase text-center tracking-tight">{item.label}</span>
+                  <span className="text-[9px] font-black text-slate-400 uppercase text-center tracking-tight leading-none">{item.label}</span>
                 </button>
               ))}
-              <button onClick={onLogout} className="flex flex-col items-center space-y-2 p-4 rounded-3xl bg-rose-500/5 border border-rose-500/10 active-scale text-rose-400">
+              <button onClick={onLogout} className="flex flex-col items-center space-y-2.5 p-4 rounded-[1.5rem] bg-rose-500/5 border border-rose-500/10 active-scale text-rose-400">
                 <div className="w-10 h-10 rounded-xl bg-rose-500/10 flex items-center justify-center">
-                  <LogOut size={20} />
+                  <LogOut size={18} />
                 </div>
-                <span className="text-[9px] font-black uppercase text-center tracking-tight">Sortie</span>
+                <span className="text-[9px] font-black uppercase text-center tracking-tight leading-none">Sortie</span>
               </button>
             </div>
           </div>
