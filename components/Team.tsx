@@ -12,6 +12,8 @@ const DEFAULT_PERMISSIONS: UserPermissions = {
   canManageClients: false,
   canManageLeads: false,
   canManageCampaigns: false,
+  canManageProjects: false,
+  canManageFinances: false,
 };
 
 const PERMISSION_LABELS: Record<keyof UserPermissions, string> = {
@@ -29,6 +31,7 @@ const PERMISSION_LABELS: Record<keyof UserPermissions, string> = {
   canManageLeads: "Gérer les leads",
   canManageCampaigns: "Gérer les campagnes",
   canManageFinances: "Gérer les finances",
+  canManageProjects: "Gérer les projets",
 };
 
 const PermissionToggle: React.FC<{
@@ -65,7 +68,6 @@ const Team: React.FC<any> = ({ currentUser, users, onAddUser, onRemoveUser, onUp
 
   const isAdmin = currentUser.role === UserRole.ADMIN;
 
-  // Charger le brouillon local lors de l'ouverture du mode "ajout"
   useEffect(() => {
     if (showModal === 'add') {
       const savedDraft = localStorage.getItem('iv_team_draft');
@@ -91,7 +93,6 @@ const Team: React.FC<any> = ({ currentUser, users, onAddUser, onRemoveUser, onUp
     const updatedData = { ...formData, [field]: value };
     setFormData(updatedData);
     
-    // Sauvegarde automatique dans le LocalStorage uniquement pour l'ajout
     if (showModal === 'add') {
       setIsSyncing(true);
       localStorage.setItem('iv_team_draft', JSON.stringify(updatedData));
@@ -105,7 +106,7 @@ const Team: React.FC<any> = ({ currentUser, users, onAddUser, onRemoveUser, onUp
     try {
       if (showModal === 'add') {
         await onAddUser(formData);
-        localStorage.removeItem('iv_team_draft'); // Nettoyer après succès
+        localStorage.removeItem('iv_team_draft');
       } else if (showModal === 'edit' && editingUser) {
         await onUpdateMember(editingUser.id, formData);
       }
@@ -128,8 +129,8 @@ const Team: React.FC<any> = ({ currentUser, users, onAddUser, onRemoveUser, onUp
   return (
     <div className="space-y-8 animate-fade-in">
       <div className="flex justify-between items-end px-2">
-        <div>
-          <p className="text-[10px] font-black uppercase text-emerald-400 mb-2">Team Core System</p>
+        <div className="text-left">
+          <p className="text-[10px] font-black uppercase text-emerald-400 mb-2 tracking-[0.4em]">Team Core System</p>
           <h2 className="text-3xl md:text-5xl font-black text-white uppercase tracking-tight leading-none">Équipe</h2>
         </div>
         {isAdmin && (
@@ -141,10 +142,10 @@ const Team: React.FC<any> = ({ currentUser, users, onAddUser, onRemoveUser, onUp
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {users.map((user: User) => (
-          <div key={user.id} className="glass-card p-6 rounded-3xl border-white/5 flex items-center justify-between group">
-            <div className="flex items-center space-x-5 min-w-0">
+          <div key={user.id} className="glass-card p-6 rounded-3xl border border-white/5 flex items-center justify-between group bg-white/[0.02]">
+            <div className="flex items-center space-x-5 min-w-0 text-left">
               <img src={user.avatar} className="w-14 h-14 rounded-2xl bg-slate-800 border border-white/10 object-cover" alt="" />
-              <div className="truncate">
+              <div className="truncate text-left">
                 <h3 className="font-black text-white text-base uppercase truncate leading-tight">{user.name}</h3>
                 <p className="text-[10px] text-emerald-400 font-bold uppercase mt-2">{user.role}</p>
               </div>
@@ -165,20 +166,20 @@ const Team: React.FC<any> = ({ currentUser, users, onAddUser, onRemoveUser, onUp
         title={showModal === 'add' ? 'Nouveau Membre' : 'Édition Profil'}
         subtitle="Moteur de Configuration iVISION"
       >
-        <form onSubmit={handleSubmit} className="space-y-8">
-          <div className="flex items-center justify-between px-2">
+        <form onSubmit={handleSubmit} className="space-y-8 text-left">
+          <div className="flex items-center justify-between px-2 text-left">
              <div className="flex items-center space-x-2">
                <Zap size={14} className={isSyncing ? "text-emerald-400 animate-spin" : "text-emerald-400"} />
                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                 {isSyncing ? 'Synchronisation du brouillon...' : 'Brouillon prêt pour déploiement'}
+                 {isSyncing ? 'Synchronisation...' : 'Brouillon prêt'}
                </span>
              </div>
              {showModal === 'add' && formData.name && (
-               <button type="button" onClick={() => { localStorage.removeItem('iv_team_draft'); setFormData({ name: '', email: '', password: '', role: UserRole.MEMBER, permissions: { ...DEFAULT_PERMISSIONS } }); }} className="text-[9px] font-black text-rose-400 uppercase hover:underline">Réinitialiser</button>
+               <button type="button" onClick={() => { localStorage.removeItem('iv_team_draft'); setFormData({ name: '', email: '', password: '', role: UserRole.MEMBER, permissions: { ...DEFAULT_PERMISSIONS } }); }} className="text-[9px] font-black text-rose-400 uppercase hover:underline">Vider</button>
              )}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-left">
             <div className="space-y-2">
               <label className="label-iv"><UserIcon size={14} className="text-emerald-400"/> Nom complet</label>
               <input required className="input-iv" placeholder="Nom d'affichage" value={formData.name} onChange={e => handleInputChange('name', e.target.value)} />
@@ -189,7 +190,7 @@ const Team: React.FC<any> = ({ currentUser, users, onAddUser, onRemoveUser, onUp
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-left">
             <div className="space-y-2">
               <label className="label-iv">Grade Opérationnel</label>
               <select className="input-iv appearance-none cursor-pointer" value={formData.role} onChange={e => handleInputChange('role', e.target.value)}>
@@ -201,7 +202,7 @@ const Team: React.FC<any> = ({ currentUser, users, onAddUser, onRemoveUser, onUp
                 <label className="label-iv mb-0"><Key size={14} className="text-emerald-400"/> Code Secret</label>
                 {isPasswordSecure && (
                   <span className="text-[9px] font-black text-emerald-400 bg-emerald-400/10 px-2 py-1 rounded-md flex items-center">
-                    <Shield size={10} className="mr-1" /> ENCRYPTÉ & SAUVÉ
+                    <Shield size={10} className="mr-1" /> OK
                   </span>
                 )}
               </div>
@@ -225,12 +226,12 @@ const Team: React.FC<any> = ({ currentUser, users, onAddUser, onRemoveUser, onUp
             </div>
           </div>
 
-          <div className="pt-2">
+          <div className="pt-2 text-left">
             <div className="flex items-center space-x-3 mb-6 px-2">
               <ShieldCheck size={18} className="text-emerald-400" />
               <h4 className="text-[10px] font-black text-white uppercase tracking-normal">Matrice des Permissions</h4>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left">
               {(Object.keys(PERMISSION_LABELS) as Array<keyof UserPermissions>).map((key) => (
                 <PermissionToggle 
                   key={key}
@@ -245,13 +246,8 @@ const Team: React.FC<any> = ({ currentUser, users, onAddUser, onRemoveUser, onUp
           <div className="space-y-4">
             <button disabled={isSubmitting} className="w-full py-6 bg-emerald-400 text-slate-950 font-black rounded-[2rem] shadow-2xl shadow-emerald-400/20 active-scale disabled:opacity-50 uppercase text-[11px] tracking-widest hover:bg-emerald-300 transition-all flex items-center justify-center">
               {isSubmitting ? <Loader2 className="animate-spin mr-3" size={20}/> : <Save className="mr-3" size={18} />}
-              <span>{showModal === 'add' ? "ACTIVER LE MEMBRE" : "SAUVEGARDER LES MODIFICATIONS"}</span>
+              <span>{showModal === 'add' ? "ACTIVER LE MEMBRE" : "SAUVEGARDER"}</span>
             </button>
-            
-            <div className="flex items-center justify-center space-x-2 text-[9px] font-bold text-slate-500 uppercase tracking-widest opacity-60 py-2">
-               <Shield size={12} className="text-emerald-400" />
-               <span>Données sauvegardées en cache local sécurisé</span>
-            </div>
           </div>
         </form>
       </Modal>

@@ -16,25 +16,32 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, onLogout }) => {
   const currentPath = location.pathname.replace('/', '') || 'dashboard';
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
 
+  // Correction de la vérification d'accès
   const hasAccess = (permissionKey?: keyof UserPermissions, requiredRole?: UserRole): boolean => {
     if (!currentUser) return false;
+    // L'Admin voit tout
     if (currentUser.role === UserRole.ADMIN) return true;
+    
+    // Vérification par rôle spécifique
     if (requiredRole && currentUser.role !== requiredRole) return false;
+    
+    // Vérification par clé de permission JSON
     if (permissionKey) {
       const perms = currentUser.permissions || {};
       return !!(perms as any)[permissionKey];
     }
+    
     return true;
   };
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutIcon, color: 'text-sky-400', bg: 'bg-sky-400', allowed: true },
-    { id: 'projects', label: 'Projets', icon: Layers, color: 'text-emerald-400', bg: 'bg-emerald-400', allowed: true },
+    { id: 'projects', label: 'Projets', icon: Layers, color: 'text-emerald-400', bg: 'bg-emerald-400', allowed: hasAccess('canManageProjects') },
     { id: 'tasks', label: 'Missions', icon: TaskIcon, color: 'text-violet-400', bg: 'bg-violet-400', allowed: true },
     { id: 'chat', label: 'Chat', icon: ChatIcon, color: 'text-indigo-400', bg: 'bg-indigo-400', allowed: hasAccess('canManageChat') },
     { id: 'clients', label: 'CRM', icon: ClientIcon, color: 'text-emerald-400', bg: 'bg-emerald-400', allowed: hasAccess('canManageClients') },
     { id: 'leads', label: 'Leads', icon: LeadIcon, color: 'text-orange-400', bg: 'bg-orange-400', allowed: hasAccess('canManageLeads') },
-    { id: 'finance', label: 'Finance', icon: Wallet, color: 'text-amber-400', bg: 'bg-amber-400', allowed: currentUser.role === UserRole.ADMIN || hasAccess('canManageFinances') },
+    { id: 'finance', label: 'Finance', icon: Wallet, color: 'text-amber-400', bg: 'bg-amber-400', allowed: hasAccess('canManageFinances') },
     { id: 'files', label: 'Documents', icon: FileIcon, color: 'text-blue-400', bg: 'bg-blue-400', allowed: hasAccess('canViewFiles') },
     { id: 'calendar', label: 'Planning', icon: CalIcon, color: 'text-rose-400', bg: 'bg-rose-400', allowed: true },
     { id: 'reports', label: 'Rapports', icon: ReportIcon, color: 'text-pink-400', bg: 'bg-pink-400', allowed: hasAccess('canViewReports') },
@@ -51,7 +58,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, onLogout }) => {
           <div className="w-10 h-10 bg-sky-500 rounded-xl flex items-center justify-center text-white font-black shadow-lg">iV</div>
           <span className="text-xl font-extrabold tracking-tight text-white uppercase">iVISION</span>
         </div>
-        <nav className="flex-1 px-4 space-y-1.5 overflow-y-auto no-scrollbar pb-6">
+        <nav className="flex-1 px-4 space-y-1.5 overflow-y-auto no-scrollbar pb-6 text-left">
           {visibleNavItems.map(item => (
             <button key={item.id} onClick={() => navigate(`/${item.id}`)} className={`w-full flex items-center space-x-3.5 px-4 py-3 rounded-xl transition-all ${currentPath === item.id ? `${item.bg} text-white shadow-xl` : 'text-slate-500 hover:text-slate-200 hover:bg-white/5'}`}>
               <item.icon size={18} className={currentPath === item.id ? 'text-white' : item.color} />

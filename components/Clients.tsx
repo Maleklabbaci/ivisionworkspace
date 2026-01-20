@@ -12,28 +12,13 @@ const Clients: React.FC<any> = ({ clients = [], tasks = [], projects = [], onAdd
   const [formData, setFormData] = useState<Partial<Client>>({ name: '', company: '', email: '', phone: '', address: '', description: '' });
   const navigate = useNavigate();
 
+  // Correction : L'utilisateur peut gérer s'il est admin OU s'il a la permission canManageClients
   const canManage = currentUser.role === UserRole.ADMIN || !!currentUser.permissions?.canManageClients;
 
   const filteredClients = clients.filter((c: Client) => 
     c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
     (c.company && c.company.toLowerCase().includes(searchTerm.toLowerCase()))
   );
-
-  const clientProjects = useMemo(() => {
-    if (!selectedClient) return [];
-    return projects.filter((p: Project) => p.clientId === selectedClient.id);
-  }, [selectedClient, projects]);
-
-  const clientTasks = useMemo(() => {
-    if (!selectedClient) return [];
-    return tasks.filter((t: Task) => t.clientId === selectedClient.id && t.status !== TaskStatus.DONE);
-  }, [selectedClient, tasks]);
-
-  const taskStats = useMemo(() => {
-    const todo = clientTasks.filter((t: any) => t.status === TaskStatus.TODO).length;
-    const inProgress = clientTasks.filter((t: any) => t.status === TaskStatus.IN_PROGRESS).length;
-    return { todo, inProgress, total: clientTasks.length };
-  }, [clientTasks]);
 
   const closeModals = () => {
     setViewMode('list');
@@ -79,9 +64,9 @@ const Clients: React.FC<any> = ({ clients = [], tasks = [], projects = [], onAdd
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 px-1">
           {filteredClients.map((client: Client) => (
             <div key={client.id} onClick={() => { setSelectedClient(client); setViewMode('view'); }} className="crystal-module p-8 rounded-[3rem] border border-white/5 group cursor-pointer relative overflow-hidden active-scale">
-              <div className="flex items-center space-x-5 mb-8">
+              <div className="flex items-center space-x-5 mb-8 text-left">
                 <div className="w-16 h-16 bg-gradient-to-br from-emerald-400/20 to-emerald-600/20 rounded-2xl flex items-center justify-center text-emerald-400 font-extrabold text-2xl shadow-inner border border-emerald-400/10 transition-transform group-hover:scale-110 duration-500">{client.name.charAt(0)}</div>
-                <div className="truncate text-left">
+                <div className="truncate flex-1">
                   <h3 className="font-extrabold text-white text-[15px] truncate uppercase tracking-tight">{client.name}</h3>
                   <p className="text-[10px] text-slate-500 font-extrabold uppercase tracking-widest mt-2 truncate">{client.company || 'Indépendant'}</p>
                 </div>
@@ -98,7 +83,7 @@ const Clients: React.FC<any> = ({ clients = [], tasks = [], projects = [], onAdd
             </div>
           ))}
           {filteredClients.length === 0 && (
-            <div className="col-span-full py-20 glass rounded-[3rem] border-dashed border-2 border-white/5 flex flex-col items-center justify-center opacity-30">
+            <div className="col-span-full py-20 glass rounded-[3rem] border-dashed border-2 border-white/5 flex flex-col items-center justify-center opacity-30 text-center">
                <Briefcase size={40} className="mb-4 text-slate-500" />
                <p className="text-[10px] font-black uppercase tracking-[0.2em]">Aucun partenaire trouvé</p>
             </div>
@@ -106,21 +91,20 @@ const Clients: React.FC<any> = ({ clients = [], tasks = [], projects = [], onAdd
         </div>
       </div>
 
-      {/* MODAL VIEW CLIENT */}
       <Modal isOpen={viewMode === 'view' && !!selectedClient} onClose={closeModals} title={selectedClient?.name} subtitle={selectedClient?.company || 'Profil Partenaire'}>
         <div className="space-y-10">
            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="p-6 bg-white/5 rounded-3xl border border-white/5 flex items-center space-x-5">
+              <div className="p-6 bg-white/5 rounded-3xl border border-white/5 flex items-center space-x-5 text-left">
                  <div className="w-12 h-12 rounded-2xl bg-emerald-400/10 flex items-center justify-center text-emerald-400"><Mail size={20} /></div>
                  <div className="truncate"><p className="label-iv mb-0">Email</p><p className="text-sm font-bold text-white truncate">{selectedClient?.email || 'N/A'}</p></div>
               </div>
-              <div className="p-6 bg-white/5 rounded-3xl border border-white/5 flex items-center space-x-5">
+              <div className="p-6 bg-white/5 rounded-3xl border border-white/5 flex items-center space-x-5 text-left">
                  <div className="w-12 h-12 rounded-2xl bg-emerald-400/10 flex items-center justify-center text-emerald-400"><Phone size={20} /></div>
                  <div className="truncate"><p className="label-iv mb-0">Téléphone</p><p className="text-sm font-bold text-white truncate">{selectedClient?.phone || 'N/A'}</p></div>
               </div>
            </div>
 
-           <div className="p-8 bg-white/5 rounded-[2.5rem] border border-white/5 space-y-6">
+           <div className="p-8 bg-white/5 rounded-[2.5rem] border border-white/5 space-y-6 text-left">
               <div>
                 <h4 className="label-iv flex items-center"><MapPin size={14} className="mr-2 text-emerald-400" /> Adresse de facturation</h4>
                 <p className="text-sm text-slate-300 font-medium leading-relaxed">{selectedClient?.address || "Non spécifiée"}</p>
@@ -133,13 +117,15 @@ const Clients: React.FC<any> = ({ clients = [], tasks = [], projects = [], onAdd
            </div>
 
            <div className="flex flex-col sm:flex-row items-center gap-4">
-              <button 
-                onClick={() => handleOpenEdit(selectedClient!)}
-                className="w-full py-6 bg-emerald-400 text-slate-950 font-black rounded-[2rem] shadow-xl active-scale uppercase text-[11px] tracking-widest hover:bg-emerald-300 flex items-center justify-center space-x-3"
-              >
-                <Edit2 size={18} />
-                <span>Modifier le Dossier</span>
-              </button>
+              {canManage && (
+                <button 
+                  onClick={() => handleOpenEdit(selectedClient!)}
+                  className="w-full py-6 bg-emerald-400 text-slate-950 font-black rounded-[2rem] shadow-xl active-scale uppercase text-[11px] tracking-widest hover:bg-emerald-300 flex items-center justify-center space-x-3"
+                >
+                  <Edit2 size={18} />
+                  <span>Modifier le Dossier</span>
+                </button>
+              )}
               {canManage && (
                 <button 
                   onClick={() => { if(confirm('Archiver définitivement ce client ?')) { onDeleteClient(selectedClient!.id); closeModals(); } }}
@@ -152,7 +138,6 @@ const Clients: React.FC<any> = ({ clients = [], tasks = [], projects = [], onAdd
         </div>
       </Modal>
 
-      {/* MODAL EDIT / ADD CLIENT */}
       <Modal 
         isOpen={viewMode === 'add' || viewMode === 'edit'} 
         onClose={closeModals} 

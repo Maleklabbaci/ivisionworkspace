@@ -22,6 +22,7 @@ export interface UserPermissions {
   canManageLeads?: boolean;
   canManageCampaigns?: boolean;
   canManageFinances?: boolean;
+  canManageProjects?: boolean;
 }
 
 export interface User {
