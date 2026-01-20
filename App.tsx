@@ -277,26 +277,15 @@ const AuthUI = ({ handleAuth, email, setEmail, password, setPassword, isAuthProc
 };
 
 const AccessGuard: React.FC<{ currentUser: User; permission?: keyof UserPermissions; role?: UserRole; children: React.ReactNode; }> = ({ currentUser, permission, role, children }) => {
-  // Les admins ont accès à tout par défaut
   if (currentUser.role === UserRole.ADMIN) return <>{children}</>;
-  
-  // Vérification de rôle spécifique si nécessaire
   const hasRole = role ? currentUser.role === role : true;
-  
-  // Vérification de la permission spécifique (canManageClients, canManageProjects, etc.)
   const hasPermission = permission ? !!(currentUser.permissions as any)?.[permission] : true;
-  
   if (hasRole && hasPermission) return <>{children}</>;
-  
   return (
     <div className="h-full flex flex-col items-center justify-center text-center p-8 pt-20">
-      <div className="bg-rose-500/10 p-10 rounded-full mb-6 flex items-center justify-center text-rose-500">
-        <Lock size={48} />
-      </div>
+      <div className="bg-rose-500/10 p-10 rounded-full mb-6 flex items-center justify-center text-rose-500"><Lock size={48} /></div>
       <h2 className="text-3xl font-black text-white mb-2 uppercase tracking-tight">Accès Restreint</h2>
-      <p className="text-slate-500 font-bold uppercase text-[11px] tracking-normal">
-        Autorisations iVISION insuffisantes pour ce module.
-      </p>
+      <p className="text-slate-500 font-bold uppercase text-[11px] tracking-normal">Autorisations iVISION insuffisantes pour ce module.</p>
     </div>
   );
 };
@@ -312,12 +301,17 @@ const AppContent: React.FC<any> = ({ currentUser, users, tasks, setTasks, client
       <Suspense fallback={<div className="h-full w-full flex items-center justify-center"><Loader2 className="animate-spin text-primary" size={40} /></div>}>
         <Routes>
           <Route path="/dashboard" element={<Dashboard currentUser={currentUser} tasks={tasks} clients={clients} onNavigate={(v:ViewState)=>navigate(`/${v}`)} />} />
-          <Route path="/tasks" element={<Tasks tasks={tasks} users={users} clients={clients} projects={projects} currentUser={currentUser} onUpdateStatus={(id:string,st:any)=> { supabase.from('tasks').update({status:st}).eq('id',id).then(()=>setTasks(tasks.map(t=>t.id===id?{...t,status:st}:t))); }} onBatchUpdateStatus={(ids:string[], st:any) => {
-            supabase.from('tasks').update({status: st}).in('id', ids).then(() => {
+          <Route path="/tasks" element={<Tasks tasks={tasks} users={users} clients={clients} projects={projects} currentUser={currentUser} onUpdateStatus={async (id:string,st:any)=> { 
+            const { error } = await supabase.from('tasks').update({status:st}).eq('id',id);
+            if (!error) setTasks(tasks.map(t=>t.id===id?{...t,status:st}:t));
+            else addNotification("Erreur", "La mise à jour de la mission a échoué.", "urgent");
+          }} onBatchUpdateStatus={async (ids:string[], st:any) => {
+            const { error } = await supabase.from('tasks').update({status: st}).in('id', ids);
+            if (!error) {
               setTasks(tasks.map(t => ids.includes(t.id) ? {...t, status: st} : t));
               addNotification("Système", `${ids.length} missions mises à jour.`, "success");
-            });
-          }} onBatchUpdateTasks={(ids: string[], updates: Partial<Task>) => {
+            } else addNotification("Erreur", "Échec de la mise à jour groupée.", "urgent");
+          }} onBatchUpdateTasks={async (ids: string[], updates: Partial<Task>) => {
             const dbUpdates: any = {};
             if (updates.dueDate) dbUpdates.due_date = updates.dueDate;
             if (updates.assigneeId) dbUpdates.assignee_id = updates.assigneeId;
@@ -325,70 +319,165 @@ const AppContent: React.FC<any> = ({ currentUser, users, tasks, setTasks, client
             if (updates.priority) dbUpdates.priority = updates.priority;
             if (updates.status) dbUpdates.status = updates.status;
 
-            supabase.from('tasks').update(dbUpdates).in('id', ids).then(() => {
+            const { error } = await supabase.from('tasks').update(dbUpdates).in('id', ids);
+            if (!error) {
               setTasks(tasks.map(t => ids.includes(t.id) ? { ...t, ...updates } : t));
               addNotification("Système", `Lot de ${ids.length} missions modifié.`, "success");
-            });
-          }} onBatchDelete={(ids:string[]) => {
-            setTasks(tasks.filter(t => !ids.includes(t.id)));
-            supabase.from('tasks').delete().in('id', ids).then(() => {
-               addNotification("Système", `${ids.length} missions révoquées.`, "success");
-            });
-          }} onAddTask={(t:any)=> { const newTask = {...t, id:generateUUID(), created_at: new Date().toISOString()}; supabase.from('tasks').insert({id:newTask.id, title:t.title, description:t.description, assignee_id:t.assigneeId, client_id:t.clientId, project_id:t.projectId, due_date:t.dueDate, status:t.status, type:t.type, priority:t.priority}).then(()=>setTasks([mapFromDB('tasks', newTask), ...tasks])); }} onUpdateTask={(t:any)=> { supabase.from('tasks').update({ title: t.title, description: t.description, assignee_id: t.assigneeId, client_id: t.clientId, project_id: t.projectId, due_date: t.dueDate, status: t.status, type: t.type, priority: t.priority }).eq('id', t.id).then(()=>setTasks(tasks.map(tk=>tk.id===t.id?{...tk,...t}:tk))); }} onDeleteTask={(id:string)=> { 
-            setTasks(tasks.filter(t=>t.id!==id));
-            supabase.from('tasks').delete().eq('id',id); 
+            } else addNotification("Erreur", "La modification groupée a échoué.", "urgent");
+          }} onBatchDelete={async (ids:string[]) => {
+            const { error } = await supabase.from('tasks').delete().in('id', ids);
+            if (!error) {
+              setTasks(tasks.filter(t => !ids.includes(t.id)));
+              addNotification("Système", `${ids.length} missions révoquées.`, "success");
+            } else addNotification("Erreur", "La révocation groupée a échoué.", "urgent");
+          }} onAddTask={async (t:any)=> { 
+            const newTask = {...t, id:generateUUID(), created_at: new Date().toISOString()}; 
+            const { error } = await supabase.from('tasks').insert({id:newTask.id, title:t.title, description:t.description, assignee_id:t.assigneeId, client_id:t.clientId, project_id:t.projectId, due_date:t.dueDate, status:t.status, type:t.type, priority:t.priority});
+            if (!error) setTasks([mapFromDB('tasks', newTask), ...tasks]);
+            else addNotification("Erreur", "Échec de l'indexation de la mission.", "urgent");
+          }} onUpdateTask={async (t:any)=> { 
+            const { error } = await supabase.from('tasks').update({ title: t.title, description: t.description, assignee_id: t.assigneeId, client_id: t.clientId, project_id: t.projectId, due_date: t.dueDate, status: t.status, type: t.type, priority: t.priority }).eq('id', t.id);
+            if (!error) setTasks(tasks.map(tk=>tk.id===t.id?{...tk,...t}:tk));
+            else addNotification("Erreur", "La mise à jour de la mission a échoué.", "urgent");
+          }} onDeleteTask={async (id:string)=> { 
+            const { error } = await supabase.from('tasks').delete().eq('id',id); 
+            if (!error) {
+              setTasks(tasks.filter(t=>t.id!==id));
+              addNotification("Système", "Mission révoquée.", "success");
+            } else addNotification("Erreur", "Échec de la révocation.", "urgent");
           }} />} />
           <Route path="/projects" element={<AccessGuard currentUser={currentUser} permission="canManageProjects"><Projects projects={projects} users={users} clients={clients} salaries={salaries} expenses={expenses} adCampaigns={adCampaigns} currentUser={currentUser} onAddProject={async (p:any, autoConfigs:any[])=>{
             const id = generateUUID();
             const createdAt = new Date().toISOString();
-            const { error: projError } = await supabase.from('projects').insert({id, name:p.name, description:p.description, total_budget:p.total_budget || p.totalBudget, spent_budget:0, status:p.status, client_id:p.clientId});
+            const { error: projError } = await supabase.from('projects').insert({id, name:p.name, description:p.description, total_budget:p.totalBudget, spent_budget:0, status:p.status, client_id:p.clientId});
             if (projError) { addNotification("Erreur Projet", projError.message, "urgent"); return; }
             setProjects([{...p, id, spentBudget:0, createdAt}, ...projects]);
             addNotification("Système", `Projet ${p.name} déployé.`, "success");
             if (autoConfigs && autoConfigs.length > 0) handleAutoGenerateTasks(id, p.name, p.clientId, autoConfigs);
-          }} onDeleteProject={(id:string)=> { 
-            setProjects(projects.filter(p=>p.id!==id)); 
-            supabase.from('projects').delete().eq('id',id); 
+          }} onDeleteProject={async (id:string)=> { 
+            const { error } = await supabase.from('projects').delete().eq('id',id); 
+            if (!error) {
+              setProjects(projects.filter(p=>p.id!==id)); 
+              addNotification("Système", "Projet supprimé définitivement.", "success");
+            } else {
+              addNotification("Erreur", "Impossible de supprimer le projet. Vérifiez s'il est utilisé.", "urgent");
+            }
           }} onUpdateProject={async (p:Project, autoConfigs?: any[])=>{
              const { error } = await supabase.from('projects').update({ name: p.name, description: p.description, total_budget: p.totalBudget, status: p.status, client_id: p.clientId }).eq('id', p.id);
              if (!error) {
                setProjects(projects.map(pr=>pr.id===p.id?p:pr));
                if (autoConfigs && autoConfigs.length > 0) await handleAutoGenerateTasks(p.id, p.name, p.clientId, autoConfigs);
                else addNotification("Système", "Projet mis à jour.", "success");
-             }
+             } else addNotification("Erreur", "Mise à jour projet échouée.", "urgent");
           }} /></AccessGuard>} />
-          <Route path="/finance" element={<AccessGuard currentUser={currentUser} permission="canManageFinances"><Finances salaries={salaries} expenses={expenses} adCampaigns={adCampaigns} users={users} projects={projects} currentUser={currentUser} onAddSalary={(s:any)=>{ const id = generateUUID(); supabase.from('salaries').insert({id, user_id:s.userId, project_id:s.projectId, amount:s.amount, bonus:s.bonus, frequency:s.frequency, status:s.status}).then(()=>setSalaries([{...s, id}, ...salaries])); }} onDeleteSalary={(id:string)=> { 
-            setSalaries(salaries.filter(s=>s.id!==id)); 
-            supabase.from('salaries').delete().eq('id',id); 
-          }} onUpdateSalary={(s:SalaryRecord)=>{ supabase.from('salaries').update({status:s.status, amount:s.amount, bonus:s.bonus, frequency:s.frequency, project_id:s.projectId}).eq('id',s.id).then(()=>setSalaries(salaries.map(sl=>sl.id===s.id?s:sl))); }} onAddExpense={(ex:any)=>{ const id = generateUUID(); supabase.from('expenses').insert({id, name:ex.name, amount:ex.amount, type:ex.type, project_id:ex.projectId, status:ex.status}).then(()=>setExpenses([{...ex, id, createdAt: new Date().toISOString()}, ...expenses])); }} onDeleteExpense={(id:string)=> { 
-            setExpenses(expenses.filter(e=>e.id!==id)); 
-            supabase.from('expenses').delete().eq('id',id); 
-          }} onAddAdCampaign={(ad:any)=>{ const id = generateUUID(); supabase.from('ad_campaigns').insert({id, name:ad.name, amount:ad.amount, platform:ad.platform, project_id:ad.projectId, status:ad.status}).then(()=>setAdCampaigns([{...ad, id, createdAt: new Date().toISOString()}, ...adCampaigns])); }} onDeleteAdCampaign={(id:string)=> { 
-            setAdCampaigns(adCampaigns.filter(a=>a.id!==id)); 
-            supabase.from('ad_campaigns').delete().eq('id',id); 
+          <Route path="/finance" element={<AccessGuard currentUser={currentUser} permission="canManageFinances"><Finances salaries={salaries} expenses={expenses} adCampaigns={adCampaigns} users={users} projects={projects} currentUser={currentUser} onAddSalary={async (s:any)=>{ 
+            const id = generateUUID(); 
+            const { error } = await supabase.from('salaries').insert({id, user_id:s.userId, project_id:s.projectId, amount:s.amount, bonus:s.bonus, frequency:s.frequency, status:s.status});
+            if (!error) {
+              setSalaries([{...s, id}, ...salaries]);
+              addNotification("Finance", "Fiche de paie indexée.", "success");
+            } else addNotification("Erreur", "L'indexation du salaire a échoué.", "urgent");
+          }} onDeleteSalary={async (id:string)=> { 
+            const { error } = await supabase.from('salaries').delete().eq('id',id); 
+            if (!error) {
+              setSalaries(salaries.filter(s=>s.id!==id)); 
+              addNotification("Finance", "Entrée salariale révoquée.", "success");
+            } else addNotification("Erreur", "Échec de la suppression.", "urgent");
+          }} onUpdateSalary={async (s:SalaryRecord)=>{ 
+            const { error } = await supabase.from('salaries').update({status:s.status, amount:s.amount, bonus:s.bonus, frequency:s.frequency, project_id:s.projectId}).eq('id',s.id);
+            if (!error) {
+              setSalaries(salaries.map(sl=>sl.id===s.id?s:sl));
+              addNotification("Finance", "Salaire mis à jour.", "success");
+            } else addNotification("Erreur", "La mise à jour a échoué.", "urgent");
+          }} onAddExpense={async (ex:any)=>{ 
+            const id = generateUUID(); 
+            const { error } = await supabase.from('expenses').insert({id, name:ex.name, amount:ex.amount, type:ex.type, project_id:ex.projectId, status:ex.status});
+            if (!error) {
+              setExpenses([{...ex, id, createdAt: new Date().toISOString()}, ...expenses]);
+              addNotification("Finance", "Dépense enregistrée.", "success");
+            } else addNotification("Erreur", "Échec de l'enregistrement de la dépense.", "urgent");
+          }} onDeleteExpense={async (id:string)=> { 
+            const { error } = await supabase.from('expenses').delete().eq('id',id); 
+            if (!error) {
+              setExpenses(expenses.filter(e=>e.id!==id)); 
+              addNotification("Finance", "Dépense supprimée.", "success");
+            } else addNotification("Erreur", "Suppression échouée.", "urgent");
+          }} onAddAdCampaign={async (ad:any)=>{ 
+            const id = generateUUID(); 
+            const { error } = await supabase.from('ad_campaigns').insert({id, name:ad.name, amount:ad.amount, platform:ad.platform, project_id:ad.projectId, status:ad.status});
+            if (!error) {
+              setAdCampaigns([{...ad, id, createdAt: new Date().toISOString()}, ...adCampaigns]);
+              addNotification("Ads", "Campagne indexée.", "success");
+            } else addNotification("Erreur", "Échec de l'indexation ADS.", "urgent");
+          }} onDeleteAdCampaign={async (id:string)=> { 
+            const { error } = await supabase.from('ad_campaigns').delete().eq('id',id); 
+            if (!error) {
+              setAdCampaigns(adCampaigns.filter(a=>a.id!==id)); 
+              addNotification("Ads", "Campagne supprimée.", "success");
+            } else addNotification("Erreur", "Suppression ADS échouée.", "urgent");
           }} /></AccessGuard>} />
           <Route path="/chat" element={<AccessGuard currentUser={currentUser} permission="canManageChat"><Chat currentUser={currentUser} users={users} channels={channels} currentChannelId={currentChannelId} messages={messages} onChannelChange={setCurrentChannelId} onSendMessage={(c:string,cid:string)=> { supabase.from('messages').insert({id:generateUUID(), content:c, channel_id:cid, user_id:currentUser.id}).select().single().then(({data})=>{if(data) setMessages([...messages, mapFromDB('messages', data)])}); }} /></AccessGuard>} />
-          <Route path="/team" element={<AccessGuard currentUser={currentUser} role={UserRole.ADMIN}><Team currentUser={currentUser} users={users} onAddUser={async (u:any)=> { const normalizedEmail = u.email.toLowerCase().trim(); if (users.some(existingUser => existingUser.email.toLowerCase() === normalizedEmail)) { addNotification("Erreur", "Cette adresse email est déjà utilisée.", "urgent"); return; } const { data: authData, error: authError } = await supabase.auth.signUp({ email: normalizedEmail, password: u.password }); if (authError) { addNotification("Erreur Déploiement", authError.message, "urgent"); return; } if (authData.user) { const { error: userError } = await supabase.from('users').insert({ id: authData.user.id, email: normalizedEmail, name: u.name, role: u.role, permissions: u.permissions, status: 'active', avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name)}&background=random` }); if (userError) addNotification("Erreur Profil", userError.message, "urgent"); else { addNotification("Succès", `Accès déployé pour ${u.name}.`, "success"); const u_list = await safeFetch(supabase.from('users').select('*'), []); setUsers(u_list.map(i => mapFromDB('users', i))); } } }} onRemoveUser={async (id:string)=> { 
-            setUsers(users.filter(u=>u.id!==id)); 
-            const { error } = await supabase.from('users').delete().eq('id', id); 
-            if (error) addNotification("Erreur", "Une erreur est survenue lors de la révocation.", "urgent");
-            else addNotification("Système", "Accès révoqué avec succès.", "success");
-          }} onUpdateMember={async (id:string, up:any) => { const { error } = await supabase.from('users').update({ name: up.name, email: up.email.toLowerCase().trim(), role: up.role, permissions: up.permissions }).eq('id',id); if (error) addNotification("Erreur", error.message, "urgent"); else { setUsers(users.map(u => u.id === id ? {...u, ...up} : u)); addNotification("Système", "Profil mis à jour.", "success"); } }} /></AccessGuard>} />
-          <Route path="/files" element={<AccessGuard currentUser={currentUser} permission="canViewFiles"><Files fileLinks={fileLinks} onAddFileLink={(n:string,u:string)=> { supabase.from('file_links').insert({id:generateUUID(), name:n, url:u, created_by:currentUser.id}).select().single().then(({data})=>{if(data) setFileLinks([mapFromDB('file_links',data),...fileLinks])}); }} onDeleteFileLink={(id:string)=> { 
-            setFileLinks(fileLinks.filter(f=>f.id!==id)); 
-            supabase.from('file_links').delete().eq('id',id); 
-          }} currentUser={currentUser} /></AccessGuard>} />
+          <Route path="/team" element={<AccessGuard currentUser={currentUser} role={UserRole.ADMIN}><Team currentUser={currentUser} users={users} onAddUser={async (u:any)=> { const normalizedEmail = u.email.toLowerCase().trim(); if (users.some(existingUser => existingUser.email.toLowerCase() === normalizedEmail)) { addNotification("Erreur", "Cette adresse email est déjà utilisée.", "urgent"); return; } const { data: authData, error: authError } = await supabase.auth.signUp({ email: normalizedEmail, password: u.password }); if (authError) { addNotification("Erreur Déploiement", authError.message, "urgent"); return; } if (authData.user) { const { error: userError } = await supabase.from('users').insert({ id: authData.user.id, email: normalizedEmail, name: u.name, role: u.role, permissions: u.permissions, status: 'active', avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name)}&background=random` }); if (userError) addNotification("Erreur Profil", userError.message, "urgent"); else { addNotification("Succès", `Accès déployé pour ${u.name}.`, "success"); const u_list = await safeFetch(supabase.from('users').select('*'), []); setUsers(u_list.map(i => mapFromDB('users', i))); } } }} onRemoveUser={async (id:string)=> { const { error } = await supabase.from('users').delete().eq('id', id); if (error) addNotification("Erreur", "Une erreur est survenue lors de la révocation.", "urgent"); else { setUsers(users.filter(u=>u.id!==id)); addNotification("Système", "Accès révoqué avec succès.", "success"); } }} onUpdateMember={async (id:string, up:any) => { const { error } = await supabase.from('users').update({ name: up.name, email: up.email.toLowerCase().trim(), role: up.role, permissions: up.permissions }).eq('id',id); if (error) addNotification("Erreur", error.message, "urgent"); else { setUsers(users.map(u => u.id === id ? {...u, ...up} : u)); addNotification("Système", "Profil mis à jour.", "success"); } }} /></AccessGuard>} />
+          <Route path="/files" element={<AccessGuard currentUser={currentUser} permission="canViewFiles"><Files fileLinks={fileLinks} onAddFileLink={(n:string,u:string)=> { supabase.from('file_links').insert({id:generateUUID(), name:n, url:u, created_by:currentUser.id}).select().single().then(({data})=>{if(data) setFileLinks([mapFromDB('file_links',data),...fileLinks])}); }} onDeleteFileLink={async (id:string)=> { const { error } = await supabase.from('file_links').delete().eq('id',id); if (!error) { setFileLinks(fileLinks.filter(f=>f.id!==id)); addNotification("Fichiers", "Lien supprimé.", "success"); } else addNotification("Erreur", "La suppression a échoué.", "urgent"); }} currentUser={currentUser} /></AccessGuard>} />
           <Route path="/settings" element={<Settings currentUser={currentUser} onUpdateProfile={async (up:any)=>{ const { error } = await supabase.from('users').update(up).eq('id', currentUser.id); if (error) addNotification("Erreur", error.message, "urgent"); else setCurrentUser({...currentUser, ...up}); }} />} />
           <Route path="/reports" element={<AccessGuard currentUser={currentUser} permission="canViewReports"><Reports tasks={tasks} leads={leads} messages={messages} projects={projects} salaries={salaries} expenses={expenses} adCampaigns={adCampaigns} currentUser={currentUser} /></AccessGuard>} />
-          <Route path="/clients" element={<AccessGuard currentUser={currentUser} permission="canManageClients"><Clients clients={clients} tasks={tasks} projects={projects} onAddClient={(c:any)=> { supabase.from('clients').insert({id:generateUUID(), ...c}).select().single().then(({data})=>{if(data) setClients([data,...clients])}); }} onUpdateClient={async (updated: Client) => { const { error } = await supabase.from('clients').update(updated).eq('id', updated.id); if (error) addNotification("Erreur", error.message, "urgent"); else { setClients(clients.map(c => c.id === updated.id ? updated : c)); addNotification("CRM", `Fiche ${updated.name} mise à jour.`, "success"); } }} onDeleteClient={(id:string)=> { 
-            setClients(clients.filter(c=>c.id!==id)); 
-            supabase.from('clients').delete().eq('id',id); 
+          <Route path="/clients" element={<AccessGuard currentUser={currentUser} permission="canManageClients"><Clients clients={clients} tasks={tasks} projects={projects} onAddClient={async (c:any)=> { 
+            const id = generateUUID();
+            const { error, data } = await supabase.from('clients').insert({id, ...c}).select().single();
+            if (!error && data) {
+              setClients([data,...clients]);
+              addNotification("CRM", "Client indexé.", "success");
+            } else addNotification("Erreur", "Échec de l'indexation du client.", "urgent");
+          }} onUpdateClient={async (updated: Client) => { 
+            const { error } = await supabase.from('clients').update(updated).eq('id', updated.id); 
+            if (error) addNotification("Erreur", error.message, "urgent"); 
+            else { setClients(clients.map(c => c.id === updated.id ? updated : c)); addNotification("CRM", `Fiche ${updated.name} mise à jour.`, "success"); } 
+          }} onDeleteClient={async (id:string)=> { 
+            const { error } = await supabase.from('clients').delete().eq('id',id); 
+            if (!error) {
+              setClients(clients.filter(c=>c.id!==id)); 
+              addNotification("CRM", "Partenaire supprimé du registre.", "success");
+            } else {
+              addNotification("Erreur", "Impossible de supprimer le client. Des projets y sont peut-être liés.", "urgent");
+            }
           }} currentUser={currentUser} /></AccessGuard>} />
-          <Route path="/calendar" element={<Calendar tasks={tasks} onAddTask={(t:any)=> { const newTask = {...t, id:generateUUID(), created_at: new Date().toISOString()}; supabase.from('tasks').insert({id:newTask.id, title:t.title, description:t.description, assignee_id:t.assigneeId, client_id:t.clientId, project_id:t.projectId, due_date:t.dueDate, status:t.status, type:t.type, priority:t.priority}).then(()=>setTasks([mapFromDB('tasks', newTask), ...tasks])); }} onUpdateStatus={(id:string,st:any)=> { supabase.from('tasks').update({status:st}).eq('id',id).then(()=>setTasks(tasks.map(t=>t.id===id?{...t,status:st}:t))); }} currentUser={currentUser} users={users} clients={clients} projects={projects} />} />
-          <Route path="/leads" element={<AccessGuard currentUser={currentUser} permission="canManageLeads"><Leads leads={leads} onAddLead={(l:any)=> { supabase.from('leads').insert({id:generateUUID(), ...l, value_min:l.valueMin, value_max:l.valueMax}).select().single().then(({data})=>{if(data) setLeads([mapFromDB('leads',data),...leads])}); }} onUpdateLead={(l:any)=> { supabase.from('leads').update({...l, value_min:l.valueMin, value_max:l.valueMax}).eq('id',l.id).then(()=>setLeads(leads.map(ld=>ld.id===l.id?{...ld,...l}:ld))); }} onDeleteLead={(id:string)=> { 
-            setLeads(leads.filter(l=>l.id!==id)); 
-            supabase.from('leads').delete().eq('id',id); 
-          }} onConvertToClient={(l:any)=> { supabase.from('clients').insert({id:generateUUID(), name:l.name, company:l.company, email:l.email, phone:l.phone}).select().single().then(({data})=>{ if(data) { setClients([data,...clients]); setLeads(leads.filter(ld=>ld.id!==l.id)); supabase.from('leads').delete().eq('id',l.id); addNotification("CRM", "Prospect converti.", "success"); } }); }} currentUser={currentUser} addNotification={addNotification} /></AccessGuard>} />
+          <Route path="/calendar" element={<Calendar tasks={tasks} onAddTask={async (t:any)=> { 
+            const newTask = {...t, id:generateUUID(), created_at: new Date().toISOString()}; 
+            const { error } = await supabase.from('tasks').insert({id:newTask.id, title:t.title, description:t.description, assignee_id:t.assigneeId, client_id:t.clientId, project_id:t.projectId, due_date:t.dueDate, status:t.status, type:t.type, priority:t.priority});
+            if (!error) setTasks([mapFromDB('tasks', newTask), ...tasks]);
+          }} onUpdateStatus={async (id:string,st:any)=> { 
+            const { error } = await supabase.from('tasks').update({status:st}).eq('id',id);
+            if (!error) setTasks(tasks.map(t=>t.id===id?{...t,status:st}:t));
+          }} currentUser={currentUser} users={users} clients={clients} projects={projects} />} />
+          <Route path="/leads" element={<AccessGuard currentUser={currentUser} permission="canManageLeads"><Leads leads={leads} onAddLead={async (l:any)=> { 
+            const id = generateUUID();
+            const { error, data } = await supabase.from('leads').insert({id, ...l, value_min:l.valueMin, value_max:l.valueMax}).select().single();
+            if (!error && data) {
+              setLeads([mapFromDB('leads',data),...leads]);
+              addNotification("CRM", "Lead indexé.", "success");
+            } else addNotification("Erreur", "Échec de l'indexation du lead.", "urgent");
+          }} onUpdateLead={async (l:any)=> { 
+            const { error } = await supabase.from('leads').update({...l, value_min:l.valueMin, value_max:l.valueMax}).eq('id',l.id);
+            if (!error) {
+              setLeads(leads.map(ld=>ld.id===l.id?{...ld,...l}:ld));
+              addNotification("CRM", "Lead mis à jour.", "success");
+            } else addNotification("Erreur", "Mise à jour échouée.", "urgent");
+          }} onDeleteLead={async (id:string)=> { 
+            const { error } = await supabase.from('leads').delete().eq('id',id); 
+            if (!error) {
+              setLeads(leads.filter(l=>l.id!==id)); 
+              addNotification("CRM", "Lead supprimé.", "success");
+            } else addNotification("Erreur", "Échec de la suppression.", "urgent");
+          }} onConvertToClient={async (l:any)=> { 
+            const id = generateUUID();
+            const { error, data } = await supabase.from('clients').insert({id, name:l.name, company:l.company, email:l.email, phone:l.phone}).select().single();
+            if(!error && data) { 
+              setClients([data,...clients]); 
+              setLeads(leads.filter(ld=>ld.id!==l.id)); 
+              await supabase.from('leads').delete().eq('id',l.id); 
+              addNotification("CRM", "Prospect converti.", "success"); 
+            } else addNotification("Erreur", "La conversion a échoué.", "urgent");
+          }} currentUser={currentUser} addNotification={addNotification} /></AccessGuard>} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </Suspense>
