@@ -112,6 +112,8 @@ export enum TaskStatus {
   DONE = 'Terminé',
 }
 
+export type TaskType = 'video' | 'design' | 'website' | 'ads' | 'post' | 'admin' | 'content';
+
 export interface Task {
   id: string;
   title: string;
@@ -121,7 +123,7 @@ export interface Task {
   projectId?: string;
   dueDate: string;
   status: TaskStatus;
-  type: 'content' | 'ads' | 'social' | 'seo' | 'admin'; 
+  type: TaskType; 
   priority?: 'low' | 'medium' | 'high';
   attachments?: string[];
 }

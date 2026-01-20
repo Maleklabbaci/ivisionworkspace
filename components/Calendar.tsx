@@ -1,6 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
-import { Task, TaskStatus, User, Client } from '../types';
+/* Added TaskType to imports */
+import { Task, TaskStatus, User, Client, TaskType } from '../types';
 import { ChevronLeft, ChevronRight, Plus, X, Calendar as CalendarIcon, Clock, Check, Briefcase, User as UserIcon, Type as TypeIcon, AlertTriangle, Layers, Info } from 'lucide-react';
 
 export default function Calendar({ tasks = [], onAddTask, onUpdateStatus, currentUser, users = [], clients = [] }: any) {
@@ -13,7 +14,8 @@ export default function Calendar({ tasks = [], onAddTask, onUpdateStatus, curren
     description: '', 
     priority: 'medium', 
     assigneeId: currentUser.id, 
-    type: 'content', 
+    /* Fix: changed 'content' to 'video' to match TaskType */
+    type: 'video', 
     clientId: '' 
   });
 
@@ -47,7 +49,8 @@ export default function Calendar({ tasks = [], onAddTask, onUpdateStatus, curren
 
   const closeModals = () => {
     setShowAddModal(false);
-    setFormData({ title: '', description: '', priority: 'medium', assigneeId: currentUser.id, type: 'content', clientId: '' });
+    /* Fix: changed 'content' to 'video' to match TaskType */
+    setFormData({ title: '', description: '', priority: 'medium', assigneeId: currentUser.id, type: 'video', clientId: '' });
   };
 
   const handleAddSubmit = (e: React.FormEvent) => {
@@ -211,11 +214,13 @@ export default function Calendar({ tasks = [], onAddTask, onUpdateStatus, curren
                       </div>
                       <div className="space-y-2">
                         <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 px-2 flex items-center leading-none"><Layers size={12} className="mr-2 text-rose-400"/> Type Flux</label>
-                        <select className="w-full p-5 bg-slate-900 border border-white/10 rounded-2xl font-bold text-slate-300 outline-none text-sm appearance-none cursor-pointer" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value as any})}>
-                            <option value="content">Contenu</option>
-                            <option value="ads">Publicité</option>
-                            <option value="social">Social</option>
-                            <option value="seo">SEO</option>
+                        <select className="w-full p-5 bg-slate-900 border border-white/10 rounded-2xl font-bold text-slate-300 outline-none text-sm appearance-none cursor-pointer" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value as TaskType})}>
+                            <option value="video">VIDEO</option>
+                            <option value="design">DESIGN</option>
+                            <option value="website">WEBSITE</option>
+                            <option value="ads">ADS</option>
+                            <option value="post">POST</option>
+                            <option value="admin">ADMIN</option>
                         </select>
                       </div>
                     </div>
