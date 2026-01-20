@@ -1,12 +1,12 @@
 
 import React, { useState } from 'react';
 import { Lead, User, UserRole } from '../types';
-import { Search, Plus, Target, X, Mail, Phone, Trash2, ArrowUpRight, Target as TargetIcon, UserCheck, PhoneCall, TrendingDown, TrendingUp, Lock, Info } from 'lucide-react';
+import { Search, Plus, Target, X, Mail, Phone, Trash2, ArrowUpRight, Target as TargetIcon, UserCheck, PhoneCall, TrendingDown, TrendingUp, Lock, Info, Edit2, Save } from 'lucide-react';
 import Modal from './Modal';
 
 const Leads: React.FC<any> = ({ leads = [], onAddLead, onUpdateLead, onDeleteLead, onConvertToClient, currentUser, addNotification }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState<'list' | 'add' | 'view'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'add' | 'view' | 'edit'>('list');
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [formData, setFormData] = useState<Partial<Lead>>({ 
     name: '', 
@@ -25,6 +25,7 @@ const Leads: React.FC<any> = ({ leads = [], onAddLead, onUpdateLead, onDeleteLea
     switch(status) {
       case 'qualified': return { color: 'text-emerald-400', bg: 'bg-emerald-400/10', icon: UserCheck, label: 'Qualifié' };
       case 'contacted': return { color: 'text-indigo-400', bg: 'bg-indigo-400/10', icon: PhoneCall, label: 'Contacté' };
+      case 'lost': return { color: 'text-rose-400', bg: 'bg-rose-400/10', icon: X, label: 'Perdu' };
       default: return { color: 'text-orange-400', bg: 'bg-orange-400/10', icon: TargetIcon, label: 'Nouveau' };
     }
   };
@@ -34,6 +35,31 @@ const Leads: React.FC<any> = ({ leads = [], onAddLead, onUpdateLead, onDeleteLea
   const closeModals = () => {
     setViewMode('list');
     setSelectedLead(null);
+  };
+
+  const handleEditClick = (lead: Lead) => {
+    setSelectedLead(lead);
+    setFormData({ 
+      name: lead.name, 
+      company: lead.company, 
+      email: lead.email, 
+      phone: lead.phone, 
+      status: lead.status, 
+      valueMin: lead.valueMin, 
+      valueMax: lead.valueMax, 
+      description: lead.description 
+    });
+    setViewMode('edit');
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (viewMode === 'add') {
+      onAddLead(formData);
+    } else if (viewMode === 'edit' && selectedLead) {
+      onUpdateLead({ ...formData, id: selectedLead.id });
+    }
+    closeModals();
   };
 
   return (
@@ -55,18 +81,20 @@ const Leads: React.FC<any> = ({ leads = [], onAddLead, onUpdateLead, onDeleteLea
           {filteredLeads.map((lead: Lead) => {
             const style = getStatusStyle(lead.status);
             return (
-              <div key={lead.id} onClick={() => { setSelectedLead(lead); setViewMode('view'); }} className="glass-card p-8 rounded-[3rem] border border-white/5 group cursor-pointer relative overflow-hidden">
-                <div className="flex justify-between items-start mb-8">
+              <div key={lead.id} onClick={() => { setSelectedLead(lead); setViewMode('view'); }} className="glass-card p-8 rounded-[3rem] border border-white/5 group cursor-pointer relative overflow-hidden active-scale">
+                <div className="flex justify-between items-start mb-8 text-left">
                   <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${style.bg} ${style.color}`}>
                     <style.icon size={24} />
                   </div>
                   <span className={`text-[10px] font-black uppercase px-4 py-1.5 rounded-full glass ${style.color}`}>{style.label}</span>
                 </div>
-                <h3 className="font-black text-white text-base truncate uppercase tracking-tight leading-none">{lead.name}</h3>
-                <p className="text-[10px] text-slate-500 font-bold uppercase mt-3 truncate">{lead.company || 'Indépendant'}</p>
+                <div className="text-left">
+                  <h3 className="font-black text-white text-base truncate uppercase tracking-tight leading-none">{lead.name}</h3>
+                  <p className="text-[10px] text-slate-500 font-bold uppercase mt-3 truncate">{lead.company || 'Indépendant'}</p>
+                </div>
                 
                 <div className="mt-10 pt-6 border-t border-white/5 flex items-center justify-between">
-                  <div>
+                  <div className="text-left">
                     <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Valeur Estimée</span>
                     <span className="text-[12px] font-black text-white mt-1 block">
                       {lead.valueMin?.toLocaleString()} - {lead.valueMax?.toLocaleString()} DZD
@@ -83,12 +111,12 @@ const Leads: React.FC<any> = ({ leads = [], onAddLead, onUpdateLead, onDeleteLea
       </div>
 
       <Modal 
-        isOpen={viewMode === 'add'} 
+        isOpen={viewMode === 'add' || viewMode === 'edit'} 
         onClose={closeModals}
-        title="Nouveau Prospect"
+        title={viewMode === 'add' ? "Nouveau Prospect" : "Modifier Prospect"}
         subtitle="Indexation Pipeline iVISION"
       >
-        <form onSubmit={(e) => { e.preventDefault(); onAddLead(formData); closeModals(); }} className="space-y-6 md:space-y-8">
+        <form onSubmit={handleSubmit} className="space-y-6 md:space-y-8 text-left">
            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div>
                  <label className="label-iv">Identité Prospect</label>
@@ -110,19 +138,36 @@ const Leads: React.FC<any> = ({ leads = [], onAddLead, onUpdateLead, onDeleteLea
               </div>
            </div>
 
-           <div className="grid grid-cols-2 gap-5 pt-2">
+           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div>
-                 <label className="label-iv"><TrendingDown size={14} className="text-orange-400"/> Budget Min (DZD)</label>
-                 <input type="number" className="input-iv" placeholder="0" value={formData.valueMin} onChange={e => setFormData({...formData, valueMin: Number(e.target.value)})} />
+                 <label className="label-iv">Statut Pipeline</label>
+                 <select className="input-iv appearance-none cursor-pointer" value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as any})}>
+                   <option value="new">NOUVEAU</option>
+                   <option value="contacted">CONTACTÉ</option>
+                   <option value="qualified">QUALIFIÉ</option>
+                   <option value="lost">PERDU</option>
+                 </select>
               </div>
-              <div>
-                 <label className="label-iv"><TrendingUp size={14} className="text-orange-400"/> Budget Max (DZD)</label>
-                 <input type="number" className="input-iv" placeholder="0" value={formData.valueMax} onChange={e => setFormData({...formData, valueMax: Number(e.target.value)})} />
+              <div className="grid grid-cols-2 gap-3">
+                 <div className="space-y-1.5">
+                    <label className="label-iv text-[8px]">Budget Min</label>
+                    <input type="number" className="input-iv" placeholder="0" value={formData.valueMin} onChange={e => setFormData({...formData, valueMin: Number(e.target.value) || 0})} />
+                 </div>
+                 <div className="space-y-1.5">
+                    <label className="label-iv text-[8px]">Budget Max</label>
+                    <input type="number" className="input-iv" placeholder="0" value={formData.valueMax} onChange={e => setFormData({...formData, valueMax: Number(e.target.value) || 0})} />
+                 </div>
               </div>
            </div>
 
-           <button className="w-full py-7 bg-[#FF9F1C] text-slate-950 font-black rounded-[2rem] shadow-2xl shadow-orange-500/10 active-scale uppercase text-[11px] tracking-tight mt-6 transition-all hover:bg-orange-300">
-             Confirmer Prospect
+           <div className="space-y-2">
+              <label className="label-iv"><Info size={14} className="text-orange-400"/> Brief Prospect</label>
+              <textarea className="input-iv h-32 resize-none leading-relaxed" placeholder="Briefing stratégique..." value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
+           </div>
+
+           <button type="submit" className="w-full py-7 bg-[#FF9F1C] text-slate-950 font-black rounded-[2rem] shadow-2xl shadow-orange-500/10 active-scale uppercase text-[11px] tracking-tight mt-6 transition-all hover:bg-orange-300 flex items-center justify-center space-x-3">
+             {viewMode === 'add' ? <Plus size={18}/> : <Save size={18}/>}
+             <span>{viewMode === 'add' ? "Confirmer Prospect" : "Enregistrer les modifications"}</span>
            </button>
         </form>
       </Modal>
@@ -133,13 +178,20 @@ const Leads: React.FC<any> = ({ leads = [], onAddLead, onUpdateLead, onDeleteLea
         title={selectedLead?.name}
         subtitle={`Identifiant iV: ${selectedLead?.id?.substring(0,8).toUpperCase()}`}
       >
-        <div className="space-y-8">
-           <div className="p-8 bg-white/5 rounded-[2.5rem] border border-white/5 relative overflow-hidden">
+        <div className="space-y-8 text-left">
+           <div className="flex flex-wrap gap-3">
+              <div className={`px-4 py-2 rounded-2xl inline-flex items-center space-x-3 ${getStatusStyle(selectedLead?.status || 'new').bg} ${getStatusStyle(selectedLead?.status || 'new').color} border border-white/5`}>
+                 {React.createElement(getStatusStyle(selectedLead?.status || 'new').icon, { size: 16, strokeWidth: 3 })}
+                 <span className="text-[11px] font-black tracking-[0.2em] uppercase">{getStatusStyle(selectedLead?.status || 'new').label}</span>
+              </div>
+           </div>
+
+           <div className="p-8 bg-white/5 rounded-[2.5rem] border border-white/5 relative overflow-hidden text-left">
               <h4 className="label-iv mb-5 text-orange-400"><Info size={16}/> Brief Prospect</h4>
               <p className="text-sm md:text-base text-slate-300 leading-relaxed font-medium">{selectedLead?.description || "Aucun brief spécifique."}</p>
            </div>
            
-           <div className="grid grid-cols-2 gap-5">
+           <div className="grid grid-cols-2 gap-5 text-left">
               <div className="p-8 bg-white/5 rounded-3xl border border-white/5">
                  <p className="label-iv mb-2">Budget Min</p>
                  <p className="text-base md:text-xl font-black text-white">{selectedLead?.valueMin?.toLocaleString()} DZD</p>
@@ -153,16 +205,26 @@ const Leads: React.FC<any> = ({ leads = [], onAddLead, onUpdateLead, onDeleteLea
            <div className="flex flex-col sm:flex-row gap-4 pt-6">
               <button 
                 onClick={() => { if(confirm('Convertir ce lead en compte CRM ?')) onConvertToClient(selectedLead); }} 
-                className="flex-1 py-6 bg-white text-slate-950 font-black rounded-[2rem] shadow-xl active-scale uppercase text-[11px] tracking-tight hover:bg-orange-400 hover:text-white transition-all"
+                className="flex-1 py-6 bg-white text-slate-950 font-black rounded-[2rem] shadow-xl active-scale uppercase text-[11px] tracking-tight hover:bg-orange-400 hover:text-white transition-all flex items-center justify-center space-x-3"
               >
-                Convertir en Client
+                <UserCheck size={18}/>
+                <span>Convertir en Client</span>
               </button>
-              <button 
-                onClick={() => { if(confirm('Supprimer définitivement ce lead ?')) { onDeleteLead(selectedLead?.id); closeModals(); } }} 
-                className="w-full sm:w-20 h-auto py-5 glass text-slate-500 font-black rounded-[2rem] hover:text-urgent hover:bg-urgent/10 transition-all active-scale border border-white/5 flex items-center justify-center"
-              >
-                <Trash2 size={24}/>
-              </button>
+              
+              <div className="flex gap-4 w-full sm:w-auto">
+                <button 
+                  onClick={() => handleEditClick(selectedLead!)} 
+                  className="flex-1 sm:w-20 py-5 glass text-slate-500 font-black rounded-[2rem] hover:text-orange-400 hover:bg-orange-400/10 transition-all active-scale border border-white/5 flex items-center justify-center"
+                >
+                  <Edit2 size={24}/>
+                </button>
+                <button 
+                  onClick={() => { if(confirm('Supprimer définitivement ce lead ?')) { onDeleteLead(selectedLead?.id); closeModals(); } }} 
+                  className="flex-1 sm:w-20 py-5 glass text-slate-500 font-black rounded-[2rem] hover:text-urgent hover:bg-urgent/10 transition-all active-scale border border-white/5 flex items-center justify-center"
+                >
+                  <Trash2 size={24}/>
+                </button>
+              </div>
            </div>
         </div>
       </Modal>

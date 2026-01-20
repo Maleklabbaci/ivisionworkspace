@@ -1,5 +1,5 @@
 
--- iVISION AGENCY FULL SYSTEM SCHEMA v4.0
+-- iVISION AGENCY FULL SYSTEM SCHEMA v4.1
 -- Architecture synchronisée pour la gestion automatisée des membres et des permissions.
 
 -- Enable UUID extension if not present
@@ -115,6 +115,11 @@ BEGIN
             description TEXT,
             created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         );
+    ELSE
+        -- Migration check for 'source' column
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='source') THEN
+            ALTER TABLE public.leads ADD COLUMN source TEXT;
+        END IF;
     END IF;
 
     -- 8. TABLE: SALARIES (Finance RH)
@@ -189,5 +194,5 @@ CREATE PUBLICATION supabase_realtime FOR TABLE
     public.file_links;
 
 -- 13. COMMENTAIRE DE VERSION
-COMMENT ON SCHEMA public IS 'iVISION Core Schema v4.0 - Auto-Save & Security Enabled';
+COMMENT ON SCHEMA public IS 'iVISION Core Schema v4.1 - Defensive Column Check';
 NOTIFY pgrst, 'reload schema';
