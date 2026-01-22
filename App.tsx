@@ -105,6 +105,44 @@ const App: React.FC = () => {
     setNotifications(prev => [...prev, { id, title, message: displayMessage, type }]);
   }, []);
 
+  // REALTIME SUBSCRIPTION FOR MESSAGES & NOTIFICATIONS
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const channel = supabase
+      .channel('schema-db-changes')
+      .on('postgres_changes', { event: 'INSERT', table: 'messages' }, (payload) => {
+        const newMessage = mapFromDB('messages', payload.new);
+        
+        setMessages(prev => {
+          if (prev.find(m => m.id === newMessage.id)) return prev;
+          return [...prev, newMessage];
+        });
+
+        // Mentions Check for Notification
+        if (newMessage.userId !== currentUser.id) {
+          const mentionTag = `@${currentUser.name.toLowerCase().replace(/\s+/g, '')}`;
+          if (newMessage.content.toLowerCase().includes(mentionTag)) {
+            const sender = users.find(u => u.id === newMessage.userId);
+            addNotification(
+              "Mention iVISION",
+              `${sender?.name || 'Un membre'} vous a mentionné dans le chat.`,
+              "info"
+            );
+          }
+        }
+      })
+      .on('postgres_changes', { event: 'UPDATE', table: 'messages' }, (payload) => {
+        const updatedMessage = mapFromDB('messages', payload.new);
+        setMessages(prev => prev.map(m => m.id === updatedMessage.id ? updatedMessage : m));
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentUser, users, addNotification]);
+
   useEffect(() => {
     const handleOnline = () => setIsOffline(false);
     const handleOffline = () => {
@@ -227,13 +265,8 @@ const App: React.FC = () => {
     if (mentions) {
       for (const mention of mentions) {
         const namePart = mention.substring(1).toLowerCase();
-
-        const mentionedUser = users.find(u => u.name.toLowerCase().replace(/\s+/g, '') === namePart);
-        if (mentionedUser && mentionedUser.id !== currentUser.id) {
-          console.log(`Notification push envoyée à : ${mentionedUser.name}`);
-        }
-
         const mentionedTask = tasks.find(t => t.title.toLowerCase().replace(/\s+/g, '') === namePart);
+        
         if (mentionedTask) {
           let newStatus: TaskStatus | null = null;
           let isProblem = false;
@@ -253,16 +286,7 @@ const App: React.FC = () => {
             const { error } = await supabase.from('tasks').update({ status: newStatus }).eq('id', mentionedTask.id);
             if (!error) {
               setTasks(prev => prev.map(t => t.id === mentionedTask.id ? { ...t, status: newStatus! } : t));
-              
-              if (isProblem) {
-                const managers = users.filter(u => u.role === UserRole.ADMIN || u.role === UserRole.PROJECT_MANAGER);
-                managers.forEach(m => {
-                   if (m.id !== currentUser.id) console.log(`ALERTE : Problème signalé par ${currentUser.name} sur ${mentionedTask.title}`);
-                });
-                addNotification("Alerte Responsables", `Le blocage de "${mentionedTask.title}" a été signalé à l'administration.`, "urgent");
-              } else {
-                addNotification("Auto-Update", `Mission "${mentionedTask.title}" -> ${newStatus}`, "success");
-              }
+              if (isProblem) addNotification("Alerte Responsables", `Le blocage de "${mentionedTask.title}" a été signalé.`, "urgent");
             }
           }
         }
@@ -401,7 +425,7 @@ const AppContent: React.FC<any> = ({ currentUser, users, tasks, setTasks, client
   const handleLogout = async () => { await supabase.auth.signOut(); setCurrentUser(null); navigate('/'); };
 
   return (
-    <Layout currentUser={currentUser} onLogout={handleLogout}>
+    <Layout currentUser={currentUser} onLogout={handleLogout} messages={messages}>
       <Suspense fallback={<div className="h-full w-full flex items-center justify-center"><Loader2 className="animate-spin text-primary" size={40} /></div>}>
         <Routes>
           <Route path="/dashboard" element={<Dashboard currentUser={currentUser} tasks={tasks} clients={clients} onNavigate={(v:ViewState)=>navigate(`/${v}`)} />} />
@@ -412,9 +436,41 @@ const AppContent: React.FC<any> = ({ currentUser, users, tasks, setTasks, client
             const { error } = await supabase.from('tasks').update(up).in('id', ids);
             if (!error) setTasks(prev => prev.map(t => ids.includes(t.id) ? {...t, ...up} : t));
           }} onAddTask={async (t:any)=> { 
-            const newTask = {...t, id:generateUUID()}; 
-            const { error } = await supabase.from('tasks').insert({id:newTask.id, ...t});
-            if (!error) setTasks(prev => [mapFromDB('tasks', newTask), ...prev]);
+            const id = generateUUID();
+            const dbTask = {
+              id,
+              title: t.title,
+              description: t.description,
+              assignee_id: t.assigneeId,
+              client_id: t.clientId || null,
+              project_id: t.projectId || null,
+              due_date: t.dueDate,
+              status: t.status,
+              type: t.type,
+              priority: t.priority
+            };
+            const { error } = await supabase.from('tasks').insert(dbTask);
+            if (!error) setTasks(prev => [mapFromDB('tasks', { ...dbTask, created_at: new Date().toISOString() }), ...prev]);
+            else addNotification("Erreur", "Échec du déploiement de la mission.", "urgent");
+          }} onUpdateTask={async (t: any) => {
+            const dbUpdate = {
+              title: t.title,
+              description: t.description,
+              assignee_id: t.assigneeId,
+              client_id: t.clientId || null,
+              project_id: t.projectId || null,
+              due_date: t.dueDate,
+              status: t.status,
+              type: t.type,
+              priority: t.priority
+            };
+            const { error } = await supabase.from('tasks').update(dbUpdate).eq('id', t.id);
+            if (!error) {
+              setTasks(prev => prev.map(task => task.id === t.id ? { ...t } : task));
+              addNotification("Succès", "Mission mise à jour.", "success");
+            } else {
+              addNotification("Erreur", "Échec de la mise à jour.", "urgent");
+            }
           }} onDeleteTask={async (id:string)=> { 
             const { error } = await supabase.from('tasks').delete().eq('id',id); 
             if (!error) setTasks(prev => prev.filter(t=>t.id!==id));

@@ -26,7 +26,6 @@ const Chat: React.FC<any> = ({
   const [newChannelName, setNewChannelName] = useState('');
   const [isPrivate, setIsPrivate] = useState(false);
   
-  // States for Mentions
   const [mentionQuery, setMentionQuery] = useState('');
   const [showMentionDropdown, setShowMentionDropdown] = useState(false);
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
@@ -51,6 +50,23 @@ const Chat: React.FC<any> = ({
       return c.member_ids?.includes(currentUser.id);
     });
   }, [channels, currentUser, isAdmin]);
+
+  const channelsWithStatus = useMemo(() => {
+    return visibleChannels.map(c => {
+      const channelMessages = messages.filter(m => m.channelId === c.id);
+      const unread = channelMessages.filter(m => !m.readBy?.includes(currentUser.id));
+      
+      const mentionTag = `@${currentUser.name.toLowerCase().replace(/\s+/g, '')}`;
+      const hasMention = unread.some(m => m.content.toLowerCase().includes(mentionTag));
+
+      return {
+        ...c,
+        isUnread: unread.length > 0,
+        unreadCount: unread.length,
+        hasMention
+      };
+    });
+  }, [visibleChannels, messages, currentUser]);
 
   useEffect(() => {
     const unreadIds = activeMessages
@@ -209,15 +225,21 @@ const Chat: React.FC<any> = ({
             )}
         </div>
         <div className="flex-1 overflow-y-auto p-4 space-y-1.5 no-scrollbar">
-            {visibleChannels.map((channel: Channel) => (
+            {channelsWithStatus.map((channel: any) => (
                 <button 
                   key={channel.id} 
                   onClick={() => onChannelChange(channel.id)} 
-                  className={`w-full flex items-center px-4 py-3.5 rounded-2xl transition-all group relative ${currentChannelId === channel.id ? 'bg-white/10 text-white shadow-lg' : 'text-slate-500 hover:bg-white/5 hover:text-slate-300'}`}
+                  className={`w-full flex items-center justify-between px-4 py-3.5 rounded-2xl transition-all group relative ${currentChannelId === channel.id ? 'bg-white/10 text-white shadow-lg' : 'text-slate-500 hover:bg-white/5 hover:text-slate-300'}`}
                 >
-                  {currentChannelId === channel.id && <div className="absolute left-0 top-3 bottom-3 w-1 bg-sky-400 rounded-r-full shadow-[0_0_10px_rgba(14,165,233,0.5)]"></div>}
-                  {channel.is_private ? <Lock size={16} className="mr-3 text-sky-400" /> : <Hash size={18} className="mr-3 opacity-50 text-slate-400" />}
-                  <span className="text-sm font-bold truncate uppercase tracking-tight">{channel.name}</span>
+                  <div className="flex items-center truncate">
+                    {currentChannelId === channel.id && <div className="absolute left-0 top-3 bottom-3 w-1 bg-sky-400 rounded-r-full shadow-[0_0_10px_rgba(14,165,233,0.5)]"></div>}
+                    {channel.is_private ? <Lock size={16} className="mr-3 text-sky-400" /> : <Hash size={18} className="mr-3 opacity-50 text-slate-400" />}
+                    <span className={`text-sm font-bold truncate uppercase tracking-tight ${channel.isUnread ? 'text-white' : ''}`}>{channel.name}</span>
+                  </div>
+                  
+                  {channel.isUnread && (
+                    <div className={`flex items-center justify-center w-2 h-2 rounded-full ${channel.hasMention ? 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.6)]' : 'bg-sky-500 shadow-[0_0_8px_rgba(14,165,233,0.6)]'}`}></div>
+                  )}
                 </button>
             ))}
         </div>
@@ -284,7 +306,6 @@ const Chat: React.FC<any> = ({
 
         {currentChannelId && (
           <footer className="p-6 md:p-10 relative">
-            {/* Mentions Dropdown redesign */}
             {showMentionDropdown && mentionSuggestions.length > 0 && (
               <div className="absolute bottom-full left-10 right-10 mb-4 bg-slate-900/95 backdrop-blur-2xl border border-white/10 rounded-3xl shadow-2xl overflow-hidden z-50 animate-slide-up ring-1 ring-white/10">
                 <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
@@ -316,7 +337,6 @@ const Chat: React.FC<any> = ({
               </div>
             )}
 
-            {/* Status Selector redesign */}
             {showStatusDropdown && selectedTaskForStatus && (
               <div className="absolute bottom-full left-10 right-10 mb-4 bg-slate-900/95 backdrop-blur-2xl border border-white/10 rounded-3xl shadow-2xl overflow-hidden z-50 animate-slide-up">
                 <div className="p-6 border-b border-white/5 text-left bg-white/[0.02]">
@@ -348,7 +368,6 @@ const Chat: React.FC<any> = ({
         )}
       </div>
 
-      {/* MODALS */}
       <Modal isOpen={showAddChannel} onClose={() => setShowAddChannel(false)} title="Nouveau Canal">
         <div className="space-y-6 text-left p-2">
           <div>
