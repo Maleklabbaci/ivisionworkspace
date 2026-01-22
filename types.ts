@@ -145,6 +145,7 @@ export interface Message {
   timestamp: string;
   fullTimestamp: string;
   attachments?: string[];
+  readBy: string[];
 }
 
 export interface FileLink {

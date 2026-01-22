@@ -1,6 +1,6 @@
 
 import React, { useMemo } from 'react';
-import { TrendingUp, Target, Zap, Clock, ChevronRight, Activity, BarChart3 } from 'lucide-react';
+import { TrendingUp, Target, Zap, Clock, ChevronRight, Activity, BarChart3, ListChecks } from 'lucide-react';
 import { Task, User, ViewState, TaskStatus, UserRole, Client } from '../types';
 
 interface DashboardProps {
@@ -13,6 +13,7 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], clients = [], onNavigate }) => {
   const today = useMemo(() => new Date().toLocaleDateString('en-CA'), []);
   const isAdminOrManager = currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.PROJECT_MANAGER;
+  const canViewReports = isAdminOrManager || !!currentUser.permissions?.canViewReports;
   
   const relevantTasks = useMemo(() => {
     if (isAdminOrManager) return tasks;
@@ -51,12 +52,12 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], clients 
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 px-1">
         {visibleStats.map((s, i) => (
-          <div key={i} className="crystal-module p-6 md:p-8 rounded-[1.75rem] md:rounded-[2.5rem] flex flex-col justify-between h-36 md:h-48 group active-scale overflow-hidden relative">
+          <div key={i} className="crystal-module p-6 md:p-8 rounded-[1.75rem] md:rounded-[2.5rem] flex flex-col justify-between h-36 md:h-48 group active-scale overflow-hidden relative text-left">
             <div className={`absolute top-0 right-0 w-20 h-20 ${s.bg} blur-2xl opacity-40`}></div>
             <div className={`w-10 h-10 md:w-12 md:h-12 rounded-[1rem] md:rounded-2xl ${s.bg} flex items-center justify-center ${s.color} border border-white/5`}>
               <s.icon size={18} />
             </div>
-            <div className="relative z-10 text-left">
+            <div className="relative z-10">
               <p className="text-[9px] md:text-[11px] font-black text-slate-500 uppercase tracking-tight">{s.label}</p>
               <p className="text-2xl md:text-4xl font-black text-white mt-0.5 tracking-tighter leading-none">{s.val}</p>
             </div>
@@ -66,15 +67,15 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], clients 
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 md:gap-6 px-1">
         <div className="lg:col-span-2 space-y-5 md:space-y-6">
-          <div onClick={() => onNavigate('reports')} className="relative group cursor-pointer overflow-hidden rounded-[2rem] md:rounded-[3rem] border border-white/10 p-1 bg-gradient-to-br from-white/5 to-transparent active-scale transition-all shadow-lg">
+          <div onClick={() => canViewReports ? onNavigate('reports') : onNavigate('tasks')} className="relative group cursor-pointer overflow-hidden rounded-[2rem] md:rounded-[3rem] border border-white/10 p-1 bg-gradient-to-br from-white/5 to-transparent active-scale transition-all shadow-lg">
             <div className="bg-slate-950/40 backdrop-blur-3xl p-6 md:p-12 rounded-[1.9rem] md:rounded-[2.9rem] flex items-center justify-between">
               <div className="flex items-center space-x-5 md:space-x-8">
                 <div className="w-12 h-12 md:w-16 md:h-16 bg-white/5 rounded-2xl flex items-center justify-center text-sky-400 border border-white/10 shadow-inner">
-                  <BarChart3 size={24} />
+                  {canViewReports ? <BarChart3 size={24} /> : <ListChecks size={24} />}
                 </div>
                 <div className="text-left">
-                  <h3 className="text-lg md:text-2xl font-black text-white uppercase tracking-tight leading-none">Intelligence Data</h3>
-                  <p className="text-slate-500 text-[9px] mt-1.5 font-bold uppercase tracking-tight">Analyse globale des performances v5.0</p>
+                  <h3 className="text-lg md:text-2xl font-black text-white uppercase tracking-tight leading-none">{canViewReports ? "Intelligence Data" : "Missions Actives"}</h3>
+                  <p className="text-slate-500 text-[9px] mt-1.5 font-bold uppercase tracking-tight">{canViewReports ? "Analyse globale des performances v5.0" : "Suivi de votre production opérationnelle"}</p>
                 </div>
               </div>
               <ChevronRight className="text-slate-600 group-hover:text-white transition-all" size={20} />
@@ -109,7 +110,6 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], clients 
           </div>
         </div>
 
-        {/* Efficiency Card Optimisée */}
         <div className="crystal-module p-10 md:p-12 rounded-[2.5rem] md:rounded-[3.5rem] flex flex-col items-center justify-center text-center space-y-8 relative overflow-hidden group shadow-xl">
           <div className="absolute top-0 right-0 w-40 h-40 bg-sky-400/5 blur-[80px] rounded-full"></div>
           <div className="relative">
@@ -121,7 +121,12 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], clients 
             <h4 className="text-xl md:text-2xl font-black text-white uppercase tracking-tight leading-none">Rendement iV</h4>
             <p className="text-slate-600 text-[10px] mt-2 font-black uppercase tracking-tight">Efficacité calculée</p>
           </div>
-          <button onClick={() => onNavigate('reports')} className="w-full py-4 bg-white text-slate-950 rounded-2xl font-black text-[10px] uppercase active-scale shadow-2xl hover:bg-sky-400 hover:text-white transition-all tracking-widest">Audit Système</button>
+          <button 
+            onClick={() => canViewReports ? onNavigate('reports') : onNavigate('tasks')} 
+            className="w-full py-4 bg-white text-slate-950 rounded-2xl font-black text-[10px] uppercase active-scale shadow-2xl hover:bg-sky-400 hover:text-white transition-all tracking-widest"
+          >
+            {canViewReports ? "Audit Système" : "Vérifier Missions"}
+          </button>
         </div>
       </div>
     </div>

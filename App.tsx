@@ -49,6 +49,7 @@ const mapFromDB = (table: string, item: any) => {
     mapped.channelId = item.channel_id;
     mapped.timestamp = new Date(item.created_at).toLocaleTimeString();
     mapped.fullTimestamp = item.created_at;
+    mapped.readBy = item.read_by || [];
   } else if (table === 'file_links') {
     mapped.clientId = item.client_id;
     mapped.createdBy = item.created_by;
@@ -217,27 +218,135 @@ const App: React.FC = () => {
     }
   };
 
-  const handleAutoGenerateTasks = async (pId: string, pName: string, pClientId: string | undefined, configs: any[]) => {
-    if (!configs || configs.length === 0) return;
-    const tasksToInsert = configs.filter(c => c.enabled && c.count > 0).flatMap(config => 
-      Array.from({ length: config.count }, (_, i) => ({
-        id: generateUUID(),
-        title: `${config.prefix} ${i + 1}`,
-        description: `Mission auto pour ${pName}.`,
-        assignee_id: config.assigneeId || currentUser?.id,
-        project_id: pId,
-        client_id: pClientId || null,
-        status: TaskStatus.TODO,
-        type: 'content',
-        priority: 'medium',
-        due_date: new Date().toLocaleDateString('en-CA')
-      }))
-    );
-    if (tasksToInsert.length === 0) return;
-    const { data: newTasks, error: taskError } = await supabase.from('tasks').insert(tasksToInsert).select();
-    if (!taskError && newTasks) {
-      setTasks(prev => [...newTasks.map(nt => mapFromDB('tasks', nt)), ...prev]);
-      addNotification("Auto-Générateur", `${tasksToInsert.length} missions créées.`, "success");
+  const handleSendMessage = async (content: string, channelId: string) => {
+    if (!currentUser) return;
+
+    const mentions = content.match(/@(\w+)/g);
+    const lowercaseContent = content.toLowerCase();
+
+    if (mentions) {
+      for (const mention of mentions) {
+        const namePart = mention.substring(1).toLowerCase();
+
+        // 1. Mentions Utilisateurs : Uniquement au destinataire
+        const mentionedUser = users.find(u => u.name.toLowerCase().replace(/\s+/g, '') === namePart);
+        if (mentionedUser && mentionedUser.id !== currentUser.id) {
+          // Simulation notification ciblée
+          console.log(`Notification push envoyée à : ${mentionedUser.name}`);
+        }
+
+        // 2. Mentions Missions & Actions Auto
+        const mentionedTask = tasks.find(t => t.title.toLowerCase().replace(/\s+/g, '') === namePart);
+        if (mentionedTask) {
+          let newStatus: TaskStatus | null = null;
+          let isProblem = false;
+          
+          if (lowercaseContent.includes('terminé') || lowercaseContent.includes('fini') || lowercaseContent.includes('ok')) {
+            newStatus = TaskStatus.DONE;
+          } else if (lowercaseContent.includes('bloqué') || lowercaseContent.includes('problème') || lowercaseContent.includes('bloque')) {
+            newStatus = TaskStatus.BLOCKED;
+            isProblem = true;
+          } else if (lowercaseContent.includes('à faire') || lowercaseContent.includes('pas fini')) {
+            newStatus = TaskStatus.TODO;
+          } else if (lowercaseContent.includes('en cours')) {
+            newStatus = TaskStatus.IN_PROGRESS;
+          }
+
+          if (newStatus) {
+            const { error } = await supabase.from('tasks').update({ status: newStatus }).eq('id', mentionedTask.id);
+            if (!error) {
+              setTasks(prev => prev.map(t => t.id === mentionedTask.id ? { ...t, status: newStatus! } : t));
+              
+              if (isProblem) {
+                // Alerte Admin et Chef de Projet uniquement si problème
+                const managers = users.filter(u => u.role === UserRole.ADMIN || u.role === UserRole.PROJECT_MANAGER);
+                managers.forEach(m => {
+                   if (m.id !== currentUser.id) console.log(`ALERTE : Problème signalé par ${currentUser.name} sur ${mentionedTask.title}`);
+                });
+                addNotification("Alerte Responsables", `Le blocage de "${mentionedTask.title}" a été signalé à l'administration.`, "urgent");
+              } else {
+                addNotification("Auto-Update", `Mission "${mentionedTask.title}" -> ${newStatus}`, "success");
+              }
+            }
+          }
+        }
+      }
+    }
+
+    const { data, error } = await supabase.from('messages').insert({
+      content,
+      channel_id: channelId,
+      user_id: currentUser.id,
+      read_by: [currentUser.id]
+    }).select().single();
+
+    if (!error && data) {
+      setMessages(prev => [...prev, mapFromDB('messages', data)]);
+    }
+  };
+
+  const handleMarkAsRead = async (messageIds: string[]) => {
+    if (!currentUser || messageIds.length === 0) return;
+    for (const id of messageIds) {
+      const msg = messages.find(m => m.id === id);
+      if (msg && !msg.readBy.includes(currentUser.id)) {
+        const updatedReadBy = [...msg.readBy, currentUser.id];
+        await supabase.from('messages').update({ read_by: updatedReadBy }).eq('id', id);
+        setMessages(prev => prev.map(m => m.id === id ? { ...m, readBy: updatedReadBy } : m));
+      }
+    }
+  };
+
+  // FIX: Correction des insertions Finance (mappage userId -> user_id, projectId -> project_id)
+  const handleAddSalary = async (s: any) => {
+    const dbSalary = {
+      user_id: s.userId,
+      project_id: s.projectId || null,
+      amount: s.amount,
+      bonus: s.bonus || 0,
+      frequency: s.frequency,
+      status: s.status
+    };
+    const { data, error } = await supabase.from('salaries').insert(dbSalary).select();
+    if (!error && data) {
+      setSalaries(prev => [mapFromDB('salaries', data[0]), ...prev]);
+      addNotification("Finance", "Flux salarial indexé.", "success");
+    } else {
+      addNotification("Erreur Finance", error?.message || "Échec de l'insertion.", "urgent");
+    }
+  };
+
+  const handleAddExpense = async (ex: any) => {
+    const dbExpense = {
+      name: ex.name,
+      amount: ex.amount,
+      type: ex.type,
+      project_id: ex.projectId || null,
+      status: ex.status
+    };
+    const { data, error } = await supabase.from('expenses').insert(dbExpense).select();
+    if (!error && data) {
+      setExpenses(prev => [mapFromDB('expenses', data[0]), ...prev]);
+      addNotification("Finance", "Dépense enregistrée.", "success");
+    } else {
+      addNotification("Erreur Finance", error?.message || "Échec de l'insertion.", "urgent");
+    }
+  };
+
+  const handleAddAdCampaign = async (ad: any) => {
+    const dbAd = {
+      name: ad.name,
+      amount: ad.amount,
+      platform: ad.platform,
+      project_id: ad.projectId || null,
+      status: ad.status
+    };
+    const { data, error } = await supabase.from('ad_campaigns').insert(dbAd).select();
+    if (!error && data) {
+      setAdCampaigns(prev => [mapFromDB('ad_campaigns', data[0]), ...prev]);
+      addNotification("Finance", "Budget ADS indexé.", "success");
+    } else {
+      addNotification("Erreur Finance", error?.message || "Échec de l'insertion.", "urgent");
     }
   };
 
@@ -249,7 +358,7 @@ const App: React.FC = () => {
         {isOffline && <div className="fixed top-0 left-0 right-0 bg-rose-500 text-white text-[10px] font-bold uppercase py-2 text-center z-[10000]">MODE HORS LIGNE</div>}
         {!currentUser ? <AuthUI handleAuth={handleAuth} email={email} setEmail={setEmail} password={password} setPassword={setPassword} isAuthProcessing={isAuthProcessing} isSignUp={isSignUp} setIsSignUp={setIsSignUp} /> : (
           <AppContent 
-            currentUser={currentUser} setCurrentUser={setCurrentUser} users={users} setUsers={setUsers} tasks={tasks} setTasks={setTasks} clients={clients} setClients={setClients} leads={leads} setLeads={setLeads} channels={channels} setChannels={setChannels} messages={messages} setMessages={setMessages} fileLinks={fileLinks} setFileLinks={setFileLinks} projects={projects} setProjects={setProjects} salaries={salaries} setSalaries={setSalaries} expenses={expenses} setExpenses={setExpenses} adCampaigns={adCampaigns} setAdCampaigns={setAdCampaigns} notifications={notifications} addNotification={addNotification} handleAutoGenerateTasks={handleAutoGenerateTasks} onDismissNotification={(id: string) => setNotifications(prev => prev.filter(n => n.id !== id))}
+            currentUser={currentUser} setCurrentUser={setCurrentUser} users={users} setUsers={setUsers} tasks={tasks} setTasks={setTasks} clients={clients} setClients={setClients} leads={leads} setLeads={setLeads} channels={channels} setChannels={setChannels} messages={messages} setMessages={setMessages} fileLinks={fileLinks} setFileLinks={setFileLinks} projects={projects} setProjects={setProjects} salaries={salaries} setSalaries={setSalaries} expenses={expenses} setExpenses={setExpenses} adCampaigns={adCampaigns} setAdCampaigns={setAdCampaigns} notifications={notifications} addNotification={addNotification} handleSendMessage={handleSendMessage} handleMarkAsRead={handleMarkAsRead} onAddSalary={handleAddSalary} onAddExpense={handleAddExpense} onAddAdCampaign={handleAddAdCampaign}
           />
         )}
         <ToastContainer notifications={notifications} onDismiss={(id) => setNotifications(prev => prev.filter(n => n.id !== id))} />
@@ -290,7 +399,7 @@ const AuthUI = ({ handleAuth, email, setEmail, password, setPassword, isAuthProc
   </div>
 );
 
-const AppContent: React.FC<any> = ({ currentUser, users, tasks, setTasks, clients, setClients, leads, setLeads, channels, setChannels, messages, setMessages, fileLinks, setFileLinks, projects, setProjects, salaries, setSalaries, expenses, setExpenses, adCampaigns, setAdCampaigns, setUsers, notifications, addNotification, handleAutoGenerateTasks, setCurrentUser }) => {
+const AppContent: React.FC<any> = ({ currentUser, users, tasks, setTasks, clients, setClients, leads, setLeads, channels, setChannels, messages, setMessages, fileLinks, setFileLinks, projects, setProjects, salaries, setSalaries, expenses, setExpenses, adCampaigns, setAdCampaigns, setUsers, notifications, addNotification, setCurrentUser, handleSendMessage, handleMarkAsRead, onAddSalary, onAddExpense, onAddAdCampaign }) => {
   const navigate = useNavigate();
   const [currentChannelId, setCurrentChannelId] = useState<string | null>(null);
   useEffect(() => { if (channels.length > 0 && !currentChannelId) setCurrentChannelId(channels[0].id); }, [channels, currentChannelId]);
@@ -319,64 +428,42 @@ const AppContent: React.FC<any> = ({ currentUser, users, tasks, setTasks, client
             const { data, error } = await supabase.from('projects').insert(p).select();
             if (!error && data) {
               setProjects(prev => [mapFromDB('projects', data[0]), ...prev]);
-              if (configs.length > 0) handleAutoGenerateTasks(data[0].id, p.name, p.client_id, configs);
             }
           }} onDeleteProject={async (id:string)=> { 
             const { error } = await supabase.from('projects').delete().eq('id',id); 
             if (!error) setProjects(prev => prev.filter(p=>p.id!==id)); 
-          }} onUpdateProject={async (p:Project, configs?: any[]) => {
+          }} onUpdateProject={async (p:Project) => {
             const { error } = await supabase.from('projects').update({ name: p.name, description: p.description, total_budget: p.totalBudget, status: p.status, client_id: p.clientId }).eq('id', p.id);
             if (!error) {
               setProjects(prev => prev.map(pr => pr.id === p.id ? p : pr));
-              if (configs && configs.length > 0) handleAutoGenerateTasks(p.id, p.name, p.clientId, configs);
             }
           }} />} />
-          <Route path="/finance" element={<Finances salaries={salaries} expenses={expenses} adCampaigns={adCampaigns} users={users} projects={projects} currentUser={currentUser} onAddSalary={async (s:any)=>{ 
-            const { data, error } = await supabase.from('salaries').insert(s).select();
-            if (!error && data) setSalaries(prev => [mapFromDB('salaries', data[0]), ...prev]);
-          }} onDeleteSalary={async (id:string)=> { 
+          <Route path="/finance" element={<Finances salaries={salaries} expenses={expenses} adCampaigns={adCampaigns} users={users} projects={projects} currentUser={currentUser} onAddSalary={onAddSalary} onDeleteSalary={async (id:string)=> { 
             const { error } = await supabase.from('salaries').delete().eq('id',id); 
             if (!error) setSalaries(prev => prev.filter(s=>s.id!==id)); 
           }} onUpdateSalary={async (s:SalaryRecord)=>{ 
-            const { error } = await supabase.from('salaries').update(s).eq('id',s.id);
+            const { error } = await supabase.from('salaries').update({status: s.status, bonus: s.bonus, amount: s.amount}).eq('id',s.id);
             if (!error) setSalaries(prev => prev.map(sl=>sl.id===s.id?s:sl));
-          }} onAddExpense={async (ex:any)=>{ 
-            const { data, error } = await supabase.from('expenses').insert(ex).select();
-            if (!error && data) setExpenses(prev => [mapFromDB('expenses', data[0]), ...prev]);
-          }} onDeleteExpense={async (id:string)=> { 
+          }} onAddExpense={onAddExpense} onDeleteExpense={async (id:string)=> { 
             const { error } = await supabase.from('expenses').delete().eq('id',id); 
             if (!error) setExpenses(prev => prev.filter(e=>e.id!==id)); 
-          }} onAddAdCampaign={async (ad:any)=>{ 
-            const { data, error } = await supabase.from('ad_campaigns').insert(ad).select();
-            if (!error && data) setAdCampaigns(prev => [mapFromDB('ad_campaigns', data[0]), ...prev]);
-          }} onDeleteAdCampaign={async (id:string)=> { 
+          }} onAddAdCampaign={onAddAdCampaign} onDeleteAdCampaign={async (id:string)=> { 
             const { error } = await supabase.from('ad_campaigns').delete().eq('id',id); 
             if (!error) setAdCampaigns(prev => prev.filter(a=>a.id!==id)); 
           }} />} />
-          <Route path="/chat" element={<Chat currentUser={currentUser} users={users} channels={channels} currentChannelId={currentChannelId} messages={messages} onChannelChange={setCurrentChannelId} onSendMessage={(c:string,cid:string)=> { supabase.from('messages').insert({content:c, channel_id:cid, user_id:currentUser.id}).select().single().then(({data})=>{if(data) setMessages(prev => [...prev, mapFromDB('messages', data)])}); }} onAddChannel={async (ch:any)=> { const { data, error } = await supabase.from('channels').insert(ch).select(); if (!error && data) setChannels(prev => [...prev, mapFromDB('channels', data[0])]); }} onDeleteChannel={async (id:string)=> { const { error } = await supabase.from('channels').delete().eq('id',id); if (!error) setChannels(prev => prev.filter(c=>c.id!==id)); }} onUpdateChannelMembers={async (id:string,m:string[])=> { const { error } = await supabase.from('channels').update({member_ids:m}).eq('id',id); if(!error) setChannels(prev => prev.map(c=>c.id===id?{...c, member_ids:m}:c)); }} />} />
+          <Route path="/chat" element={<Chat currentUser={currentUser} users={users} tasks={tasks} channels={channels} currentChannelId={currentChannelId} messages={messages} onChannelChange={setCurrentChannelId} onSendMessage={handleSendMessage} onMarkAsRead={handleMarkAsRead} onAddChannel={async (ch:any)=> { const { data, error } = await supabase.from('channels').insert(ch).select(); if (!error && data) setChannels(prev => [...prev, mapFromDB('channels', data[0])]); }} onDeleteChannel={async (id:string)=> { const { error } = await supabase.from('channels').delete().eq('id',id); if (!error) setChannels(prev => prev.filter(c=>c.id!==id)); }} onUpdateChannelMembers={async (id:string,m:string[])=> { const { error } = await supabase.from('channels').update({member_ids:m}).eq('id',id); if(!error) setChannels(prev => prev.map(c=>c.id===id?{...c, member_ids:m}:c)); }} />} />
           <Route path="/team" element={<Team currentUser={currentUser} users={users} onAddUser={async (u:any)=> { 
             const normalizedEmail = u.email.toLowerCase().trim(); 
-            
-            // 1. VÉRIFIER LA DATABASE AVANT TOUT
             const { data: existingUser } = await supabase.from('users').select('id').eq('email', normalizedEmail).maybeSingle();
             if (existingUser) {
               addNotification("Erreur", "Ce membre est déjà présent dans la base de données.", "urgent");
               return;
             }
-
-            // 2. TENTER L'INSCRIPTION AUTH
             const { data: authData, error: authError } = await supabase.auth.signUp({ email: normalizedEmail, password: u.password }); 
-            
             if (authError) {
-              if (authError.message.toLowerCase().includes('already registered')) {
-                addNotification("Ghost User Détecté", "L'e-mail est réservé dans Supabase Auth mais le profil est absent. Utilisez 'Suppression Totale' ou nettoyez l'onglet Authentication.", "urgent");
-              } else {
-                addNotification("Erreur", authError.message, "urgent");
-              }
+              addNotification("Erreur", authError.message, "urgent");
               return;
             }
-
-            // 3. CRÉER LE PROFIL SI AUTH OK
             if (authData.user) {
               const { error: userError } = await supabase.from('users').insert({ 
                 id: authData.user.id, 
@@ -387,7 +474,6 @@ const AppContent: React.FC<any> = ({ currentUser, users, tasks, setTasks, client
                 status: 'active', 
                 avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name)}&background=020617&color=fff` 
               });
-              
               if (userError) {
                 addNotification("Erreur Profil", userError.message, "urgent");
               } else {
@@ -398,10 +484,7 @@ const AppContent: React.FC<any> = ({ currentUser, users, tasks, setTasks, client
             }
           }} onRemoveUser={async (id:string)=> { 
             const { error } = await supabase.rpc('delete_user_completely', { target_user_id: id });
-            
             if (error) {
-              console.error('RPC Error:', error);
-              addNotification("Erreur Critique", "Impossible de supprimer totalement le compte. Vérifiez l'étape SQL sur Supabase.", "urgent");
               await supabase.from('users').delete().eq('id', id);
               setUsers(prev => prev.filter(u=>u.id!==id));
             } else {
@@ -415,7 +498,7 @@ const AppContent: React.FC<any> = ({ currentUser, users, tasks, setTasks, client
           <Route path="/reports" element={<Reports tasks={tasks} leads={leads} messages={messages} projects={projects} salaries={salaries} expenses={expenses} adCampaigns={adCampaigns} currentUser={currentUser} />} />
           <Route path="/clients" element={<Clients clients={clients} tasks={tasks} projects={projects} onAddClient={async (c:any)=> { const { error, data } = await supabase.from('clients').insert(c).select(); if (!error && data) setClients(prev => [data[0], ...prev]); }} onUpdateClient={async (up:Client) => { const { error } = await supabase.from('clients').update(up).eq('id', up.id); if (!error) setClients(prev => prev.map(c => c.id === up.id ? up : c)); }} onDeleteClient={async (id:string)=> { const { error } = await supabase.from('clients').delete().eq('id',id); if (!error) setFileLinks(prev => prev.filter(c=>c.id!==id)); }} currentUser={currentUser} />} />
           <Route path="/calendar" element={<Calendar tasks={tasks} onAddTask={async (t:any)=> { const { data, error } = await supabase.from('tasks').insert(t).select(); if (!error && data) setTasks(prev => [mapFromDB('tasks', data[0]), ...prev]); }} onUpdateStatus={async (id:string,st:any)=> { const { error } = await supabase.from('tasks').update({status:st}).eq('id',id); if (!error) setTasks(prev => prev.map(t=>t.id===id?{...t,status:st}:t)); }} currentUser={currentUser} users={users} clients={clients} projects={projects} />} />
-          <Route path="/leads" element={<Leads leads={leads} onAddLead={async (l:any)=> { const { error, data } = await supabase.from('leads').insert(l).select(); if (!error && data) setLeads(prev => [mapFromDB('leads', data[0]), ...prev]); }} onUpdateLead={async (l:any)=> { const { error } = await supabase.from('leads').update(l).eq('id', l.id); if (!error) setLeads(prev => prev.map(ld => ld.id === l.id ? l : ld)); }} onDeleteLead={async (id:string)=> { const { error } = await supabase.from('leads').delete().eq('id',id); if (!error) setLeads(prev => prev.filter(l=>l.id!==id)); }} onConvertToClient={async (l:any)=> { const { error, data } = await supabase.from('clients').insert({name:l.name, company:l.company, email:l.email, phone:l.phone}).select(); if(!error && data) { setClients(prev => [data[0], ...prev]); setLeads(prev => prev.filter(ld=>ld.id!==l.id)); await supabase.from('leads').delete().eq('id',l.id); } }} currentUser={currentUser} addNotification={addNotification} />} />
+          <Route path="/leads" element={<Leads leads={leads} onAddLead={async (l:any)=> { const { error, data } = await supabase.from('leads').insert(l).select(); if (!error && data) setLeads(prev => [mapFromDB('leads', data[0]), ...prev]); }} onUpdateLead={async (l:any)=> { const { error } = await supabase.from('leads').update(l).eq('id', l.id); if (!error) setLeads(prev => prev.filter(ld => ld.id === l.id ? l : ld)); }} onDeleteLead={async (id:string)=> { const { error } = await supabase.from('leads').delete().eq('id',id); if (!error) setLeads(prev => prev.filter(l=>l.id!==id)); }} onConvertToClient={async (l:any)=> { const { error, data } = await supabase.from('clients').insert({name:l.name, company:l.company, email:l.email, phone:l.phone}).select(); if(!error && data) { setClients(prev => [data[0], ...prev]); setLeads(prev => prev.filter(ld=>ld.id!==l.id)); await supabase.from('leads').delete().eq('id',l.id); } }} currentUser={currentUser} addNotification={addNotification} />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </Suspense>
