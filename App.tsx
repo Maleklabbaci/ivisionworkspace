@@ -167,7 +167,6 @@ const App: React.FC = () => {
       const userId = authUser.id;
       let { data: userData, error: userError } = await supabase.from('users').select('*').eq('id', userId).maybeSingle();
       
-      // AUTO-RÉPARATION : Création du profil si manquant dans la table 'users'
       if (!userData && !userError) {
         const defaultProfile = {
           id: userId,
@@ -357,11 +356,27 @@ const AppContent: React.FC<any> = ({ currentUser, users, tasks, setTasks, client
           <Route path="/chat" element={<Chat currentUser={currentUser} users={users} channels={channels} currentChannelId={currentChannelId} messages={messages} onChannelChange={setCurrentChannelId} onSendMessage={(c:string,cid:string)=> { supabase.from('messages').insert({content:c, channel_id:cid, user_id:currentUser.id}).select().single().then(({data})=>{if(data) setMessages(prev => [...prev, mapFromDB('messages', data)])}); }} onAddChannel={async (ch:any)=> { const { data, error } = await supabase.from('channels').insert(ch).select(); if (!error && data) setChannels(prev => [...prev, mapFromDB('channels', data[0])]); }} onDeleteChannel={async (id:string)=> { const { error } = await supabase.from('channels').delete().eq('id',id); if (!error) setChannels(prev => prev.filter(c=>c.id!==id)); }} onUpdateChannelMembers={async (id:string,m:string[])=> { const { error } = await supabase.from('channels').update({member_ids:m}).eq('id',id); if(!error) setChannels(prev => prev.map(c=>c.id===id?{...c, member_ids:m}:c)); }} />} />
           <Route path="/team" element={<Team currentUser={currentUser} users={users} onAddUser={async (u:any)=> { 
             const normalizedEmail = u.email.toLowerCase().trim(); 
-            const { data: authData, error: authError } = await supabase.auth.signUp({ email: normalizedEmail, password: u.password }); 
-            if (authError) {
-              addNotification("Erreur", authError.message, "urgent");
+            
+            // 1. VÉRIFIER LA DATABASE AVANT TOUT
+            const { data: existingUser } = await supabase.from('users').select('id').eq('email', normalizedEmail).maybeSingle();
+            if (existingUser) {
+              addNotification("Erreur", "Ce membre est déjà présent dans la base de données.", "urgent");
               return;
             }
+
+            // 2. TENTER L'INSCRIPTION AUTH
+            const { data: authData, error: authError } = await supabase.auth.signUp({ email: normalizedEmail, password: u.password }); 
+            
+            if (authError) {
+              if (authError.message.toLowerCase().includes('already registered')) {
+                addNotification("Ghost User Détecté", "L'e-mail est réservé dans Supabase Auth mais le profil est absent. Utilisez 'Suppression Totale' ou nettoyez l'onglet Authentication.", "urgent");
+              } else {
+                addNotification("Erreur", authError.message, "urgent");
+              }
+              return;
+            }
+
+            // 3. CRÉER LE PROFIL SI AUTH OK
             if (authData.user) {
               const { error: userError } = await supabase.from('users').insert({ 
                 id: authData.user.id, 
@@ -372,18 +387,33 @@ const AppContent: React.FC<any> = ({ currentUser, users, tasks, setTasks, client
                 status: 'active', 
                 avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name)}&background=020617&color=fff` 
               });
-              if (userError) addNotification("Erreur Profil", userError.message, "urgent");
-              else {
+              
+              if (userError) {
+                addNotification("Erreur Profil", userError.message, "urgent");
+              } else {
                 addNotification("Succès", `Accès iVISION déployé pour ${u.name}.`, "success");
                 const u_list = await safeFetch(supabase.from('users').select('*'), []);
                 setUsers(u_list.map(i => mapFromDB('users', i)));
               }
             }
-          }} onRemoveUser={async (id:string)=> { const { error } = await supabase.from('users').delete().eq('id', id); if (!error) setUsers(prev => prev.filter(u=>u.id!==id)); }} onUpdateMember={async (id:string, up:any) => { const { error } = await supabase.from('users').update({ name: up.name, role: up.role, permissions: up.permissions }).eq('id',id); if (!error) setUsers(prev => prev.map(u => u.id === id ? {...u, ...up} : u)); }} />} />
+          }} onRemoveUser={async (id:string)=> { 
+            const { error } = await supabase.rpc('delete_user_completely', { target_user_id: id });
+            
+            if (error) {
+              console.error('RPC Error:', error);
+              addNotification("Erreur Critique", "Impossible de supprimer totalement le compte. Vérifiez l'étape SQL sur Supabase.", "urgent");
+              await supabase.from('users').delete().eq('id', id);
+              setUsers(prev => prev.filter(u=>u.id!==id));
+            } else {
+              setUsers(prev => prev.filter(u=>u.id!==id)); 
+              addNotification("Système", "Accès révoqué et e-mail libéré dans Supabase Auth.", "success");
+              if (id === currentUser.id) handleLogout();
+            }
+          }} onUpdateMember={async (id:string, up:any) => { const { error } = await supabase.from('users').update({ name: up.name, role: up.role, permissions: up.permissions }).eq('id',id); if (!error) setUsers(prev => prev.map(u => u.id === id ? {...u, ...up} : u)); }} />} />
           <Route path="/files" element={<Files fileLinks={fileLinks} onAddFileLink={(n:string,u:string)=> { supabase.from('file_links').insert({name:n, url:u, created_by:currentUser.id}).select().single().then(({data})=>{if(data) setFileLinks(prev => [mapFromDB('file_links',data),...prev])}); }} onDeleteFileLink={async (id:string)=> { const { error } = await supabase.from('file_links').delete().eq('id',id); if (!error) setFileLinks(prev => prev.filter(f=>f.id!==id)); }} currentUser={currentUser} />} />
           <Route path="/settings" element={<Settings currentUser={currentUser} onUpdateProfile={async (up:any)=>{ const { error } = await supabase.from('users').update(up).eq('id', currentUser.id); if (!error) setCurrentUser({...currentUser, ...up}); }} />} />
           <Route path="/reports" element={<Reports tasks={tasks} leads={leads} messages={messages} projects={projects} salaries={salaries} expenses={expenses} adCampaigns={adCampaigns} currentUser={currentUser} />} />
-          <Route path="/clients" element={<Clients clients={clients} tasks={tasks} projects={projects} onAddClient={async (c:any)=> { const { error, data } = await supabase.from('clients').insert(c).select(); if (!error && data) setClients(prev => [data[0], ...prev]); }} onUpdateClient={async (up:Client) => { const { error } = await supabase.from('clients').update(up).eq('id', up.id); if (!error) setClients(prev => prev.map(c => c.id === up.id ? up : c)); }} onDeleteClient={async (id:string)=> { const { error } = await supabase.from('clients').delete().eq('id',id); if (!error) setClients(prev => prev.filter(c=>c.id!==id)); }} currentUser={currentUser} />} />
+          <Route path="/clients" element={<Clients clients={clients} tasks={tasks} projects={projects} onAddClient={async (c:any)=> { const { error, data } = await supabase.from('clients').insert(c).select(); if (!error && data) setClients(prev => [data[0], ...prev]); }} onUpdateClient={async (up:Client) => { const { error } = await supabase.from('clients').update(up).eq('id', up.id); if (!error) setClients(prev => prev.map(c => c.id === up.id ? up : c)); }} onDeleteClient={async (id:string)=> { const { error } = await supabase.from('clients').delete().eq('id',id); if (!error) setFileLinks(prev => prev.filter(c=>c.id!==id)); }} currentUser={currentUser} />} />
           <Route path="/calendar" element={<Calendar tasks={tasks} onAddTask={async (t:any)=> { const { data, error } = await supabase.from('tasks').insert(t).select(); if (!error && data) setTasks(prev => [mapFromDB('tasks', data[0]), ...prev]); }} onUpdateStatus={async (id:string,st:any)=> { const { error } = await supabase.from('tasks').update({status:st}).eq('id',id); if (!error) setTasks(prev => prev.map(t=>t.id===id?{...t,status:st}:t)); }} currentUser={currentUser} users={users} clients={clients} projects={projects} />} />
           <Route path="/leads" element={<Leads leads={leads} onAddLead={async (l:any)=> { const { error, data } = await supabase.from('leads').insert(l).select(); if (!error && data) setLeads(prev => [mapFromDB('leads', data[0]), ...prev]); }} onUpdateLead={async (l:any)=> { const { error } = await supabase.from('leads').update(l).eq('id', l.id); if (!error) setLeads(prev => prev.map(ld => ld.id === l.id ? l : ld)); }} onDeleteLead={async (id:string)=> { const { error } = await supabase.from('leads').delete().eq('id',id); if (!error) setLeads(prev => prev.filter(l=>l.id!==id)); }} onConvertToClient={async (l:any)=> { const { error, data } = await supabase.from('clients').insert({name:l.name, company:l.company, email:l.email, phone:l.phone}).select(); if(!error && data) { setClients(prev => [data[0], ...prev]); setLeads(prev => prev.filter(ld=>ld.id!==l.id)); await supabase.from('leads').delete().eq('id',l.id); } }} currentUser={currentUser} addNotification={addNotification} />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />

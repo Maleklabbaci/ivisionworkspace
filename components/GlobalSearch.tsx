@@ -2,6 +2,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Search, X, CheckCircle, MessageSquare, FileText, ArrowRight, Hash, Command } from 'lucide-react';
 import { Task, Message, User, Channel, FileLink } from '../types';
+// Fix: Ensure standard react-router-dom exports are properly used
 import { useNavigate } from 'react-router-dom';
 
 interface GlobalSearchProps {

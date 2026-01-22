@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { LogOut, Plus, X, LayoutGrid as LayoutIcon, CheckSquare as TaskIcon, MessageSquare as ChatIcon, Briefcase as ClientIcon, Target as LeadIcon, FileText as FileIcon, Calendar as CalIcon, BarChart3 as ReportIcon, Users as TeamIcon, Settings as SettingsIcon, Layers, Wallet } from 'lucide-react';
 import { User, UserPermissions, UserRole } from '../types';
+// Fix: Ensure react-router-dom exports are properly resolved
 import { useLocation, useNavigate } from 'react-router-dom';
 
 interface LayoutProps {
@@ -38,7 +39,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, onLogout }) => {
     { id: 'dashboard', label: 'Dashboard', icon: LayoutIcon, color: 'text-sky-400', bg: 'bg-sky-400', allowed: true },
     { id: 'projects', label: 'Projets', icon: Layers, color: 'text-emerald-400', bg: 'bg-emerald-400', allowed: hasAccess('canManageProjects') },
     { id: 'tasks', label: 'Missions', icon: TaskIcon, color: 'text-violet-400', bg: 'bg-violet-400', allowed: true },
-    { id: 'chat', label: 'Chat', icon: ChatIcon, color: 'text-indigo-400', bg: 'bg-indigo-400', allowed: hasAccess('canManageChat') },
+    { id: 'chat', label: 'Chat', icon: ChatIcon, color: 'text-indigo-400', bg: 'bg-indigo-Ind-400', allowed: hasAccess('canManageChat') },
     { id: 'clients', label: 'CRM', icon: ClientIcon, color: 'text-emerald-400', bg: 'bg-emerald-400', allowed: hasAccess('canManageClients') },
     { id: 'leads', label: 'Leads', icon: LeadIcon, color: 'text-orange-400', bg: 'bg-orange-400', allowed: hasAccess('canManageLeads') },
     { id: 'finance', label: 'Finance', icon: Wallet, color: 'text-amber-400', bg: 'bg-amber-400', allowed: hasAccess('canManageFinances') },

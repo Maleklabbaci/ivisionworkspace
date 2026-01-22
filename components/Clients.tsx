@@ -2,6 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { Client, Task, User, UserRole, Project, TaskStatus } from '../types';
 import { Plus, Search, Mail, Phone, MapPin, X, Briefcase, ChevronRight, Trash2, Edit2, Globe, Activity, Info, Lock, Layers, CheckCircle2, Clock, ListChecks, ArrowUpRight, Save } from 'lucide-react';
+// Fix: Ensure standard react-router-dom exports are properly used
 import { useNavigate } from 'react-router-dom';
 import Modal from './Modal';
 
