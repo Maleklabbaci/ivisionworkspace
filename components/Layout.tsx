@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { LogOut, Plus, X, LayoutGrid as LayoutIcon, CheckSquare as TaskIcon, MessageSquare as ChatIcon, Briefcase as ClientIcon, Target as LeadIcon, FileText as FileIcon, Calendar as CalIcon, BarChart3 as ReportIcon, Users as TeamIcon, Settings as SettingsIcon, Layers, Wallet } from 'lucide-react';
-import { User, UserPermissions, UserRole, Message } from '../types';
+import { User, UserPermissions, UserRole, Message, Channel } from '../types';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 interface LayoutProps {
@@ -28,8 +28,9 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, onLogout, messag
     return true;
   };
 
+  // Calcul du nombre total de messages non lus
   const unreadCount = useMemo(() => {
-    return messages.filter(m => !m.readBy?.includes(currentUser.id)).length;
+    return messages.filter(m => m.userId !== currentUser.id && !m.readBy?.includes(currentUser.id)).length;
   }, [messages, currentUser.id]);
 
   const navItems = [
@@ -48,6 +49,15 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, onLogout, messag
 
   const visibleNavItems = navItems.filter(item => item.allowed);
 
+  const renderBadge = (count: number) => {
+    if (!count || count <= 0) return null;
+    return (
+      <div className="min-w-[18px] h-4.5 px-1 bg-rose-500 text-white text-[9px] font-black rounded-full flex items-center justify-center animate-pulse border border-white/20 shadow-lg shadow-rose-500/20">
+        {count > 99 ? '99+' : count}
+      </div>
+    );
+  };
+
   return (
     <div className="flex h-screen w-full overflow-hidden bg-slate-950">
       {/* Sidebar PC */}
@@ -63,11 +73,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, onLogout, messag
                 <item.icon size={18} className={currentPath === item.id ? 'text-white' : item.color} />
                 <span className="text-[11px] font-bold uppercase tracking-tight">{item.label}</span>
               </div>
-              {item.badge && item.badge > 0 && (
-                <div className="w-4 h-4 bg-rose-500 text-white text-[9px] font-black rounded-full flex items-center justify-center animate-pulse border border-white/20">
-                  {item.badge > 9 ? '+' : item.badge}
-                </div>
-              )}
+              {item.badge !== undefined && renderBadge(item.badge)}
             </button>
           ))}
         </nav>
@@ -108,9 +114,9 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, onLogout, messag
               className={`relative flex items-center justify-center w-11 h-11 rounded-[1.25rem] transition-all active-scale ${currentPath === item.id ? `${item.bg} text-white shadow-xl` : 'text-slate-500'}`}
             >
               <item.icon size={20} strokeWidth={2.5} />
-              {item.badge && item.badge > 0 && (
-                <div className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 text-white text-[9px] font-black rounded-full flex items-center justify-center border border-white/20">
-                  {item.badge}
+              {item.badge !== undefined && item.badge > 0 && (
+                <div className="absolute -top-1 -right-1 min-w-[18px] h-4.5 px-1 bg-rose-500 text-white text-[9px] font-black rounded-full flex items-center justify-center border border-white/20 animate-pulse">
+                  {item.badge > 99 ? '99+' : item.badge}
                 </div>
               )}
             </button>
@@ -145,9 +151,9 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, onLogout, messag
                     <item.icon size={18} />
                   </div>
                   <span className="text-[9px] font-black text-slate-400 uppercase text-center tracking-tight leading-none">{item.label}</span>
-                  {item.badge && item.badge > 0 && (
-                    <div className="absolute top-2 right-2 w-4 h-4 bg-rose-500 text-white text-[8px] font-black rounded-full flex items-center justify-center border border-white/20">
-                      {item.badge}
+                  {item.badge !== undefined && item.badge > 0 && (
+                    <div className="absolute top-2 right-2 min-w-[16px] h-4 bg-rose-500 text-white text-[8px] font-black rounded-full flex items-center justify-center border border-white/20">
+                      {item.badge > 99 ? '99+' : item.badge}
                     </div>
                   )}
                 </button>
