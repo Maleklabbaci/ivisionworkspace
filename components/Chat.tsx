@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Send, Paperclip, Hash, Lock, Plus, X, Search, CheckCheck, Users, UserPlus, Trash2, Globe, AlertTriangle, Check, Clock, ShieldAlert, Layers, ChevronRight, ArrowLeft } from 'lucide-react';
+import { Send, Paperclip, Hash, Lock, Plus, X, Search, CheckCheck, Users, UserPlus, Trash2, Globe, AlertTriangle, Check, Clock, ShieldAlert, Layers, ChevronRight, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { Message, User, Channel, UserRole, Task, TaskStatus, Project } from '../types';
 import Modal from './Modal';
 
@@ -88,6 +88,10 @@ const Chat: React.FC<any> = ({
         .map(t => ({ id: t.id, label: t.title, type: 'task' as const, task: t }));
     }
 
+    const taskSuggestions = tasks
+      .filter((t: Task) => t.title.toLowerCase().includes(q) && t.status !== TaskStatus.DONE)
+      .map(t => ({ id: t.id, label: t.title, type: 'task' as const, task: t }));
+
     const projectSuggestions = projects
       .filter((p: Project) => p.name.toLowerCase().includes(q))
       .map(p => ({ id: p.id, label: p.name, type: 'project' as const, project: p }));
@@ -96,7 +100,7 @@ const Chat: React.FC<any> = ({
       .filter((u: User) => u.name.toLowerCase().replace(/\s+/g, '').includes(q))
       .map(u => ({ id: u.id, label: u.name, type: 'user' as const }));
 
-    return [...projectSuggestions, ...userSuggestions].slice(0, 8);
+    return [...taskSuggestions, ...projectSuggestions, ...userSuggestions].slice(0, 10);
   }, [mentionQuery, showMentionDropdown, drillDownProject, tasks, projects, users]);
 
   useEffect(() => {
@@ -153,9 +157,7 @@ const Chat: React.FC<any> = ({
       setSelectedMentionIndex(0);
       setMentionQuery('');
     } else if (suggestion.type === 'task') {
-      setSelectedTaskForStatus(suggestion.task);
-      setShowStatusDropdown(true);
-      setShowMentionDropdown(false);
+      insertMention(suggestion.label);
     } else {
       insertMention(suggestion.label);
     }
@@ -193,13 +195,18 @@ const Chat: React.FC<any> = ({
     return parts.map((part, i) => {
       if (part.startsWith('@')) {
         const namePart = part.substring(1).toLowerCase();
-        const isUserMention = users.some((u: User) => u.name.toLowerCase().replace(/\s+/g, '') === namePart);
-        const isTaskMention = tasks.some((t: Task) => t.title.toLowerCase().replace(/\s+/g, '') === namePart);
+        const user = users.find((u: User) => u.name.toLowerCase().replace(/\s+/g, '') === namePart);
+        const task = tasks.find((t: Task) => t.title.toLowerCase().replace(/\s+/g, '') === namePart);
 
-        if (isUserMention) {
-          return <span key={i} className="text-sky-400 font-bold hover:underline cursor-pointer">@{part.substring(1)}</span>;
-        } else if (isTaskMention) {
-          return <span key={i} className="text-emerald-400 font-bold hover:underline cursor-pointer">@{part.substring(1)}</span>;
+        if (user) {
+          return <span key={i} className="text-sky-400 font-bold hover:underline cursor-pointer">@{user.name}</span>;
+        } else if (task) {
+          return (
+            <span key={i} className="inline-flex items-center space-x-1.5 px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-emerald-400 font-bold hover:bg-emerald-500/20 transition-all cursor-pointer">
+              <CheckCircle2 size={14} strokeWidth={2.5} />
+              <span className="text-[12px] uppercase tracking-tight">@{task.title}</span>
+            </span>
+          );
         }
       }
       return part;
@@ -237,8 +244,10 @@ const Chat: React.FC<any> = ({
                     <span className={`text-sm font-bold truncate uppercase tracking-tight ${channel.isUnread ? 'text-white' : ''}`}>{channel.name}</span>
                   </div>
                   
-                  {channel.isUnread && (
-                    <div className={`flex items-center justify-center w-2 h-2 rounded-full ${channel.hasMention ? 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.6)]' : 'bg-sky-500 shadow-[0_0_8px_rgba(14,165,233,0.6)]'}`}></div>
+                  {channel.unreadCount > 0 && (
+                    <div className={`flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[9px] font-black text-white shadow-lg ${channel.hasMention ? 'bg-rose-500 shadow-rose-500/20' : 'bg-sky-500 shadow-sky-500/20'}`}>
+                      {channel.unreadCount}
+                    </div>
                   )}
                 </button>
             ))}
@@ -292,7 +301,7 @@ const Chat: React.FC<any> = ({
                             </div>
                           )}
                           <div className={`relative ${!isSameAuthor ? 'ml-0' : 'ml-0'}`}>
-                              <div className={`inline-block max-w-[85%] px-5 py-3.5 rounded-[1.25rem] text-[14px] leading-relaxed font-medium transition-all ${msg.userId === currentUser.id ? 'bg-sky-500/10 text-sky-100 border border-sky-400/20 shadow-[0_0_20px_rgba(14,165,233,0.05)]' : 'bg-white/[0.03] text-slate-200 border border-white/5'}`}>
+                              <div className={`inline-block max-w-[85%] px-5 py-3.5 rounded-[1.25rem] text-[14px] font-medium transition-all ${msg.userId === currentUser.id ? 'bg-sky-500/10 text-sky-100 border border-sky-400/20 shadow-[0_0_20px_rgba(14,165,233,0.05)]' : 'bg-white/[0.03] text-slate-200 border border-white/5'}`}>
                                 {renderContentWithMentions(msg.content)}
                               </div>
                               {readByText && <div className="text-[9px] text-slate-700 font-bold uppercase mt-1.5 ml-2 tracking-tight opacity-0 group-hover:opacity-100 transition-opacity">{readByText}</div>}
@@ -323,11 +332,11 @@ const Chat: React.FC<any> = ({
                     <button key={suggestion.id} onClick={() => handleMentionSelect(suggestion)} onMouseEnter={() => setSelectedMentionIndex(index)} className={`w-full flex items-center justify-between px-6 py-3.5 text-left transition-all ${index === selectedMentionIndex ? 'bg-sky-500/10' : 'hover:bg-white/5'}`}>
                       <div className="flex items-center space-x-4">
                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${suggestion.type === 'task' ? 'bg-rose-500/10 text-rose-400' : suggestion.type === 'project' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-sky-500/10 text-sky-400'}`}>
-                          {suggestion.type === 'task' ? <Check size={18} /> : suggestion.type === 'project' ? <Layers size={18}/> : <Users size={18} />}
+                          {suggestion.type === 'task' ? <CheckCircle2 size={18} /> : suggestion.type === 'project' ? <Layers size={18}/> : <Users size={18} />}
                         </div>
                         <div className="truncate">
                           <p className="text-sm font-black text-white truncate uppercase tracking-tight leading-none">{suggestion.label}</p>
-                          <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-2">{suggestion.type === 'task' ? 'Flux Opérationnel' : suggestion.type === 'project' ? 'Architecture Projet' : 'Membre Agence'}</p>
+                          <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-2">{suggestion.type === 'task' ? 'Mission Opérationnelle' : suggestion.type === 'project' ? 'Architecture Projet' : 'Membre Agence'}</p>
                         </div>
                       </div>
                       {suggestion.type === 'project' && <ChevronRight size={16} className="text-slate-600" />}

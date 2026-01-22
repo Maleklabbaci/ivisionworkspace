@@ -33,6 +33,7 @@ export interface User {
   role: UserRole;
   phoneNumber?: string;
   notificationPref: 'push' | 'all';
+  muteChatNotifications?: boolean; // Nouvelle préférence
   status: 'active' | 'pending';
   permissions?: UserPermissions;
   lastSeen?: string;

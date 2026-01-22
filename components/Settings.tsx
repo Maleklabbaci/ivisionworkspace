@@ -1,7 +1,7 @@
 
 import React, { useState, useRef } from 'react';
 import { User } from '../types';
-import { Camera, Mail, Phone, Loader2, Check, User as UserIcon } from 'lucide-react';
+import { Camera, Mail, Phone, Loader2, Check, User as UserIcon, BellOff, BellRing } from 'lucide-react';
 import { supabase } from '../services/supabaseClient';
 
 interface SettingsProps {
@@ -14,6 +14,7 @@ const Settings: React.FC<SettingsProps> = ({ currentUser, onUpdateProfile }) => 
     name: currentUser.name,
     email: currentUser.email,
     phoneNumber: currentUser.phoneNumber || '',
+    muteChatNotifications: !!currentUser.muteChatNotifications,
   });
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -24,7 +25,6 @@ const Settings: React.FC<SettingsProps> = ({ currentUser, onUpdateProfile }) => 
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validation basique
     if (!file.type.startsWith('image/')) {
       alert("Veuillez sélectionner une image valide.");
       return;
@@ -36,19 +36,16 @@ const Settings: React.FC<SettingsProps> = ({ currentUser, onUpdateProfile }) => 
       const fileName = `${currentUser.id}/${Math.random()}.${fileExt}`;
       const filePath = `${fileName}`;
 
-      // 1. Upload vers Supabase Storage
       const { error: uploadError } = await supabase.storage
         .from('avatars')
         .upload(filePath, file);
 
       if (uploadError) throw uploadError;
 
-      // 2. Récupérer l'URL publique
       const { data: { publicUrl } } = supabase.storage
         .from('avatars')
         .getPublicUrl(filePath);
 
-      // 3. Mettre à jour le profil via la fonction parente
       await onUpdateProfile({ avatar: publicUrl });
       
       setSaved(true);
@@ -127,7 +124,6 @@ const Settings: React.FC<SettingsProps> = ({ currentUser, onUpdateProfile }) => 
         <div className="space-y-2">
           <label className="label-iv"><Mail size={14} className="text-sky-400" /> Email iVISION</label>
           <input disabled className="input-iv opacity-50 cursor-not-allowed" value={formData.email} />
-          <p className="text-[9px] text-slate-500 font-bold uppercase mt-1 ml-2 tracking-widest">L'email ne peut être modifié que par un administrateur.</p>
         </div>
 
         <div className="space-y-2">
@@ -135,19 +131,31 @@ const Settings: React.FC<SettingsProps> = ({ currentUser, onUpdateProfile }) => 
           <input className="input-iv" placeholder="+213..." value={formData.phoneNumber} onChange={e => setFormData({...formData, phoneNumber: e.target.value})} />
         </div>
 
+        {/* Mute Chat Toggle */}
+        <div className="pt-4">
+           <div className="flex items-center justify-between p-6 bg-white/5 rounded-3xl border border-white/5 cursor-pointer hover:bg-white/10 transition-all group" onClick={() => setFormData({...formData, muteChatNotifications: !formData.muteChatNotifications})}>
+              <div className="flex items-center space-x-4">
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-colors ${formData.muteChatNotifications ? 'bg-rose-500/10 text-rose-500' : 'bg-emerald-500/10 text-emerald-500'}`}>
+                  {formData.muteChatNotifications ? <BellOff size={24}/> : <BellRing size={24}/>}
+                </div>
+                <div>
+                   <p className="text-[12px] font-black text-white uppercase leading-none">Notifications de Chat</p>
+                   <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-1.5">{formData.muteChatNotifications ? 'Seulement les @mentions' : 'Tous les messages iV'}</p>
+                </div>
+              </div>
+              <div className={`w-12 h-6 rounded-full p-1 transition-colors ${formData.muteChatNotifications ? 'bg-rose-500' : 'bg-emerald-500'}`}>
+                <div className={`w-4 h-4 bg-white rounded-full transition-transform duration-300 ${formData.muteChatNotifications ? 'translate-x-6' : 'translate-x-0'}`} />
+              </div>
+           </div>
+        </div>
+
         <button 
           disabled={isSaving || isUploading} 
           className={`w-full py-6 md:py-8 rounded-[2rem] font-black uppercase text-[11px] tracking-[0.3em] flex items-center justify-center space-x-3 transition-all active-scale shadow-2xl ${saved ? 'bg-emerald-500 text-white shadow-emerald-500/20' : 'bg-white text-slate-950 hover:bg-sky-400 hover:text-white shadow-sky-500/10'}`}
         >
-          {isSaving ? <Loader2 className="animate-spin" size={20} /> : saved ? <><Check size={20} strokeWidth={3} /> <span>Mise à jour effectuée</span></> : "Enregistrer le profil"}
+          {isSaving ? <Loader2 className="animate-spin" size={20} /> : saved ? <><Check size={20} strokeWidth={3} /> <span>Sauvegardé</span></> : "Sauvegarder les préférences"}
         </button>
       </form>
-
-      <div className="p-8 md:p-10 bg-rose-500/5 rounded-[2.5rem] border border-rose-500/10 text-left">
-        <h3 className="text-rose-400 font-black text-[10px] uppercase tracking-widest mb-4">Zone de Sécurité</h3>
-        <p className="text-slate-500 text-[11px] font-medium leading-relaxed mb-6 uppercase">La modification de vos accès critiques nécessite une validation du protocole par l'administrateur iVISION.</p>
-        <button disabled className="px-6 py-3 bg-rose-500/10 text-rose-500 text-[9px] font-black uppercase rounded-xl border border-rose-500/20 opacity-50">Demander un nouveau code</button>
-      </div>
     </div>
   );
 };
