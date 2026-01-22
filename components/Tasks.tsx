@@ -205,7 +205,8 @@ const Tasks = ({ tasks = [], users, clients = [], projects = [], currentUser, on
 
         {/* Client Groups Design */}
         <div className="space-y-24 px-4">
-          {Object.entries(groupedTasks).map(([clientId, clientTasks]) => {
+          {/* Fix: Explicitly cast the entries result to prevent 'unknown' type errors for clientTasks */}
+          {(Object.entries(groupedTasks) as [string, Task[]][]).map(([clientId, clientTasks]) => {
             const client = clientMap.get(clientId);
             return (
               <section key={clientId} className="animate-slide-up">
@@ -219,6 +220,7 @@ const Tasks = ({ tasks = [], users, clients = [], projects = [], currentUser, on
                    <div className="flex items-center space-x-4 mt-4">
                       <div className="flex items-center space-x-2">
                         <div className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.5)]"></div>
+                        {/* Fix: clientTasks is correctly inferred as Task[] after the explicit cast above */}
                         <span className="text-[11px] text-sky-500 font-black uppercase tracking-[0.2em]">{clientTasks.length} ACTIVES</span>
                       </div>
                       <span className="text-slate-700 font-black">•</span>
@@ -227,6 +229,7 @@ const Tasks = ({ tasks = [], users, clients = [], projects = [], currentUser, on
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
+                  {/* Fix: clientTasks is correctly inferred as Task[] */}
                   {clientTasks.map(task => (
                     <TaskCard 
                       key={task.id} 
