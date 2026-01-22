@@ -228,14 +228,11 @@ const App: React.FC = () => {
       for (const mention of mentions) {
         const namePart = mention.substring(1).toLowerCase();
 
-        // 1. Mentions Utilisateurs : Uniquement au destinataire
         const mentionedUser = users.find(u => u.name.toLowerCase().replace(/\s+/g, '') === namePart);
         if (mentionedUser && mentionedUser.id !== currentUser.id) {
-          // Simulation notification ciblée
           console.log(`Notification push envoyée à : ${mentionedUser.name}`);
         }
 
-        // 2. Mentions Missions & Actions Auto
         const mentionedTask = tasks.find(t => t.title.toLowerCase().replace(/\s+/g, '') === namePart);
         if (mentionedTask) {
           let newStatus: TaskStatus | null = null;
@@ -258,7 +255,6 @@ const App: React.FC = () => {
               setTasks(prev => prev.map(t => t.id === mentionedTask.id ? { ...t, status: newStatus! } : t));
               
               if (isProblem) {
-                // Alerte Admin et Chef de Projet uniquement si problème
                 const managers = users.filter(u => u.role === UserRole.ADMIN || u.role === UserRole.PROJECT_MANAGER);
                 managers.forEach(m => {
                    if (m.id !== currentUser.id) console.log(`ALERTE : Problème signalé par ${currentUser.name} sur ${mentionedTask.title}`);
@@ -297,7 +293,6 @@ const App: React.FC = () => {
     }
   };
 
-  // FIX: Correction des insertions Finance (mappage userId -> user_id, projectId -> project_id)
   const handleAddSalary = async (s: any) => {
     const dbSalary = {
       user_id: s.userId,
@@ -424,7 +419,7 @@ const AppContent: React.FC<any> = ({ currentUser, users, tasks, setTasks, client
             const { error } = await supabase.from('tasks').delete().eq('id',id); 
             if (!error) setTasks(prev => prev.filter(t=>t.id!==id));
           }} />} />
-          <Route path="/projects" element={<Projects projects={projects} users={users} clients={clients} currentUser={currentUser} onAddProject={async (p:any, configs:any[])=>{
+          <Route path="/projects" element={<Projects projects={projects} users={users} clients={clients} salaries={salaries} expenses={expenses} adCampaigns={adCampaigns} currentUser={currentUser} onAddProject={async (p:any, configs:any[])=>{
             const { data, error } = await supabase.from('projects').insert(p).select();
             if (!error && data) {
               setProjects(prev => [mapFromDB('projects', data[0]), ...prev]);
@@ -451,7 +446,7 @@ const AppContent: React.FC<any> = ({ currentUser, users, tasks, setTasks, client
             const { error } = await supabase.from('ad_campaigns').delete().eq('id',id); 
             if (!error) setAdCampaigns(prev => prev.filter(a=>a.id!==id)); 
           }} />} />
-          <Route path="/chat" element={<Chat currentUser={currentUser} users={users} tasks={tasks} channels={channels} currentChannelId={currentChannelId} messages={messages} onChannelChange={setCurrentChannelId} onSendMessage={handleSendMessage} onMarkAsRead={handleMarkAsRead} onAddChannel={async (ch:any)=> { const { data, error } = await supabase.from('channels').insert(ch).select(); if (!error && data) setChannels(prev => [...prev, mapFromDB('channels', data[0])]); }} onDeleteChannel={async (id:string)=> { const { error } = await supabase.from('channels').delete().eq('id',id); if (!error) setChannels(prev => prev.filter(c=>c.id!==id)); }} onUpdateChannelMembers={async (id:string,m:string[])=> { const { error } = await supabase.from('channels').update({member_ids:m}).eq('id',id); if(!error) setChannels(prev => prev.map(c=>c.id===id?{...c, member_ids:m}:c)); }} />} />
+          <Route path="/chat" element={<Chat currentUser={currentUser} users={users} tasks={tasks} channels={channels} projects={projects} currentChannelId={currentChannelId} messages={messages} onChannelChange={setCurrentChannelId} onSendMessage={handleSendMessage} onMarkAsRead={handleMarkAsRead} onAddChannel={async (ch:any)=> { const { data, error } = await supabase.from('channels').insert(ch).select(); if (!error && data) setChannels(prev => [...prev, mapFromDB('channels', data[0])]); }} onDeleteChannel={async (id:string)=> { const { error } = await supabase.from('channels').delete().eq('id',id); if (!error) setChannels(prev => prev.filter(c=>c.id!==id)); }} onUpdateChannelMembers={async (id:string,m:string[])=> { const { error } = await supabase.from('channels').update({member_ids:m}).eq('id',id); if(!error) setChannels(prev => prev.map(c=>c.id===id?{...c, member_ids:m}:c)); }} />} />
           <Route path="/team" element={<Team currentUser={currentUser} users={users} onAddUser={async (u:any)=> { 
             const normalizedEmail = u.email.toLowerCase().trim(); 
             const { data: existingUser } = await supabase.from('users').select('id').eq('email', normalizedEmail).maybeSingle();

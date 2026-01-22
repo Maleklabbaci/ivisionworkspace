@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { Plus, X, Briefcase, DollarSign, Activity, Calendar, MoreVertical, Search, Layers, TrendingUp, Filter, TrendingDown, Target, Wallet, Edit3, Type, Info, User as UserIcon, Zap, Sparkles, Trash2 } from 'lucide-react';
+import { Plus, X, Briefcase, DollarSign, Activity, Calendar, MoreVertical, Search, Layers, TrendingUp, Filter, TrendingDown, Target, Wallet, Edit3, Type, Info, User as UserIcon, Zap, Sparkles, Trash2, Receipt, Megaphone, Users } from 'lucide-react';
 import { Project, Client, UserRole, User, SalaryRecord, Expense, AdCampaignExpense } from '../types';
 import Modal from './Modal';
 
@@ -32,7 +32,6 @@ const Projects: React.FC<any> = ({
     { id: '1', enabled: false, count: 1, prefix: 'Vidéo', assigneeId: '' }
   ]);
 
-  // Correction : Autoriser la gestion si Admin OU permission canManageProjects
   const canManage = currentUser.role === UserRole.ADMIN || !!currentUser.permissions?.canManageProjects;
   
   const presets = ['Vidéo', 'Design', 'Website', 'Ads', 'Post'];
@@ -44,12 +43,45 @@ const Projects: React.FC<any> = ({
 
   const projectsWithFinancials = useMemo(() => {
     return filteredProjects.map(project => {
-      const projSalaries = salaries.filter(s => s.projectId === project.id).reduce((acc, s) => acc + (s.amount + (s.bonus || 0)), 0);
-      const projExpenses = expenses.filter(e => e.projectId === project.id).reduce((acc, e) => acc + e.amount, 0);
-      const projAds = adCampaigns.filter(a => a.projectId === project.id).reduce((acc, a) => acc + a.amount, 0);
+      // CALCUL DÉTAILLÉ PAR COMPOSANTE
+      
+      // 1. Salaires (Allocations RH) - x4 si hebdomadaire pour estimation mensuelle cohérente
+      const projSalaries = salaries
+        .filter((s: SalaryRecord) => s.projectId === project.id)
+        .reduce((acc: number, s: SalaryRecord) => {
+          const total = (s.amount || 0) + (s.bonus || 0);
+          return acc + (s.frequency === 'hebdo' ? total * 4 : total);
+        }, 0);
+
+      // 2. Frais Opérationnels (Factures, Freelances, Softwares)
+      const projExpenses = expenses
+        .filter((e: Expense) => e.projectId === project.id)
+        .reduce((acc: number, e: Expense) => acc + (e.amount || 0), 0);
+
+      // 3. Budgets ADS (Campagnes actives)
+      const projAds = adCampaigns
+        .filter((a: AdCampaignExpense) => a.projectId === project.id)
+        .reduce((acc: number, a: AdCampaignExpense) => acc + (a.amount || 0), 0);
+
       const realSpent = projSalaries + projExpenses + projAds;
       const remaining = (project.totalBudget || 0) - realSpent;
-      return { ...project, realSpent, remaining };
+      
+      // Calcul des pourcentages pour la barre de répartition
+      const salaryPerc = realSpent > 0 ? (projSalaries / realSpent) * 100 : 0;
+      const expensePerc = realSpent > 0 ? (projExpenses / realSpent) * 100 : 0;
+      const adsPerc = realSpent > 0 ? (projAds / realSpent) * 100 : 0;
+
+      return { 
+        ...project, 
+        realSpent, 
+        remaining,
+        breakdown: {
+          rh: projSalaries,
+          ops: projExpenses,
+          ads: projAds,
+          percs: { rh: salaryPerc, ops: expensePerc, ads: adsPerc }
+        }
+      };
     });
   }, [filteredProjects, salaries, expenses, adCampaigns]);
 
@@ -133,8 +165,9 @@ const Projects: React.FC<any> = ({
           const client = clients.find(c => c.id === project.clientId);
           const progress = project.totalBudget > 0 ? (project.realSpent / project.totalBudget) * 100 : 0;
           const isOverBudget = project.remaining < 0;
+          
           return (
-            <div key={project.id} className="bg-slate-900/40 backdrop-blur-3xl p-10 rounded-[3rem] border border-white/5 relative overflow-hidden group hover:border-emerald-400/20 transition-all text-left">
+            <div key={project.id} className="bg-slate-900/40 backdrop-blur-3xl p-8 md:p-10 rounded-[3rem] border border-white/5 relative overflow-hidden group hover:border-emerald-400/20 transition-all text-left">
               <div className="flex justify-between items-start mb-8 relative z-10">
                 <div className="flex items-center space-x-6 min-w-0">
                   <div className="w-14 h-14 bg-emerald-400/10 rounded-2xl flex items-center justify-center text-emerald-400 border border-emerald-400/10 flex-shrink-0"><Briefcase size={24} /></div>
@@ -142,11 +175,36 @@ const Projects: React.FC<any> = ({
                 </div>
                 <div className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase glass ${project.status === 'active' ? 'text-emerald-400' : 'text-slate-500'}`}>{project.status === 'active' ? 'En Cours' : 'Clôturé'}</div>
               </div>
-              <div className="grid grid-cols-2 gap-4 mb-8 relative z-10">
-                <div className="p-6 bg-white/5 rounded-[2rem] border border-white/5"><p className="text-[8px] font-black text-slate-500 uppercase mb-1">Dépensé</p><p className="text-lg font-black text-white">{project.realSpent.toLocaleString()}</p></div>
-                <div className={`p-6 rounded-[2rem] border ${isOverBudget ? 'bg-rose-400/10 border-rose-400/10' : 'bg-emerald-400/10 border-emerald-400/10'}`}><p className="text-[8px] font-black text-slate-500 uppercase mb-1">Restant</p><p className={`text-lg font-black ${isOverBudget ? 'text-rose-400' : 'text-emerald-400'}`}>{project.remaining.toLocaleString()}</p></div>
+
+              <div className="grid grid-cols-2 gap-4 mb-6 relative z-10">
+                <div className="p-6 bg-white/5 rounded-[2rem] border border-white/5">
+                  <p className="text-[8px] font-black text-slate-500 uppercase mb-1">Dépensé Cumulé</p>
+                  <p className="text-lg font-black text-white">{project.realSpent.toLocaleString()}</p>
+                </div>
+                <div className={`p-6 rounded-[2rem] border ${isOverBudget ? 'bg-rose-400/10 border-rose-400/10' : 'bg-emerald-400/10 border-emerald-400/10'}`}>
+                  <p className="text-[8px] font-black text-slate-500 uppercase mb-1">Budget Restant</p>
+                  <p className={`text-lg font-black ${isOverBudget ? 'text-rose-400' : 'text-emerald-400'}`}>{project.remaining.toLocaleString()}</p>
+                </div>
               </div>
-              <div className="h-3 bg-white/5 rounded-full overflow-hidden border border-white/5 mb-8"><div className={`h-full rounded-full transition-all duration-1000 ${isOverBudget ? 'bg-rose-500' : 'bg-emerald-500'}`} style={{ width: `${Math.min(100, progress)}%` }} /></div>
+
+              {/* Barre de répartition détaillée */}
+              <div className="mb-6 px-1">
+                <div className="flex justify-between items-end mb-2">
+                   <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Répartition des coûts</p>
+                   <p className="text-[9px] font-black text-white">{Math.round(progress)}% du budget</p>
+                </div>
+                <div className="h-4 bg-white/5 rounded-full overflow-hidden flex border border-white/5">
+                  <div className="h-full bg-amber-400 transition-all duration-700" style={{ width: `${project.breakdown.percs.rh}%` }} title="RH"></div>
+                  <div className="h-full bg-sky-400 transition-all duration-700" style={{ width: `${project.breakdown.percs.ops}%` }} title="Ops"></div>
+                  <div className="h-full bg-emerald-400 transition-all duration-700" style={{ width: `${project.breakdown.percs.ads}%` }} title="Ads"></div>
+                </div>
+                <div className="flex flex-wrap gap-4 mt-3">
+                  <div className="flex items-center space-x-1.5"><div className="w-2 h-2 rounded-full bg-amber-400"></div><span className="text-[7px] font-black text-slate-500 uppercase">RH: {project.breakdown.rh.toLocaleString()}</span></div>
+                  <div className="flex items-center space-x-1.5"><div className="w-2 h-2 rounded-full bg-sky-400"></div><span className="text-[7px] font-black text-slate-500 uppercase">OPS: {project.breakdown.ops.toLocaleString()}</span></div>
+                  <div className="flex items-center space-x-1.5"><div className="w-2 h-2 rounded-full bg-emerald-400"></div><span className="text-[7px] font-black text-slate-500 uppercase">ADS: {project.breakdown.ads.toLocaleString()}</span></div>
+                </div>
+              </div>
+
               {canManage && (
                 <div className="pt-6 border-t border-white/5 flex justify-end space-x-3 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button onClick={() => handleEditClick(project)} className="p-3 bg-white/5 rounded-xl text-amber-400 hover:bg-white/10 active-scale"><Edit3 size={18} /></button>
@@ -164,10 +222,9 @@ const Projects: React.FC<any> = ({
             <div className="text-left"><label className="label-iv"><Type size={12} className="text-emerald-400"/> Désignation</label><input required className="input-iv" placeholder="Nom du projet" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} /></div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 text-left">
               <div><label className="label-iv"><Briefcase size={12} className="text-emerald-400"/> Client</label><select className="input-iv" value={formData.clientId} onChange={e => setFormData({...formData, clientId: e.target.value})}><option value="">Interne iVISION</option>{clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
-              <div><label className="label-iv"><DollarSign size={12} className="text-emerald-400"/> Budget</label><input type="number" required className="input-iv" placeholder="0" value={formData.totalBudget} onChange={e => setFormData({...formData, totalBudget: Number(e.target.value)})} /></div>
+              <div><label className="label-iv"><DollarSign size={12} className="text-emerald-400"/> Budget Mensuel</label><input type="number" required className="input-iv" placeholder="0" value={formData.totalBudget} onChange={e => setFormData({...formData, totalBudget: Number(e.target.value)})} /></div>
             </div>
 
-            {/* Auto-Générateur MULTI-LOTS */}
             <div className="p-5 md:p-8 bg-emerald-400/5 rounded-[2rem] border border-emerald-400/10 space-y-6">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3"><Zap size={18} className="text-emerald-400" /><span className="text-[10px] md:text-[11px] font-black text-white uppercase tracking-widest leading-none">Auto-Missions</span></div>

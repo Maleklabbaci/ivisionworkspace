@@ -1,23 +1,37 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Send, Paperclip, Hash, Lock, Plus, X, Search, CheckCheck, Users, UserPlus, Trash2, Globe, AlertTriangle, Check, Clock, ShieldAlert } from 'lucide-react';
-import { Message, User, Channel, UserRole, Task, TaskStatus } from '../types';
+import { Send, Paperclip, Hash, Lock, Plus, X, Search, CheckCheck, Users, UserPlus, Trash2, Globe, AlertTriangle, Check, Clock, ShieldAlert, Layers, ChevronRight, ArrowLeft } from 'lucide-react';
+import { Message, User, Channel, UserRole, Task, TaskStatus, Project } from '../types';
 import Modal from './Modal';
 
-const Chat: React.FC<any> = ({ currentUser, users, tasks, channels, currentChannelId, messages, onChannelChange, onSendMessage, onMarkAsRead, onAddChannel, onDeleteChannel, onUpdateChannelMembers }) => {
+const Chat: React.FC<any> = ({ 
+  currentUser, 
+  users = [], 
+  tasks = [], 
+  channels = [], 
+  projects = [], 
+  currentChannelId, 
+  messages = [], 
+  onChannelChange, 
+  onSendMessage, 
+  onMarkAsRead, 
+  onAddChannel, 
+  onDeleteChannel, 
+  onUpdateChannelMembers 
+}) => {
   const [newMessage, setNewMessage] = useState('');
   const [showAddChannel, setShowAddChannel] = useState(false);
   const [showManageMembers, setShowManageMembers] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [newChannelName, setNewChannelName] = useState('');
   const [isPrivate, setIsPrivate] = useState(false);
-  const [memberSearch, setMemberSearch] = useState('');
   
   // States for Mentions
   const [mentionQuery, setMentionQuery] = useState('');
   const [showMentionDropdown, setShowMentionDropdown] = useState(false);
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [selectedTaskForStatus, setSelectedTaskForStatus] = useState<Task | null>(null);
+  const [drillDownProject, setDrillDownProject] = useState<Project | null>(null);
   const [mentionStartIndex, setMentionStartIndex] = useState(-1);
   const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
 
@@ -38,10 +52,9 @@ const Chat: React.FC<any> = ({ currentUser, users, tasks, channels, currentChann
     });
   }, [channels, currentUser, isAdmin]);
 
-  // Mark messages as read when viewing
   useEffect(() => {
     const unreadIds = activeMessages
-      .filter((m: any) => !m.readBy.includes(currentUser.id))
+      .filter((m: any) => !m.readBy?.includes(currentUser.id))
       .map((m: any) => m.id);
     
     if (unreadIds.length > 0) {
@@ -49,21 +62,26 @@ const Chat: React.FC<any> = ({ currentUser, users, tasks, channels, currentChann
     }
   }, [activeMessages, currentUser.id, onMarkAsRead]);
 
-  // Mentions Filtering
   const mentionSuggestions = useMemo(() => {
     if (!showMentionDropdown) return [];
     const q = mentionQuery.toLowerCase();
     
-    const taskSuggestions = tasks.filter((t: Task) => 
-      t.title.toLowerCase().replace(/\s+/g, '').includes(q)
-    ).map(t => ({ id: t.id, label: t.title, type: 'task' as const, task: t }));
+    if (drillDownProject) {
+      return tasks
+        .filter((t: Task) => t.projectId === drillDownProject.id && t.status !== TaskStatus.DONE && t.title.toLowerCase().includes(q))
+        .map(t => ({ id: t.id, label: t.title, type: 'task' as const, task: t }));
+    }
 
-    const userSuggestions = users.filter((u: User) => 
-      u.name.toLowerCase().replace(/\s+/g, '').includes(q)
-    ).map(u => ({ id: u.id, label: u.name, type: 'user' as const }));
+    const projectSuggestions = projects
+      .filter((p: Project) => p.name.toLowerCase().includes(q))
+      .map(p => ({ id: p.id, label: p.name, type: 'project' as const, project: p }));
 
-    return [...taskSuggestions, ...userSuggestions].slice(0, 8);
-  }, [mentionQuery, showMentionDropdown, tasks, users]);
+    const userSuggestions = users
+      .filter((u: User) => u.name.toLowerCase().replace(/\s+/g, '').includes(q))
+      .map(u => ({ id: u.id, label: u.name, type: 'user' as const }));
+
+    return [...projectSuggestions, ...userSuggestions].slice(0, 8);
+  }, [mentionQuery, showMentionDropdown, drillDownProject, tasks, projects, users]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -73,8 +91,14 @@ const Chat: React.FC<any> = ({ currentUser, users, tasks, channels, currentChann
     if (!newMessage.trim() || !currentChannelId) return;
     onSendMessage(newMessage, currentChannelId);
     setNewMessage('');
+    resetMentionState();
+  };
+
+  const resetMentionState = () => {
     setShowMentionDropdown(false);
     setShowStatusDropdown(false);
+    setDrillDownProject(null);
+    setSelectedTaskForStatus(null);
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -82,7 +106,6 @@ const Chat: React.FC<any> = ({ currentUser, users, tasks, channels, currentChann
     const cursorPosition = e.target.selectionStart || 0;
     setNewMessage(value);
 
-    // Logic to detect @ mention trigger
     const lastAtPos = value.lastIndexOf('@', cursorPosition - 1);
     if (lastAtPos !== -1) {
       const textAfterAt = value.substring(lastAtPos + 1, cursorPosition);
@@ -94,8 +117,7 @@ const Chat: React.FC<any> = ({ currentUser, users, tasks, channels, currentChann
         return;
       }
     }
-    setShowMentionDropdown(false);
-    setShowStatusDropdown(false);
+    resetMentionState();
   };
 
   const insertMention = (label: string, actionText?: string) => {
@@ -105,14 +127,16 @@ const Chat: React.FC<any> = ({ currentUser, users, tasks, channels, currentChann
     const suffix = actionText ? ` ${actionText}` : "";
     const newValue = `${beforeAt}@${sanitizedLabel}${suffix} ${afterCursor}`;
     setNewMessage(newValue);
-    setShowMentionDropdown(false);
-    setShowStatusDropdown(false);
-    setSelectedTaskForStatus(null);
+    resetMentionState();
     setTimeout(() => inputRef.current?.focus(), 10);
   };
 
   const handleMentionSelect = (suggestion: any) => {
-    if (suggestion.type === 'task') {
+    if (suggestion.type === 'project') {
+      setDrillDownProject(suggestion.project);
+      setSelectedMentionIndex(0);
+      setMentionQuery('');
+    } else if (suggestion.type === 'task') {
       setSelectedTaskForStatus(suggestion.task);
       setShowStatusDropdown(true);
       setShowMentionDropdown(false);
@@ -123,16 +147,7 @@ const Chat: React.FC<any> = ({ currentUser, users, tasks, channels, currentChann
 
   const handleStatusSelect = (statusLabel: string) => {
     if (!selectedTaskForStatus) return;
-    
-    if (statusLabel === 'TERMINÉ') {
-      if (confirm(`Confirmer que la mission "${selectedTaskForStatus.title}" est terminée ?`)) {
-        insertMention(selectedTaskForStatus.title, 'TERMINÉ');
-      }
-    } else if (statusLabel === 'BLOQUÉ' || statusLabel === 'PROBLÈME') {
-      insertMention(selectedTaskForStatus.title, statusLabel);
-    } else {
-      insertMention(selectedTaskForStatus.title, 'EN COURS');
-    }
+    insertMention(selectedTaskForStatus.title, statusLabel);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -147,26 +162,14 @@ const Chat: React.FC<any> = ({ currentUser, users, tasks, channels, currentChann
         e.preventDefault();
         handleMentionSelect(mentionSuggestions[selectedMentionIndex]);
       } else if (e.key === 'Escape') {
-        setShowMentionDropdown(false);
+        resetMentionState();
+      } else if (e.key === 'Backspace' && mentionQuery === '' && drillDownProject) {
+        setDrillDownProject(null);
       }
     } else if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
-  };
-
-  const handleCreateChannel = () => {
-    if (!newChannelName.trim()) return;
-    onAddChannel({
-      name: newChannelName.toUpperCase().replace(/\s+/g, '_'),
-      type: isPrivate ? 'project' : 'global',
-      is_private: isPrivate,
-      created_by: currentUser.id,
-      member_ids: [currentUser.id]
-    });
-    setNewChannelName('');
-    setIsPrivate(false);
-    setShowAddChannel(false);
   };
 
   const renderContentWithMentions = (content: string) => {
@@ -178,58 +181,42 @@ const Chat: React.FC<any> = ({ currentUser, users, tasks, channels, currentChann
         const isTaskMention = tasks.some((t: Task) => t.title.toLowerCase().replace(/\s+/g, '') === namePart);
 
         if (isUserMention) {
-          return <span key={i} className="bg-indigo-500/20 text-indigo-400 px-1.5 py-0.5 rounded-[4px] font-black text-[13px] border border-indigo-500/10">@{part.substring(1)}</span>;
+          return <span key={i} className="text-sky-400 font-bold hover:underline cursor-pointer">@{part.substring(1)}</span>;
         } else if (isTaskMention) {
-          return <span key={i} className="bg-rose-500/20 text-rose-400 px-1.5 py-0.5 rounded-[4px] font-black text-[13px] border border-rose-500/10">@{part.substring(1)}</span>;
+          return <span key={i} className="text-emerald-400 font-bold hover:underline cursor-pointer">@{part.substring(1)}</span>;
         }
       }
       return part;
     });
   };
 
-  const isOwner = activeChannel?.created_by === currentUser.id || isAdmin;
-
-  const filteredUsersForInvite = useMemo(() => {
-    return users.filter((u: User) => u.name.toLowerCase().includes(memberSearch.toLowerCase()));
-  }, [users, memberSearch]);
-
-  const closeModals = () => {
-    setShowAddChannel(false);
-    setShowManageMembers(false);
-    setShowDeleteConfirm(false);
-    setMemberSearch('');
-  };
-
   const formatReadBy = (readBy: string[]) => {
-    const others = readBy.filter(id => id !== currentUser.id);
+    const others = readBy?.filter(id => id !== currentUser.id) || [];
     if (others.length === 0) return null;
-    
-    const names = others.map(id => users.find(u => u.id === id)?.name || "Utilisateur").filter(Boolean);
+    const names = others.map(id => users.find((u:any) => u.id === id)?.name || "Utilisateur").filter(Boolean);
     if (names.length === 0) return null;
-    
     return `Vu par ${names.join(', ')}`;
   };
 
   return (
-    <div className="flex h-[calc(100vh-140px)] rounded-[1.5rem] md:rounded-[2rem] overflow-hidden animate-fade-in border-white/5 shadow-2xl relative bg-[#111214]">
-      {/* SIDEBAR COMPACT */}
-      <div className="hidden md:flex flex-col w-64 border-r border-white/5 bg-[#1E1F22] text-left">
-        <div className="p-5 border-b border-white/5 flex justify-between items-center bg-[#1E1F22]">
-            <div>
-              <h2 className="font-black text-white text-[10px] uppercase tracking-widest leading-none">CANAUX iV</h2>
-            </div>
+    <div className="flex h-[calc(100vh-140px)] rounded-[2.5rem] overflow-hidden animate-fade-in border border-white/5 shadow-2xl relative bg-slate-950/20 backdrop-blur-md">
+      {/* SIDEBAR */}
+      <div className="hidden md:flex flex-col w-72 border-r border-white/5 bg-slate-900/40 text-left">
+        <div className="p-8 border-b border-white/5 flex justify-between items-center">
+            <h2 className="font-black text-white text-[11px] uppercase tracking-[0.2em] leading-none">CANAUX iV</h2>
             {canManageChannels && (
-              <button onClick={() => setShowAddChannel(true)} className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-white transition-all"><Plus size={18}/></button>
+              <button onClick={() => setShowAddChannel(true)} className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-white transition-all hover:scale-110 active:scale-95"><Plus size={20}/></button>
             )}
         </div>
-        <div className="flex-1 overflow-y-auto p-2 space-y-0.5 no-scrollbar">
+        <div className="flex-1 overflow-y-auto p-4 space-y-1.5 no-scrollbar">
             {visibleChannels.map((channel: Channel) => (
                 <button 
                   key={channel.id} 
                   onClick={() => onChannelChange(channel.id)} 
-                  className={`w-full flex items-center px-3 py-2 rounded-lg transition-all group ${currentChannelId === channel.id ? 'bg-[#35373C] text-white shadow-sm' : 'text-slate-500 hover:bg-[#35373C]/50 hover:text-slate-300'}`}
+                  className={`w-full flex items-center px-4 py-3.5 rounded-2xl transition-all group relative ${currentChannelId === channel.id ? 'bg-white/10 text-white shadow-lg' : 'text-slate-500 hover:bg-white/5 hover:text-slate-300'}`}
                 >
-                  {channel.is_private ? <Lock size={16} className="mr-2" /> : <Hash size={18} className="mr-2 opacity-50" />}
+                  {currentChannelId === channel.id && <div className="absolute left-0 top-3 bottom-3 w-1 bg-sky-400 rounded-r-full shadow-[0_0_10px_rgba(14,165,233,0.5)]"></div>}
+                  {channel.is_private ? <Lock size={16} className="mr-3 text-sky-400" /> : <Hash size={18} className="mr-3 opacity-50 text-slate-400" />}
                   <span className="text-sm font-bold truncate uppercase tracking-tight">{channel.name}</span>
                 </button>
             ))}
@@ -237,225 +224,148 @@ const Chat: React.FC<any> = ({ currentUser, users, tasks, channels, currentChann
       </div>
 
       {/* CHAT AREA */}
-      <div className="flex-1 flex flex-col bg-[#313338]">
-        <header className="px-5 py-4 border-b border-white/5 flex items-center justify-between bg-[#313338] z-10 text-left shadow-sm">
-            <div className="flex items-center space-x-3 truncate">
-              {activeChannel?.is_private ? <Lock size={20} className="text-slate-400"/> : <Hash size={24} className="text-slate-500"/>}
-              <h2 className="font-black text-white text-base md:text-lg tracking-tight uppercase truncate">{activeChannel?.name || 'Canal'}</h2>
+      <div className="flex-1 flex flex-col bg-slate-950/40 backdrop-blur-xl">
+        <header className="px-8 py-5 border-b border-white/5 flex items-center justify-between z-10 text-left">
+            <div className="flex items-center space-x-4 truncate">
+              <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-sky-400">
+                {activeChannel?.is_private ? <Lock size={18}/> : <Hash size={20}/>}
+              </div>
+              <div className="truncate">
+                <h2 className="font-black text-white text-lg tracking-tight uppercase leading-none">{activeChannel?.name || 'Sélectionnez un canal'}</h2>
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1.5">Flux de communication sécurisé</p>
+              </div>
             </div>
-            
             <div className="flex items-center space-x-2">
-              {isOwner && currentChannelId && (
-                <button onClick={() => setShowManageMembers(true)} className="p-2 text-slate-400 hover:text-white transition-all"><UserPlus size={18}/></button>
-              )}
-              {isOwner && currentChannelId && (
-                 <button onClick={() => setShowDeleteConfirm(true)} className="p-2 text-slate-400 hover:text-rose-400 transition-all"><Trash2 size={18}/></button>
+              {(activeChannel?.created_by === currentUser.id || isAdmin) && currentChannelId && (
+                <>
+                  <button onClick={() => setShowManageMembers(true)} className="w-10 h-10 flex items-center justify-center text-slate-500 hover:text-white transition-all hover:bg-white/5 rounded-xl" title="Gérer les membres"><UserPlus size={18}/></button>
+                  <button onClick={() => setShowDeleteConfirm(true)} className="w-10 h-10 flex items-center justify-center text-slate-500 hover:text-rose-400 transition-all hover:bg-rose-500/10 rounded-xl" title="Supprimer le canal"><Trash2 size={18}/></button>
+                </>
               )}
             </div>
         </header>
 
-        {/* MESSAGES FLOW */}
-        <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-1 no-scrollbar text-left">
-            {activeMessages.map((msg: any, idx: number) => {
-                const prevMsg = activeMessages[idx-1];
-                const isSameAuthor = prevMsg && prevMsg.userId === msg.userId && (new Date(msg.fullTimestamp).getTime() - new Date(prevMsg.fullTimestamp).getTime() < 300000);
-                const sender = users.find((u: any) => u.id === msg.userId);
-                const readByText = formatReadBy(msg.readBy);
+        <div className="flex-1 overflow-y-auto p-6 md:p-10 space-y-6 no-scrollbar text-left">
+            {activeMessages.length === 0 ? (
+               <div className="h-full flex flex-col items-center justify-center opacity-20">
+                  <div className="w-20 h-20 rounded-[2rem] border-2 border-dashed border-slate-500 flex items-center justify-center mb-6">
+                    <Send size={32} />
+                  </div>
+                  <p className="text-[11px] font-black uppercase tracking-[0.4em]">Début de la transmission</p>
+               </div>
+            ) : (
+              activeMessages.map((msg: any, idx: number) => {
+                  const prevMsg = activeMessages[idx-1];
+                  const isSameAuthor = prevMsg && prevMsg.userId === msg.userId && (new Date(msg.fullTimestamp).getTime() - new Date(prevMsg.fullTimestamp).getTime() < 300000);
+                  const sender = users.find((u: any) => u.id === msg.userId);
+                  const readByText = formatReadBy(msg.readBy);
 
-                return (
-                    <div key={msg.id} className={`group flex flex-col ${!isSameAuthor ? 'mt-4' : 'mt-0.5'} hover:bg-white/[0.01] transition-colors -mx-4 px-8 py-0.5`}>
-                        {!isSameAuthor ? (
-                          <div className="flex items-start space-x-4">
-                            <img src={sender?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(sender?.name || 'U')}`} className="w-10 h-10 rounded-xl flex-shrink-0 mt-1" alt="" />
-                            <div className="flex-1 min-w-0">
-                                <div className="flex items-baseline space-x-2">
-                                  <span className="text-[14px] font-black text-white hover:underline cursor-pointer">{sender?.name}</span>
-                                  <span className="text-[10px] text-slate-500 font-bold uppercase">{msg.timestamp}</span>
-                                </div>
-                                <div className="text-[14px] text-[#DBDEE1] leading-relaxed font-medium">
-                                  {renderContentWithMentions(msg.content)}
-                                </div>
-                                {readByText && (
-                                  <div className="text-[9px] text-slate-600 font-bold uppercase mt-1 tracking-tighter opacity-0 group-hover:opacity-100 transition-opacity">
-                                    {readByText}
-                                  </div>
-                                )}
+                  return (
+                      <div key={msg.id} className={`group flex flex-col ${!isSameAuthor ? 'mt-2' : '-mt-4'}`}>
+                          {!isSameAuthor && (
+                            <div className="flex items-center space-x-3 mb-2 px-1">
+                               <img src={sender?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(sender?.name || 'U')}`} className="w-8 h-8 rounded-lg object-cover border border-white/10" alt="" />
+                               <span className="text-[12px] font-black text-white uppercase tracking-tight">{sender?.name}</span>
+                               <span className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">{msg.timestamp}</span>
                             </div>
-                          </div>
-                        ) : (
-                          <div className="flex items-start space-x-4 pl-14 relative">
-                            <span className="absolute left-4 top-1 text-[8px] text-slate-600 font-bold opacity-0 group-hover:opacity-100 transition-opacity uppercase">{msg.timestamp.split(':')[0]}:{msg.timestamp.split(':')[1]}</span>
-                            <div className="flex flex-col w-full">
-                              <div className="text-[14px] text-[#DBDEE1] leading-relaxed font-medium">
-                                 {renderContentWithMentions(msg.content)}
+                          )}
+                          <div className={`relative ${!isSameAuthor ? 'ml-0' : 'ml-0'}`}>
+                              <div className={`inline-block max-w-[85%] px-5 py-3.5 rounded-[1.25rem] text-[14px] leading-relaxed font-medium transition-all ${msg.userId === currentUser.id ? 'bg-sky-500/10 text-sky-100 border border-sky-400/20 shadow-[0_0_20px_rgba(14,165,233,0.05)]' : 'bg-white/[0.03] text-slate-200 border border-white/5'}`}>
+                                {renderContentWithMentions(msg.content)}
                               </div>
-                              {readByText && (
-                                <div className="text-[9px] text-slate-600 font-bold uppercase mt-1 tracking-tighter opacity-0 group-hover:opacity-100 transition-opacity">
-                                  {readByText}
-                                </div>
-                              )}
-                            </div>
+                              {readByText && <div className="text-[9px] text-slate-700 font-bold uppercase mt-1.5 ml-2 tracking-tight opacity-0 group-hover:opacity-100 transition-opacity">{readByText}</div>}
                           </div>
-                        )}
-                    </div>
-                );
-            })}
+                      </div>
+                  );
+              })
+            )}
             <div ref={messagesEndRef} />
         </div>
 
-        {/* INPUT COMPACT WITH MENTION DROPDOWN */}
         {currentChannelId && (
-          <footer className="p-4 bg-[#313338] relative">
-            {/* Mention Suggestions Dropdown */}
+          <footer className="p-6 md:p-10 relative">
+            {/* Mentions Dropdown redesign */}
             {showMentionDropdown && mentionSuggestions.length > 0 && (
-              <div className="absolute bottom-full left-4 right-4 mb-2 bg-[#1E1F22] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50 animate-slide-up">
-                <div className="p-3 border-b border-white/5 flex items-center justify-between">
-                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Suggestions de mentions</span>
-                  <span className="text-[10px] font-bold text-slate-600">Sélectionner pour options</span>
+              <div className="absolute bottom-full left-10 right-10 mb-4 bg-slate-900/95 backdrop-blur-2xl border border-white/10 rounded-3xl shadow-2xl overflow-hidden z-50 animate-slide-up ring-1 ring-white/10">
+                <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
+                    <div className="flex items-center space-x-3 text-sky-400">
+                      {drillDownProject && (
+                        <button onClick={() => setDrillDownProject(null)} className="p-1.5 hover:bg-white/10 rounded-lg transition-colors"><ArrowLeft size={14}/></button>
+                      )}
+                      <span className="text-[10px] font-black uppercase tracking-[0.2em]">
+                        {drillDownProject ? `LOTS: ${drillDownProject.name}` : 'SMART SELECTOR'}
+                      </span>
+                    </div>
                 </div>
-                <div className="max-h-60 overflow-y-auto no-scrollbar py-1">
+                <div className="max-h-64 overflow-y-auto no-scrollbar py-2">
                   {mentionSuggestions.map((suggestion, index) => (
-                    <button
-                      key={suggestion.id}
-                      onClick={() => handleMentionSelect(suggestion)}
-                      onMouseEnter={() => setSelectedMentionIndex(index)}
-                      className={`w-full flex items-center justify-between px-4 py-2 text-left transition-all ${index === selectedMentionIndex ? 'bg-white/10' : 'hover:bg-white/5'}`}
-                    >
-                      <div className="flex items-center space-x-3">
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${suggestion.type === 'task' ? 'bg-rose-500/10 text-rose-400' : 'bg-indigo-500/10 text-indigo-400'}`}>
-                          {suggestion.type === 'task' ? <Check size={14} /> : <Users size={14} />}
+                    <button key={suggestion.id} onClick={() => handleMentionSelect(suggestion)} onMouseEnter={() => setSelectedMentionIndex(index)} className={`w-full flex items-center justify-between px-6 py-3.5 text-left transition-all ${index === selectedMentionIndex ? 'bg-sky-500/10' : 'hover:bg-white/5'}`}>
+                      <div className="flex items-center space-x-4">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${suggestion.type === 'task' ? 'bg-rose-500/10 text-rose-400' : suggestion.type === 'project' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-sky-500/10 text-sky-400'}`}>
+                          {suggestion.type === 'task' ? <Check size={18} /> : suggestion.type === 'project' ? <Layers size={18}/> : <Users size={18} />}
                         </div>
                         <div className="truncate">
-                          <p className="text-sm font-bold text-white truncate uppercase tracking-tight">{suggestion.label}</p>
-                          <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest leading-none mt-1">{suggestion.type === 'task' ? 'Mission' : 'Utilisateur'}</p>
+                          <p className="text-sm font-black text-white truncate uppercase tracking-tight leading-none">{suggestion.label}</p>
+                          <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-2">{suggestion.type === 'task' ? 'Flux Opérationnel' : suggestion.type === 'project' ? 'Architecture Projet' : 'Membre Agence'}</p>
                         </div>
                       </div>
-                      {index === selectedMentionIndex && <div className="text-sky-400"><Check size={14} strokeWidth={3} /></div>}
+                      {suggestion.type === 'project' && <ChevronRight size={16} className="text-slate-600" />}
                     </button>
                   ))}
                 </div>
               </div>
             )}
 
-            {/* Status Options for Tasks */}
+            {/* Status Selector redesign */}
             {showStatusDropdown && selectedTaskForStatus && (
-              <div className="absolute bottom-full left-4 right-4 mb-2 bg-[#1E1F22] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50 animate-slide-up">
-                <div className="p-4 border-b border-white/5 text-left">
-                  <span className="text-[10px] font-black text-sky-400 uppercase tracking-widest block">Action Smart Mention</span>
-                  <h4 className="text-white font-black text-base uppercase tracking-tight mt-1 truncate">{selectedTaskForStatus.title}</h4>
+              <div className="absolute bottom-full left-10 right-10 mb-4 bg-slate-900/95 backdrop-blur-2xl border border-white/10 rounded-3xl shadow-2xl overflow-hidden z-50 animate-slide-up">
+                <div className="p-6 border-b border-white/5 text-left bg-white/[0.02]">
+                  <span className="text-[10px] font-black text-sky-400 uppercase tracking-widest block">Action Smart Protocol</span>
+                  <h4 className="text-white font-black text-lg uppercase tracking-tight mt-1.5 truncate">{selectedTaskForStatus.title}</h4>
                 </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-1 p-2 bg-[#111214]">
+                <div className="grid grid-cols-4 gap-2 p-3 bg-slate-950/20">
                   {[
-                    { label: 'TERMINÉ', color: 'bg-emerald-500 text-white', icon: Check },
-                    { label: 'EN COURS', color: 'bg-sky-500 text-white', icon: Clock },
-                    { label: 'BLOQUÉ', color: 'bg-rose-500 text-white', icon: AlertTriangle },
-                    { label: 'PROBLÈME', color: 'bg-rose-600 text-white', icon: ShieldAlert }
+                    { label: 'TERMINÉ', color: 'bg-emerald-500 text-white shadow-emerald-500/20', icon: Check },
+                    { label: 'EN COURS', color: 'bg-sky-500 text-white shadow-sky-500/20', icon: Clock },
+                    { label: 'BLOQUÉ', color: 'bg-rose-500 text-white shadow-rose-500/20', icon: AlertTriangle },
+                    { label: 'PROBLÈME', color: 'bg-rose-600 text-white shadow-rose-600/20', icon: ShieldAlert }
                   ].map((opt) => (
-                    <button
-                      key={opt.label}
-                      onClick={() => handleStatusSelect(opt.label)}
-                      className={`flex flex-col items-center justify-center p-4 rounded-xl transition-all active-scale ${opt.color} hover:brightness-110`}
-                    >
-                      <opt.icon size={20} className="mb-2" />
-                      <span className="text-[9px] font-black tracking-widest uppercase">{opt.label}</span>
+                    <button key={opt.label} onClick={() => handleStatusSelect(opt.label)} className={`flex flex-col items-center justify-center p-5 rounded-2xl transition-all active-scale ${opt.color} hover:brightness-110`}>
+                      <opt.icon size={22} className="mb-2" />
+                      <span className="text-[8px] font-black tracking-widest uppercase">{opt.label}</span>
                     </button>
                   ))}
                 </div>
-                <button 
-                  onClick={() => setShowStatusDropdown(false)} 
-                  className="w-full py-3 bg-white/5 text-slate-500 font-bold uppercase text-[9px] hover:text-white transition-colors border-t border-white/5"
-                >
-                  Annuler la mention
-                </button>
               </div>
             )}
 
-            <div className="bg-[#383A40] rounded-xl p-3 flex items-center shadow-inner group">
-                <button className="p-2 text-slate-400 hover:text-white transition-colors active-scale"><Paperclip size={20} /></button>
-                <input 
-                    ref={inputRef}
-                    value={newMessage} 
-                    onChange={handleInputChange}
-                    onKeyDown={handleKeyDown}
-                    placeholder={`Écrire dans #${activeChannel?.name}...`}
-                    className="flex-1 bg-transparent border-none focus:ring-0 text-[14px] font-medium text-white placeholder-[#949BA4] px-4 outline-none"
-                />
-                <button onClick={handleSend} disabled={!newMessage.trim()} className="w-10 h-10 text-slate-400 hover:text-white active-scale disabled:opacity-20 transition-all flex items-center justify-center">
-                    <Send size={18} />
-                </button>
+            <div className="flex items-center space-x-4 bg-white/[0.03] border border-white/5 rounded-3xl p-2.5 shadow-2xl focus-within:border-sky-500/50 transition-all">
+                <button className="w-12 h-12 flex items-center justify-center text-slate-500 hover:text-white transition-all hover:bg-white/5 rounded-2xl active:scale-90"><Paperclip size={20} /></button>
+                <input ref={inputRef} value={newMessage} onChange={handleInputChange} onKeyDown={handleKeyDown} placeholder={`Envoyer un message sécurisé dans #${activeChannel?.name || '...'}`} className="flex-1 bg-transparent border-none focus:ring-0 text-[14px] font-medium text-white placeholder-slate-600 px-2 outline-none" />
+                <button onClick={handleSend} disabled={!newMessage.trim() || !currentChannelId} className="w-12 h-12 bg-sky-500 text-white rounded-2xl shadow-xl shadow-sky-500/20 flex items-center justify-center transition-all hover:scale-105 active:scale-95 disabled:opacity-20 disabled:grayscale disabled:scale-100"><Send size={20} strokeWidth={2.5}/></button>
             </div>
           </footer>
         )}
       </div>
 
-      {/* MODAL CANAL */}
-      <Modal isOpen={showAddChannel} onClose={closeModals} title="Nouveau Canal">
-        <div className="space-y-6 text-left">
-          <div className="space-y-1.5">
-            <label className="label-iv">NOM DU CANAL</label>
-            <input value={newChannelName} onChange={e => setNewChannelName(e.target.value)} className="input-iv" placeholder="Ex: STRATÉGIE_Q4" />
+      {/* MODALS */}
+      <Modal isOpen={showAddChannel} onClose={() => setShowAddChannel(false)} title="Nouveau Canal">
+        <div className="space-y-6 text-left p-2">
+          <div>
+            <label className="label-iv">IDENTIFIANT DU CANAL</label>
+            <input value={newChannelName} onChange={e => setNewChannelName(e.target.value)} className="input-iv uppercase" placeholder="EX: STRATÉGIE_PROJET" />
           </div>
-          
-          <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5 cursor-pointer hover:bg-white/[0.08] transition-all" onClick={() => setIsPrivate(!isPrivate)}>
+          <div className="flex items-center justify-between p-5 bg-white/5 rounded-[1.75rem] border border-white/5 cursor-pointer hover:bg-white/10 transition-all group" onClick={() => setIsPrivate(!isPrivate)}>
              <div className="flex items-center space-x-4">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isPrivate ? 'bg-indigo-500 text-white' : 'bg-white/5 text-slate-500'}`}>
-                   {isPrivate ? <Lock size={18}/> : <Globe size={18}/>}
-                </div>
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors ${isPrivate ? 'bg-sky-500 text-white shadow-lg shadow-sky-500/20' : 'bg-white/5 text-slate-500'}`}>{isPrivate ? <Lock size={20}/> : <Globe size={20}/>}</div>
                 <div>
-                   <p className="text-xs font-black text-white uppercase tracking-widest">{isPrivate ? 'Privé' : 'Public'}</p>
-                   <p className="text-[9px] font-bold text-slate-500 uppercase mt-1">L'accès sera restreint.</p>
+                  <p className="text-[12px] font-black text-white uppercase leading-none">{isPrivate ? 'Canal Privé' : 'Canal Public'}</p>
+                  <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-1.5">{isPrivate ? 'Membres invités uniquement' : 'Visible par toute l\'agence'}</p>
                 </div>
              </div>
-             <div className={`w-10 h-5 rounded-full p-1 transition-all ${isPrivate ? 'bg-indigo-500' : 'bg-white/10'}`}>
-                <div className={`w-3 h-3 bg-white rounded-full transition-all ${isPrivate ? 'translate-x-5' : 'translate-x-0'}`} />
-             </div>
+             <div className={`w-12 h-6 rounded-full p-1.5 transition-colors ${isPrivate ? 'bg-sky-500' : 'bg-white/10'}`}><div className={`w-3 h-3 bg-white rounded-full transition-transform duration-300 ${isPrivate ? 'translate-x-6' : 'translate-x-0'}`} /></div>
           </div>
-
-          <button onClick={handleCreateChannel} disabled={!newChannelName.trim()} className="w-full py-5 bg-indigo-500 text-white font-black rounded-[2rem] shadow-2xl uppercase text-[11px] tracking-[0.3em] transition-all">
-            Créer le Canal
-          </button>
-        </div>
-      </Modal>
-
-      {/* MODAL MEMBRES */}
-      <Modal isOpen={showManageMembers && !!activeChannel} onClose={closeModals} title="Membres du Canal">
-        <div className="flex flex-col h-full max-h-[60vh] text-left">
-          <div className="relative mb-5">
-             <Search size={14} className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-500" />
-             <input type="text" placeholder="RECHERCHER..." value={memberSearch} onChange={e => setMemberSearch(e.target.value)} className="input-iv pl-12" />
-          </div>
-          
-          <div className="flex-1 overflow-y-auto no-scrollbar space-y-2">
-            {filteredUsersForInvite.map((user: User) => {
-              const isMember = activeChannel?.member_ids?.includes(user.id);
-              const isCreator = activeChannel?.created_by === user.id;
-              return (
-                <div key={user.id} className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5">
-                   <div className="flex items-center space-x-4">
-                      <img src={user.avatar} className="w-10 h-10 rounded-xl" alt=""/>
-                      <div className="truncate">
-                         <p className="text-[11px] font-black text-white uppercase tracking-tighter truncate leading-none">{user.name}</p>
-                         <p className="text-[8px] font-bold text-slate-500 uppercase tracking-widest mt-1">{user.role}</p>
-                      </div>
-                   </div>
-                   {isCreator ? (
-                     <span className="text-[7px] font-black uppercase bg-indigo-500/10 text-indigo-400 px-2 py-1 rounded-full">Propriétaire</span>
-                   ) : (
-                     <button 
-                      onClick={() => {
-                        const currentIds = activeChannel.member_ids || [];
-                        const newIds = isMember ? currentIds.filter(id => id !== user.id) : [...currentIds, user.id];
-                        onUpdateChannelMembers(activeChannel.id, newIds);
-                      }}
-                      className={`px-4 py-2 rounded-xl text-[8px] font-black uppercase transition-all ${isMember ? 'bg-rose-400/10 text-rose-400' : 'bg-emerald-400 text-slate-950'}`}
-                     >
-                       {isMember ? 'Révoquer' : 'Inviter'}
-                     </button>
-                   )}
-                </div>
-              );
-            })}
-          </div>
+          <button onClick={() => { onAddChannel({name: newChannelName.toUpperCase().replace(/\s+/g, '_'), is_private: isPrivate, created_by: currentUser.id, member_ids: [currentUser.id]}); setShowAddChannel(false); setNewChannelName(''); }} disabled={!newChannelName.trim()} className="w-full py-6 bg-sky-500 text-white font-black rounded-[2rem] shadow-xl shadow-sky-500/20 uppercase text-[11px] tracking-[0.2em] active-scale transition-all hover:bg-sky-400 disabled:opacity-30">ACTIVER LE CANAL</button>
         </div>
       </Modal>
     </div>
