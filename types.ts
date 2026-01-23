@@ -11,6 +11,7 @@ export interface UserPermissions {
   canCreateTasks?: boolean;
   canEditAllTasks?: boolean;
   canDeleteTasks?: boolean;
+  canViewAllTasks?: boolean; // Nouvelle permission critique
   canManageChat?: boolean;
   canViewFiles?: boolean;
   canDeleteFiles?: boolean;
@@ -23,7 +24,7 @@ export interface UserPermissions {
   canManageCampaigns?: boolean;
   canManageFinances?: boolean;
   canManageProjects?: boolean;
-  canViewProjectFinances?: boolean; // Nouvelle permission
+  canViewProjectFinances?: boolean;
 }
 
 export interface User {

@@ -17,10 +17,12 @@ const DEFAULT_PERMISSIONS: UserPermissions = {
   canViewProjectFinances: false,
 };
 
+// Added missing canViewAllTasks permission label
 const PERMISSION_LABELS: Record<keyof UserPermissions, string> = {
   canCreateTasks: "Créer des missions",
   canEditAllTasks: "Éditer toutes les missions",
   canDeleteTasks: "Supprimer des missions",
+  canViewAllTasks: "Voir toutes les missions",
   canManageChat: "Gérer le chat",
   canViewFiles: "Voir les documents",
   canDeleteFiles: "Supprimer les documents",
