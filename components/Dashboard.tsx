@@ -1,6 +1,5 @@
-
 import React, { useMemo, useState } from 'react';
-import { TrendingUp, Target, Zap, Clock, ChevronRight, Activity, BarChart3, ListChecks, AlertTriangle, Info, HelpCircle } from 'lucide-react';
+import { TrendingUp, Target, Zap, Clock, ChevronRight, Activity, BarChart3, ListChecks, AlertTriangle, Info, HelpCircle, AlertCircle } from 'lucide-react';
 import { Task, User, ViewState, TaskStatus, UserRole, Client } from '../types';
 import Modal from './Modal';
 
@@ -52,7 +51,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], clients 
              <HelpCircle size={24} />
           </button>
         </div>
-        <div className="hidden md:flex items-center space-x-3 crystal-module px-6 py-3 rounded-2xl">
+        <div className="hidden md:flex items-center space-x-3 crystal-module px-6 py-3 rounded-2xl border-white/5">
            <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-tight">{currentUser.role}</span>
         </div>
@@ -60,58 +59,46 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], clients 
 
       <Modal isOpen={showInfo} onClose={() => setShowInfo(false)} title="Guide Dashboard iV" subtitle="Centre de Commandement">
          <div className="space-y-6 text-left">
-            <p className="text-slate-300 text-sm leading-relaxed">Bienvenue sur votre interface de pilotage. Voici vos accès actuels :</p>
+            <p className="text-slate-300 text-sm leading-relaxed font-medium">Bienvenue sur votre interface de pilotage stratégique.</p>
             <div className="space-y-4">
                <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
-                  <h4 className="text-sky-400 font-bold text-xs uppercase mb-2">Surveillance Globale</h4>
-                  <p className="text-slate-400 text-xs">Visualisez vos KPI en temps réel. Le score de rendement iV est calculé sur vos missions validées ce cycle.</p>
+                  <h4 className="text-sky-400 font-bold text-xs uppercase mb-2">Commandes Chat (@mentions)</h4>
+                  <p className="text-slate-400 text-xs">Utilisez @NomMission + Action (urgent, bloquer, terminé) dans le chat pour piloter vos flux par commande vocale/texte.</p>
                </div>
-               <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
-                  <h4 className="text-amber-400 font-bold text-xs uppercase mb-2">Alertes Bloquages</h4>
-                  <p className="text-slate-400 text-xs">Si une mission passe en statut <strong>BLOQUÉ</strong>, elle apparaîtra immédiatement en haut de votre écran pour intervention.</p>
+               <div className="p-4 bg-rose-500/10 rounded-2xl border border-rose-500/20">
+                  <h4 className="text-rose-500 font-bold text-xs uppercase mb-2">Alerte Rouge iV</h4>
+                  <p className="text-slate-400 text-xs">Tout blocage critique (statut BLOQUÉ) place l'agence en alerte visuelle prioritaire pour intervention immédiate.</p>
                </div>
-               {isAdminOrManager && (
-                 <div className="p-4 bg-emerald-400/10 rounded-2xl border border-emerald-400/20">
-                    <h4 className="text-emerald-400 font-bold text-xs uppercase mb-2">Privilèges {currentUser.role}</h4>
-                    <ul className="text-slate-400 text-xs space-y-2 list-disc pl-4">
-                       <li>Vue consolidée de toute l'équipe</li>
-                       <li>Accès direct aux audits d'intelligence</li>
-                       <li>Gestion du pipeline CRM</li>
-                    </ul>
-                 </div>
-               )}
             </div>
          </div>
       </Modal>
 
-      {/* SECTION BLOCAGES CRITIQUES */}
+      {/* SECTION ALERTE ROUGE BLOQUÉE */}
       {blockedTasks.length > 0 && (
-        <div className="px-1">
-          <div className="bg-rose-500/10 border border-rose-500/30 p-8 rounded-[2.5rem] flex flex-col md:flex-row items-center justify-between gap-6 shadow-2xl shadow-rose-500/10 animate-pulse-subtle">
+        <div className="px-1 animate-pulse-subtle">
+          <div className="bg-rose-500 border-4 border-rose-400 p-8 md:p-10 rounded-[2.5rem] md:rounded-[3.5rem] flex flex-col md:flex-row items-center justify-between gap-6 shadow-[0_0_60px_rgba(244,63,94,0.4)] ring-8 ring-rose-500/10">
             <div className="flex items-center space-x-6 text-left">
-              <div className="w-16 h-16 bg-rose-500 rounded-3xl flex items-center justify-center text-white shadow-xl">
-                <AlertTriangle size={32} />
+              <div className="w-20 h-20 bg-white rounded-[2rem] flex items-center justify-center text-rose-500 shadow-2xl animate-bounce">
+                <AlertCircle size={48} strokeWidth={3} />
               </div>
               <div>
-                <h3 className="text-xl font-black text-white uppercase tracking-tight leading-none">Système Bloqué</h3>
-                <p className="text-[11px] font-bold text-rose-400 uppercase tracking-widest mt-2">{blockedTasks.length} MISSION(S) REQUIERT VOTRE INTERVENTION</p>
+                <h3 className="text-2xl md:text-4xl font-black text-white uppercase tracking-tighter leading-none">Alerte Rouge iV</h3>
+                <p className="text-[11px] md:text-[13px] font-black text-white uppercase tracking-[0.2em] mt-3 opacity-90">{blockedTasks.length} MISSION(S) INTERROMPUE(S) - INTERVENTION IMMÉDIATE</p>
               </div>
             </div>
-            <div className="flex -space-x-3">
-              {blockedTasks.slice(0, 5).map(bt => (
-                <div key={bt.id} title={bt.title} className="w-12 h-12 rounded-xl bg-slate-900 border-2 border-rose-500/50 flex items-center justify-center text-rose-500 font-black text-xs hover:-translate-y-2 transition-transform cursor-help">
-                  {bt.title.substring(0, 2).toUpperCase()}
-                </div>
-              ))}
-              {blockedTasks.length > 5 && <div className="w-12 h-12 rounded-xl bg-rose-500 flex items-center justify-center text-white font-black text-xs">+{blockedTasks.length - 5}</div>}
-            </div>
+            <button 
+              onClick={() => onNavigate('tasks')}
+              className="px-10 py-5 bg-white text-rose-500 rounded-2xl font-black uppercase text-[11px] tracking-widest shadow-2xl active-scale hover:scale-105 transition-all"
+            >
+              Débloquer le Flux
+            </button>
           </div>
         </div>
       )}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 px-1">
         {visibleStats.map((s, i) => (
-          <div key={i} className="crystal-module p-6 md:p-8 rounded-[1.75rem] md:rounded-[2.5rem] flex flex-col justify-between h-36 md:h-48 group active-scale overflow-hidden relative text-left">
+          <div key={i} className="crystal-module p-6 md:p-8 rounded-[1.75rem] md:rounded-[2.5rem] flex flex-col justify-between h-36 md:h-48 group active-scale overflow-hidden relative text-left border-white/5">
             <div className={`absolute top-0 right-0 w-20 h-20 ${s.bg} blur-2xl opacity-40`}></div>
             <div className={`w-10 h-10 md:w-12 md:h-12 rounded-[1rem] md:rounded-2xl ${s.bg} flex items-center justify-center ${s.color} border border-white/5`}>
               <s.icon size={18} />
@@ -144,17 +131,17 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], clients 
           <div className="space-y-3 md:space-y-4">
             <div className="flex items-center justify-between px-3">
               <h3 className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Flux Prioritaire</h3>
-              <button onClick={() => onNavigate('tasks')} className="text-[9px] font-black text-sky-400 uppercase px-4 py-2 rounded-xl crystal-module active-scale">Tout voir</button>
+              <button onClick={() => onNavigate('tasks')} className="text-[9px] font-black text-sky-400 uppercase px-4 py-2 rounded-xl crystal-module active-scale border-white/5">Tout voir</button>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
               {relevantTasks.filter(t => t.status !== TaskStatus.DONE).slice(0, 4).map(task => (
-                <div key={task.id} onClick={() => onNavigate('tasks')} className={`crystal-module p-5 rounded-[1.5rem] md:rounded-[2rem] border-l-[4px] active-scale flex items-center justify-between group ${task.status === TaskStatus.BLOCKED ? 'border-l-rose-500 bg-rose-500/5' : 'border-l-sky-500'}`}>
+                <div key={task.id} onClick={() => onNavigate('tasks')} className={`crystal-module p-5 rounded-[1.5rem] md:rounded-[2rem] border-l-[4px] active-scale flex items-center justify-between group border-white/5 ${task.status === TaskStatus.BLOCKED ? 'border-l-rose-500 bg-rose-500/10' : 'border-l-sky-500'}`}>
                   <div className="truncate pr-4 flex-1 text-left">
                     <h4 className={`font-bold text-[12px] uppercase truncate transition-colors tracking-tight ${task.status === TaskStatus.BLOCKED ? 'text-rose-400' : 'text-white group-hover:text-sky-400'}`}>{task.title}</h4>
                     <p className="text-[9px] text-slate-600 font-bold mt-1.5 uppercase tracking-tighter">{task.dueDate} {task.status === TaskStatus.BLOCKED && '• BLOQUÉ'}</p>
                   </div>
-                  <div className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase flex-shrink-0 border ${task.status === TaskStatus.BLOCKED ? 'bg-rose-500 text-white border-rose-400' : task.priority === 'high' ? 'bg-rose-500/10 text-rose-500 border-rose-500/10' : 'bg-white/5 text-slate-400 border-white/5'}`}>
+                  <div className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase flex-shrink-0 border ${task.status === TaskStatus.BLOCKED ? 'bg-rose-500 text-white border-rose-400 animate-pulse' : task.priority === 'high' ? 'bg-rose-500/10 text-rose-500 border-rose-500/10' : 'bg-white/5 text-slate-400 border-white/5'}`}>
                     {task.status === TaskStatus.BLOCKED ? 'STOP' : (task.priority || 'MED')}
                   </div>
                 </div>
@@ -163,7 +150,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], clients 
           </div>
         </div>
 
-        <div className="crystal-module p-10 md:p-12 rounded-[2.5rem] md:rounded-[3.5rem] flex flex-col items-center justify-center text-center space-y-8 relative overflow-hidden group shadow-xl">
+        <div className="crystal-module p-10 md:p-12 rounded-[2.5rem] md:rounded-[3.5rem] flex flex-col items-center justify-center text-center space-y-8 relative overflow-hidden group shadow-xl border-white/5">
           <div className="absolute top-0 right-0 w-40 h-40 bg-sky-400/5 blur-[80px] rounded-full"></div>
           <div className="relative">
             <div className="w-40 h-40 md:w-48 md:h-48 rounded-full border-[10px] border-white/5 border-t-sky-400 flex items-center justify-center shadow-[0_0_40px_rgba(14,165,233,0.1)]">

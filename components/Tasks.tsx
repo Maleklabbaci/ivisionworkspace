@@ -1,6 +1,5 @@
-
 import React, { useState, useMemo } from 'react';
-import { Plus, X, Calendar as CalendarIcon, CheckCircle2, RotateCcw, Check, Trash2, Video, Palette, Globe, Megaphone, Send, Layers, ChevronRight, Zap, HelpCircle, CheckSquare, Save, User as UserIcon, ListChecks, Filter, Eye, EyeOff } from 'lucide-react';
+import { Plus, X, Calendar as CalendarIcon, CheckCircle2, RotateCcw, Check, Trash2, Video, Palette, Globe, Megaphone, Send, Layers, ChevronRight, Zap, HelpCircle, CheckSquare, Save, User as UserIcon, ListChecks, Filter, Eye, EyeOff, AlertCircle, AlertTriangle } from 'lucide-react';
 import { Task, TaskStatus, User, Client, Project, UserRole, TaskType } from '../types';
 import Modal from './Modal';
 
@@ -24,8 +23,8 @@ const TaskCard = ({ task, onClick, projectName, assignee, onUpdateStatus, isSele
     <div 
       onClick={() => isSelectionMode ? onToggleSelect(task.id) : onClick()}
       className={`relative p-5 rounded-[1.75rem] border transition-all duration-300 ${
-        isBlocked ? 'border-rose-500/40 bg-rose-500/10' : 
-        isUrgent ? 'border-amber-500/40 bg-amber-500/5' : 
+        isBlocked ? 'border-rose-500 bg-rose-600/10 ring-4 ring-rose-500/20 animate-pulse-subtle shadow-[0_0_30px_rgba(244,63,94,0.2)]' : 
+        isUrgent ? 'animate-urgent-glow border-amber-500 bg-amber-500/5' : 
         'border-white/5 bg-[#0A0F1E]/60'
       } ${isDone ? 'opacity-40 grayscale-[0.6]' : 'active:bg-white/[0.08] cursor-pointer'} ${isSelected ? 'ring-4 ring-sky-500/40 border-sky-400 bg-sky-500/10' : ''}`}
     >
@@ -35,16 +34,16 @@ const TaskCard = ({ task, onClick, projectName, assignee, onUpdateStatus, isSele
         </div>
       )}
 
-      <div className={`absolute left-0 top-6 bottom-6 w-1 rounded-r-full ${isBlocked ? 'bg-rose-500 shadow-[0_0_15px_#f43f5e]' : isUrgent ? 'bg-amber-500 shadow-[0_0_15px_#f59e0b]' : config.accent}`}></div>
+      <div className={`absolute left-0 top-6 bottom-6 w-1.5 rounded-r-full ${isBlocked ? 'bg-rose-500 shadow-[0_0_20px_#f43f5e]' : isUrgent ? 'bg-amber-500 shadow-[0_0_20px_#f59e0b]' : config.accent}`}></div>
 
       <div className="flex items-center justify-between mb-4">
         <div className={`flex items-center space-x-2 px-2.5 py-1 rounded-full ${
-          isBlocked ? 'bg-rose-500 text-white' : 
-          isUrgent ? 'bg-amber-500 text-slate-950' :
+          isBlocked ? 'bg-rose-500 text-white font-black' : 
+          isUrgent ? 'bg-amber-500 text-slate-950 font-black' :
           config.bg + ' ' + config.color
         } border border-white/5`}>
-          {isBlocked ? <Zap size={10} strokeWidth={3} /> : <config.icon size={10} strokeWidth={3} />}
-          <span className="text-[8px] font-black tracking-[0.1em] uppercase">{isBlocked ? 'BLOQUÉ' : config.label}</span>
+          {isBlocked ? <AlertTriangle size={10} strokeWidth={4} /> : isUrgent ? <Zap size={10} strokeWidth={3} fill="currentColor" /> : <config.icon size={10} strokeWidth={3} />}
+          <span className="text-[8px] font-black tracking-[0.1em] uppercase">{isBlocked ? 'ALERTE ROUGE' : isUrgent ? 'PRIORITÉ HAUTE' : config.label}</span>
         </div>
         <div className="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center text-[9px] font-black text-slate-400 border border-white/5 uppercase">
            {assignee?.name?.substring(0, 2) || 'iV'}
@@ -58,11 +57,11 @@ const TaskCard = ({ task, onClick, projectName, assignee, onUpdateStatus, isSele
       
       {!isSelectionMode && (
         <div className="flex items-center justify-between pt-3 mt-4 border-t border-white/5">
-          <div className={`flex items-center space-x-2 text-[9px] font-black uppercase tracking-tight ${isUrgent ? 'text-amber-500' : 'text-slate-600'}`}>
+          <div className={`flex items-center space-x-2 text-[9px] font-black uppercase tracking-tight ${isBlocked ? 'text-rose-500' : isUrgent ? 'text-amber-500 font-black' : 'text-slate-600'}`}>
             <CalendarIcon size={12} />
             <span>{task.dueDate}</span>
           </div>
-          <button onClick={(e) => { e.stopPropagation(); onUpdateStatus(task.id, isDone ? TaskStatus.IN_PROGRESS : TaskStatus.DONE); }} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all active-scale ${isDone ? 'bg-emerald-500 text-white' : 'bg-white/5 text-slate-600 hover:text-white border border-white/10'}`}>
+          <button onClick={(e) => { e.stopPropagation(); onUpdateStatus(task.id, isDone ? TaskStatus.IN_PROGRESS : TaskStatus.DONE); }} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all active-scale ${isDone ? 'bg-emerald-500 text-white shadow-lg' : isBlocked ? 'bg-rose-500 text-white shadow-lg' : 'bg-white/5 text-slate-600 hover:text-white border border-white/10'}`}>
             {isDone ? <RotateCcw size={16} strokeWidth={3} /> : <Check size={18} strokeWidth={4} />}
           </button>
         </div>
@@ -222,7 +221,7 @@ const Tasks = ({ tasks = [], users = [], clients = [], projects = [], currentUse
         </div>
       </div>
 
-      {/* CONSOLE D'ACTION MOBILE (OPTIMISÉE POUCE) */}
+      {/* CONSOLE D'ACTION MOBILE */}
       {selectedTaskIds.length > 0 && (
         <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[500] w-[94%] max-w-2xl bg-slate-900 border border-sky-500/40 rounded-[2.5rem] p-4 flex items-center justify-between shadow-[0_20px_60px_rgba(0,0,0,0.8)] animate-slide-up backdrop-blur-3xl ring-8 ring-slate-950/50">
            <div className="flex items-center space-x-4 pl-4">
@@ -237,12 +236,12 @@ const Tasks = ({ tasks = [], users = [], clients = [], projects = [], currentUse
         </div>
       )}
 
-      {/* MODAL MODIFICATION COLLECTIVE INTEGRALE */}
+      {/* MODAL MODIFICATION COLLECTIVE */}
       <Modal isOpen={viewMode === 'bulk'} onClose={() => setViewMode('list')} title="Mise à jour Lot" subtitle={`Réglage global de ${selectedTaskIds.length} missions`}>
          <div className="space-y-8 text-left p-1">
             <div className="p-5 bg-white/5 rounded-3xl border border-white/5 flex items-start space-x-4">
                <div className="w-10 h-10 rounded-2xl bg-sky-400/10 flex items-center justify-center text-sky-400 shrink-0"><HelpCircle size={20}/></div>
-               <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest leading-relaxed">Les champs vides ne seront pas modifiés sur les missions existantes. L'ordre sera propagé instantanément.</p>
+               <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest leading-relaxed">Les champs vides ne seront pas modifiés. L'ordre sera propagé instantanément.</p>
             </div>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -281,34 +280,14 @@ const Tasks = ({ tasks = [], users = [], clients = [], projects = [], currentUse
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-               <div className="space-y-2">
-                 <label className="label-iv">Typologie Flux</label>
-                 <select className="input-iv" value={bulkData.type} onChange={e => setBulkData({...bulkData, type: e.target.value})}>
-                   <option value="">-- Conserver type --</option>
-                   <option value="video">VIDEO CONTENT</option>
-                   <option value="design">GRAPHIC DESIGN</option>
-                   <option value="website">WEB DEVELOPMENT</option>
-                   <option value="ads">ADVERTISING & PERFORMANCE</option>
-                 </select>
-               </div>
-               <div className="space-y-2">
-                 <label className="label-iv">Affectation Projet</label>
-                 <select className="input-iv" value={bulkData.projectId} onChange={e => setBulkData({...bulkData, projectId: e.target.value})}>
-                   <option value="">-- Conserver projet --</option>
-                   {projects.map((p:any) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                 </select>
-               </div>
-            </div>
-
-            <button onClick={applyBulkEdit} className="w-full py-7 bg-sky-500 text-white font-black rounded-3xl shadow-2xl shadow-sky-500/20 active-scale uppercase text-[11px] tracking-[0.2em] mt-4 hover:bg-sky-400 transition-all flex items-center justify-center space-x-3">
+            <button onClick={applyBulkEdit} className="w-full py-7 bg-sky-500 text-white font-black rounded-3xl shadow-2xl active-scale uppercase text-[11px] tracking-[0.2em] mt-4 hover:bg-sky-400 transition-all flex items-center justify-center space-x-3">
                <Save size={18} />
                <span>Propager l'Ordre de Masse</span>
             </button>
          </div>
       </Modal>
 
-      {/* MODAL AJOUT/EDITION INDIVIDUELLE */}
+      {/* MODAL AJOUT/EDITION */}
       <Modal isOpen={viewMode === 'add' || viewMode === 'edit'} onClose={() => { setViewMode('list'); setSelectedTaskId(null); }} title={viewMode === 'add' ? 'Indexation Mission' : 'Dossier Technique'}>
         <form onSubmit={(e) => { e.preventDefault(); if (viewMode === 'edit') onUpdateTask(formData); else onAddTask(formData); setViewMode('list'); setSelectedTaskId(null); }} className="space-y-6 text-left p-1">
             <div className="space-y-2">
@@ -347,27 +326,6 @@ const Tasks = ({ tasks = [], users = [], clients = [], projects = [], currentUse
                 <input type="date" required className="input-iv" value={formData.dueDate} onChange={e => setFormData({...formData, dueDate: e.target.value})} />
               </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              <div className="space-y-2">
-                <label className="label-iv">Priorité</label>
-                <select className="input-iv" value={formData.priority} onChange={e => setFormData({...formData, priority: e.target.value as any})}>
-                  <option value="low">BASSE</option>
-                  <option value="medium">NORMALE</option>
-                  <option value="high">URGENTE</option>
-                </select>
-              </div>
-              <div className="space-y-2">
-                <label className="label-iv">Dossier / CRM</label>
-                <select className="input-iv" value={formData.clientId} onChange={e => setFormData({...formData, clientId: e.target.value})}>
-                  <option value="">INTERNE iVISION</option>
-                  {clients.map((c:any) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <label className="label-iv">Briefing de Production</label>
-              <textarea className="input-iv h-32 resize-none leading-relaxed" placeholder="Spécifications techniques..." value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
-            </div>
             <button type="submit" className="w-full py-7 bg-sky-500 text-white font-black rounded-3xl shadow-2xl active-scale uppercase text-[11px] tracking-widest hover:bg-sky-400 transition-all flex items-center justify-center space-x-3">
                <Save size={18} />
                <span>{viewMode === 'edit' ? 'Mettre à jour Dossier' : 'Déployer Mission'}</span>
@@ -375,7 +333,7 @@ const Tasks = ({ tasks = [], users = [], clients = [], projects = [], currentUse
          </form>
       </Modal>
 
-      {/* MODAL CONSULTATION RAPIDE */}
+      {/* CONSULTATION RAPIDE */}
       <Modal isOpen={!!selectedTaskId && !!currentTask && viewMode === 'list'} onClose={() => setSelectedTaskId(null)} title={currentTask?.title}>
         <div className="space-y-10 text-left p-1">
            <div className={`p-8 rounded-[2.5rem] border shadow-inner ${currentTask?.status === TaskStatus.BLOCKED ? 'bg-rose-500/10 border-rose-500/20' : 'bg-white/5 border-white/5'}`}>
@@ -383,7 +341,7 @@ const Tasks = ({ tasks = [], users = [], clients = [], projects = [], currentUse
               <p className="text-base text-slate-200 leading-relaxed font-medium">{currentTask?.description || "Aucun briefing disponible."}</p>
            </div>
            <div className="flex flex-col gap-4">
-            {currentTask?.status !== TaskStatus.DONE && <button onClick={() => { onUpdateStatus(currentTask.id, TaskStatus.DONE); setSelectedTaskId(null); }} className="w-full py-7 bg-emerald-500 text-slate-950 font-black rounded-3xl uppercase text-[11px] shadow-2xl shadow-emerald-500/20 active-scale tracking-widest">VALIDER LA MISSION</button>}
+            {currentTask?.status !== TaskStatus.DONE && <button onClick={() => { onUpdateStatus(currentTask.id, TaskStatus.DONE); setSelectedTaskId(null); }} className="w-full py-7 bg-emerald-500 text-slate-950 font-black rounded-3xl uppercase text-[11px] shadow-2xl active-scale tracking-widest">VALIDER LA MISSION</button>}
             <div className="flex gap-4">
               <button onClick={() => { setFormData({ ...currentTask }); setViewMode('edit'); }} className="flex-1 py-6 glass text-white font-black rounded-[2rem] border border-white/10 uppercase text-[10px] tracking-widest active-scale">ÉDITER LE PROTOCOL</button>
               <button onClick={() => { if(confirm('Supprimer définitivement ?')) { onDeleteTask(currentTask?.id); setSelectedTaskId(null); } }} className="w-16 h-16 bg-rose-500/10 text-rose-500 border border-rose-500/20 rounded-[1.8rem] flex items-center justify-center active-scale transition-all hover:bg-rose-500 hover:text-white"><Trash2 size={24}/></button>

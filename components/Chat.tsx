@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Send, Paperclip, Hash, Lock, Plus, X, Users, UserPlus, Trash2, Globe, AlertTriangle, Check, Clock, ShieldAlert, CheckCircle2, Zap, HelpCircle, Settings2, UserMinus, ArrowLeft, MessageSquare } from 'lucide-react';
+import { Send, Paperclip, Hash, Lock, Plus, X, Users, UserPlus, Trash2, Globe, AlertTriangle, Check, Clock, ShieldAlert, CheckCircle2, Zap, HelpCircle, Settings2, UserMinus, ArrowLeft, MessageSquare, AlertCircle, Info, ChevronRight } from 'lucide-react';
 import { Message, User, Channel, UserRole, Task, TaskStatus, Project } from '../types';
 import Modal from './Modal';
 
@@ -22,6 +21,9 @@ const Chat: React.FC<any> = ({
   const [mentionQuery, setMentionQuery] = useState('');
   const [showMentionDropdown, setShowMentionDropdown] = useState(false);
   const [mentionStartIndex, setMentionStartIndex] = useState(-1);
+
+  // État pour les commandes intelligentes en attente de confirmation
+  const [pendingCommand, setPendingCommand] = useState<{ task: Task, action: 'terminé' | 'urgent' | 'bloquer' } | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -51,7 +53,6 @@ const Chat: React.FC<any> = ({
     if (!isMobileListOpen) messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [activeMessages.length, isMobileListOpen]);
 
-  // Si on sélectionne un canal, on ferme la liste mobile
   useEffect(() => {
     if (currentChannelId) setIsMobileListOpen(false);
   }, [currentChannelId]);
@@ -66,10 +67,46 @@ const Chat: React.FC<any> = ({
   }, [mentionQuery, showMentionDropdown, tasks, projects, users]);
 
   const handleSend = () => {
-    if (!newMessage.trim() || !currentChannelId) return;
-    onSendMessage(newMessage, currentChannelId);
+    const content = newMessage.trim();
+    if (!content || !currentChannelId) return;
+
+    // Détection flexible : @MissionAction ou @Mission + Action
+    const commandMatch = content.match(/@([^\s+]+)\s*(\+)?\s*(terminé|urgent|bloquer)/i);
+    
+    if (commandMatch) {
+      const taskSlug = commandMatch[1].toLowerCase();
+      const action = commandMatch[3].toLowerCase() as 'terminé' | 'urgent' | 'bloquer';
+      
+      const foundTask = tasks.find((t: Task) => t.title.toLowerCase().replace(/\s+/g, '') === taskSlug);
+      
+      if (foundTask) {
+        setPendingCommand({ task: foundTask, action });
+        return;
+      }
+    }
+
+    onSendMessage(content, currentChannelId);
     setNewMessage('');
     setShowMentionDropdown(false);
+  };
+
+  const confirmSmartCommand = () => {
+    if (!pendingCommand) return;
+    const { task, action } = pendingCommand;
+
+    if (action === 'terminé') {
+      onUpdateTaskStatus(task.id, TaskStatus.DONE);
+      onSendMessage(`✅ [SYSTÈME] Mission "${task.title}" validée et terminée par @${currentUser.name.replace(/\s+/g, '')}.`, currentChannelId);
+    } else if (action === 'urgent') {
+      onUpdateTaskPriority(task.id, 'high');
+      onSendMessage(`⚡ [URGENT] Alerte prioritaire déclenchée sur "${task.title}". Activation de la signalétique d'urgence globale.`, currentChannelId);
+    } else if (action === 'bloquer') {
+      onUpdateTaskStatus(task.id, TaskStatus.BLOCKED);
+      onSendMessage(`🚨 [CRITIQUE] Mission "${task.title}" BLOQUÉE par @${currentUser.name.replace(/\s+/g, '')}. Le système a été placé en état d'ALERTE ROUGE sur tous les Dashboards.`, currentChannelId);
+    }
+
+    setPendingCommand(null);
+    setNewMessage('');
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -98,7 +135,7 @@ const Chat: React.FC<any> = ({
   return (
     <div className="flex h-[calc(100vh-140px)] rounded-[2.5rem] md:rounded-[3rem] overflow-hidden border border-white/10 relative bg-slate-900/40 backdrop-blur-3xl animate-fade-in shadow-2xl">
       
-      {/* SIDEBAR PC / LISTE MOBILE */}
+      {/* SIDEBAR */}
       <div className={`${isMobileListOpen ? 'flex' : 'hidden'} md:flex flex-col w-full md:w-80 border-r border-white/5 bg-slate-950/60 text-left transition-all`}>
         <div className="p-8 md:p-10 border-b border-white/5 flex justify-between items-center bg-slate-950/20">
             <h2 className="font-black text-white text-[12px] uppercase tracking-[0.3em]">FLUX iVISION</h2>
@@ -191,7 +228,34 @@ const Chat: React.FC<any> = ({
         )}
       </div>
 
-      {/* MODALS ADMINISTRATION CANAL */}
+      {/* CONFIRMATION DE COMMANDE STRATÉGIQUE */}
+      <Modal isOpen={!!pendingCommand} onClose={() => setPendingCommand(null)} title="Panneau de Contrôle" subtitle="Validation d'ordre opérationnel">
+         <div className="space-y-8 text-left py-4">
+            <div className={`p-8 rounded-[2.5rem] border flex items-center space-x-6 ${pendingCommand?.action === 'bloquer' ? 'bg-rose-500/10 border-rose-500/30 ring-4 ring-rose-500/20' : pendingCommand?.action === 'urgent' ? 'bg-amber-500/10 border-amber-500/30' : 'bg-emerald-500/10 border-emerald-500/30'}`}>
+               <div className={`w-20 h-20 rounded-3xl flex items-center justify-center shadow-2xl ${pendingCommand?.action === 'bloquer' ? 'bg-rose-500 text-white animate-pulse' : pendingCommand?.action === 'urgent' ? 'bg-amber-500 text-slate-950' : 'bg-emerald-500 text-white'}`}>
+                  {pendingCommand?.action === 'bloquer' ? <AlertCircle size={40} /> : pendingCommand?.action === 'urgent' ? <Zap size={40} fill="currentColor" /> : <CheckCircle2 size={40} />}
+               </div>
+               <div>
+                  <h4 className="text-2xl font-black text-white uppercase tracking-tight leading-none">Passer en {pendingCommand?.action.toUpperCase()}</h4>
+                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-[0.2em] mt-3 truncate max-w-[200px]">Mission: {pendingCommand?.task.title}</p>
+               </div>
+            </div>
+
+            <div className="space-y-4 px-4 text-slate-400 text-sm leading-relaxed font-medium">
+               <p>Cette action va modifier l'état de la mission en temps réel sur tout le réseau iVISION.</p>
+               {pendingCommand?.action === 'bloquer' && <p className="text-rose-400 font-bold uppercase tracking-widest text-xs">🚨 ATTENTION: Déclenchera l'état d'ALERTE ROUGE global sur tous les écrans.</p>}
+               {pendingCommand?.action === 'urgent' && <p className="text-amber-400 font-bold uppercase tracking-widest text-xs">⚡ ALERTE: La mission passera en priorité critique (glow doré actif).</p>}
+               {pendingCommand?.action === 'terminé' && <p className="text-emerald-400 font-bold uppercase tracking-widest text-xs">✅ ARCHIVE: Validera définitivement l'exécution du briefing.</p>}
+            </div>
+
+            <div className="flex flex-col gap-3">
+               <button onClick={confirmSmartCommand} className={`w-full py-6 rounded-2xl font-black uppercase text-[11px] tracking-[0.3em] shadow-2xl active-scale transition-all ${pendingCommand?.action === 'bloquer' ? 'bg-rose-500 text-white hover:bg-rose-600 shadow-rose-500/20' : pendingCommand?.action === 'urgent' ? 'bg-amber-500 text-slate-950 hover:bg-amber-400 shadow-amber-500/20' : 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-emerald-500/20'}`}>Propager l'Ordre</button>
+               <button onClick={() => setPendingCommand(null)} className="w-full py-5 glass rounded-2xl font-black uppercase text-[11px] text-slate-500 active-scale border border-white/5">Annuler</button>
+            </div>
+         </div>
+      </Modal>
+
+      {/* ADMIN CANAL */}
       <Modal isOpen={showChannelSettings} onClose={() => setShowChannelSettings(false)} title="Pilotage Canal" subtitle="Sécurité & Accès">
          <div className="space-y-8 text-left">
             <div className="p-6 bg-white/5 rounded-[2rem] border border-white/5">
@@ -207,7 +271,6 @@ const Chat: React.FC<any> = ({
                   <div className={`w-10 h-5 rounded-full p-1 transition-all ${activeChannel?.is_private ? 'bg-sky-500' : 'bg-white/10'}`}><div className={`w-3 h-3 bg-white rounded-full transition-transform ${activeChannel?.is_private ? 'translate-x-5' : 'translate-x-0'}`} /></div>
                 </button>
             </div>
-
             <div className="p-6 bg-white/5 rounded-[2rem] border border-white/5">
                 <h4 className="label-iv mb-4 font-black text-sky-400">Membres Habilités</h4>
                 <div className="space-y-2 max-h-64 overflow-y-auto no-scrollbar">
@@ -228,10 +291,10 @@ const Chat: React.FC<any> = ({
       <Modal isOpen={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)} title="Révoquer le Canal">
          <div className="space-y-8 text-center py-4">
             <div className="w-24 h-24 rounded-full bg-rose-500/10 border-4 border-rose-500/20 flex items-center justify-center mx-auto text-rose-500 animate-pulse"><AlertTriangle size={48}/></div>
-            <p className="text-slate-400 text-base leading-relaxed px-6">Voulez-vous vraiment détruire tout l'historique du canal <span className="text-white font-black">"#{activeChannel?.name}"</span> ?</p>
+            <p className="text-slate-400 text-base leading-relaxed px-6 font-medium">Voulez-vous vraiment détruire tout l'historique du canal <span className="text-white font-black">"#{activeChannel?.name}"</span> ?</p>
             <div className="flex flex-col gap-3">
                <button onClick={() => { onDeleteChannel(currentChannelId); setShowDeleteConfirm(false); setIsMobileListOpen(true); }} className="w-full py-5 bg-rose-500 text-white rounded-2xl font-black uppercase text-[11px] shadow-2xl active-scale">Confirmer Suppression</button>
-               <button onClick={() => setShowDeleteConfirm(false)} className="w-full py-5 glass rounded-2xl font-black uppercase text-[11px] text-slate-500">Annuler</button>
+               <button onClick={() => setShowDeleteConfirm(false)} className="w-full py-5 glass rounded-2xl font-black uppercase text-[11px] text-slate-500 border border-white/5">Annuler</button>
             </div>
          </div>
       </Modal>
