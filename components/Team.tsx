@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { User, UserRole, UserPermissions } from '../types';
-import { Plus, X, Edit2, Trash2, Loader2, ShieldCheck, CheckSquare, Square, User as UserIcon, Mail, Key, Check, Save, Shield, Zap } from 'lucide-react';
+import { Plus, X, Edit2, Trash2, Loader2, ShieldCheck, CheckSquare, Square, User as UserIcon, Mail, Key, Check, Save, Shield, Zap, HelpCircle } from 'lucide-react';
 import Modal from './Modal';
 
 const DEFAULT_PERMISSIONS: UserPermissions = {
@@ -14,7 +14,7 @@ const DEFAULT_PERMISSIONS: UserPermissions = {
   canManageCampaigns: false,
   canManageProjects: false,
   canManageFinances: false,
-  canViewProjectFinances: false, // Par défaut à false
+  canViewProjectFinances: false,
 };
 
 const PERMISSION_LABELS: Record<keyof UserPermissions, string> = {
@@ -33,7 +33,7 @@ const PERMISSION_LABELS: Record<keyof UserPermissions, string> = {
   canManageCampaigns: "Gérer les campagnes",
   canManageFinances: "Gérer les finances",
   canManageProjects: "Gérer les projets",
-  canViewProjectFinances: "Voir les finances des projets", // Nouveau label
+  canViewProjectFinances: "Voir les finances des projets",
 };
 
 const PermissionToggle: React.FC<{
@@ -57,6 +57,7 @@ const PermissionToggle: React.FC<{
 
 const Team: React.FC<any> = ({ currentUser, users, onAddUser, onRemoveUser, onUpdateMember }) => {
   const [showModal, setShowModal] = useState<'add' | 'edit' | null>(null);
+  const [showInfo, setShowInfo] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [formData, setFormData] = useState<any>({ 
     name: '', 
@@ -131,9 +132,14 @@ const Team: React.FC<any> = ({ currentUser, users, onAddUser, onRemoveUser, onUp
   return (
     <div className="space-y-8 animate-fade-in">
       <div className="flex justify-between items-end px-2">
-        <div className="text-left">
-          <p className="text-[10px] font-black uppercase text-emerald-400 mb-2 tracking-[0.4em]">Team Core System</p>
-          <h2 className="text-3xl md:text-5xl font-black text-white uppercase tracking-tight leading-none">Équipe</h2>
+        <div className="flex items-start space-x-6 text-left">
+          <div>
+            <p className="text-[10px] font-black uppercase text-emerald-400 mb-2 tracking-[0.4em]">Team Core System</p>
+            <h2 className="text-3xl md:text-5xl font-black text-white uppercase tracking-tight leading-none">Équipe</h2>
+          </div>
+          <button onClick={() => setShowInfo(true)} className="w-12 h-12 rounded-2xl glass flex items-center justify-center text-emerald-400 hover:bg-emerald-400/10 active-scale transition-all mt-6 md:mt-10">
+             <HelpCircle size={28} />
+          </button>
         </div>
         {isAdmin && (
           <button onClick={() => setShowModal('add')} className="w-14 h-14 bg-emerald-400 text-slate-950 rounded-2xl shadow-xl shadow-emerald-500/10 active-scale flex items-center justify-center transition-all hover:bg-emerald-300">
@@ -141,6 +147,27 @@ const Team: React.FC<any> = ({ currentUser, users, onAddUser, onRemoveUser, onUp
           </button>
         )}
       </div>
+
+      <Modal isOpen={showInfo} onClose={() => setShowInfo(false)} title="Gestion d'Équipe" subtitle="Matrice d'Habilitation iV">
+         <div className="space-y-6 text-left">
+            <div className="space-y-4">
+               <div className="p-4 bg-emerald-400/5 rounded-2xl border border-emerald-400/10">
+                  <h4 className="text-emerald-400 font-bold text-xs uppercase mb-2">Permissions Granulaires</h4>
+                  <p className="text-slate-400 text-xs">Chaque membre possède une matrice de permissions spécifique. L'administrateur peut modifier ces droits à tout moment via le bouton édition.</p>
+               </div>
+               <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
+                  <h4 className="text-slate-400 font-bold text-xs uppercase mb-2">Rôles iVISION</h4>
+                  <p className="text-slate-400 text-xs">Les rôles (Admin, Membre, Analyste, etc.) servent de base, mais les permissions individuelles prévalent sur les accès aux modules.</p>
+               </div>
+               {isAdmin && (
+                 <div className="p-4 bg-rose-500/10 rounded-2xl border border-rose-500/20">
+                    <h4 className="text-rose-500 font-bold text-xs uppercase mb-2">Sécurité Critique</h4>
+                    <p className="text-slate-400 text-xs">La suppression d'un membre révoque instantanément son accès à l'ensemble du système (Base de données + Auth).</p>
+                 </div>
+               )}
+            </div>
+         </div>
+      </Modal>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {users.map((user: User) => (

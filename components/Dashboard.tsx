@@ -1,7 +1,8 @@
 
-import React, { useMemo } from 'react';
-import { TrendingUp, Target, Zap, Clock, ChevronRight, Activity, BarChart3, ListChecks, AlertTriangle } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { TrendingUp, Target, Zap, Clock, ChevronRight, Activity, BarChart3, ListChecks, AlertTriangle, Info, HelpCircle } from 'lucide-react';
 import { Task, User, ViewState, TaskStatus, UserRole, Client } from '../types';
+import Modal from './Modal';
 
 interface DashboardProps {
   currentUser: User;
@@ -11,6 +12,7 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], clients = [], onNavigate }) => {
+  const [showInfo, setShowInfo] = useState(false);
   const today = useMemo(() => new Date().toLocaleDateString('en-CA'), []);
   const isAdminOrManager = currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.PROJECT_MANAGER;
   const canViewReports = isAdminOrManager || !!currentUser.permissions?.canViewReports;
@@ -41,15 +43,46 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], clients 
   return (
     <div className="space-y-6 md:space-y-8 animate-fade-in">
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-4 px-1">
-        <div>
-          <p className="text-[10px] font-black uppercase text-sky-400 mb-1 tracking-widest">iVISION ENGINE • CRYSTAL CORE</p>
-          <h1 className="text-2xl md:text-5xl font-black text-white tracking-tighter uppercase leading-none">Bonjour, {currentUser.name.split(' ')[0]} 👋</h1>
+        <div className="flex items-start space-x-4">
+          <div>
+            <p className="text-[10px] font-black uppercase text-sky-400 mb-1 tracking-widest text-left">iVISION ENGINE • CRYSTAL CORE</p>
+            <h1 className="text-2xl md:text-5xl font-black text-white tracking-tighter uppercase leading-none text-left">Bonjour, {currentUser.name.split(' ')[0]} 👋</h1>
+          </div>
+          <button onClick={() => setShowInfo(true)} className="w-10 h-10 md:w-12 md:h-12 rounded-2xl glass flex items-center justify-center text-sky-400 hover:bg-sky-400/10 active-scale transition-all mt-2 md:mt-4">
+             <HelpCircle size={24} />
+          </button>
         </div>
         <div className="hidden md:flex items-center space-x-3 crystal-module px-6 py-3 rounded-2xl">
            <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-tight">{currentUser.role}</span>
         </div>
       </header>
+
+      <Modal isOpen={showInfo} onClose={() => setShowInfo(false)} title="Guide Dashboard iV" subtitle="Centre de Commandement">
+         <div className="space-y-6 text-left">
+            <p className="text-slate-300 text-sm leading-relaxed">Bienvenue sur votre interface de pilotage. Voici vos accès actuels :</p>
+            <div className="space-y-4">
+               <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
+                  <h4 className="text-sky-400 font-bold text-xs uppercase mb-2">Surveillance Globale</h4>
+                  <p className="text-slate-400 text-xs">Visualisez vos KPI en temps réel. Le score de rendement iV est calculé sur vos missions validées ce cycle.</p>
+               </div>
+               <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
+                  <h4 className="text-amber-400 font-bold text-xs uppercase mb-2">Alertes Bloquages</h4>
+                  <p className="text-slate-400 text-xs">Si une mission passe en statut <strong>BLOQUÉ</strong>, elle apparaîtra immédiatement en haut de votre écran pour intervention.</p>
+               </div>
+               {isAdminOrManager && (
+                 <div className="p-4 bg-emerald-400/10 rounded-2xl border border-emerald-400/20">
+                    <h4 className="text-emerald-400 font-bold text-xs uppercase mb-2">Privilèges {currentUser.role}</h4>
+                    <ul className="text-slate-400 text-xs space-y-2 list-disc pl-4">
+                       <li>Vue consolidée de toute l'équipe</li>
+                       <li>Accès direct aux audits d'intelligence</li>
+                       <li>Gestion du pipeline CRM</li>
+                    </ul>
+                 </div>
+               )}
+            </div>
+         </div>
+      </Modal>
 
       {/* SECTION BLOCAGES CRITIQUES */}
       {blockedTasks.length > 0 && (

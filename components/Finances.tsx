@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { Plus, X, Wallet, TrendingUp, Users, ShieldCheck, Edit3, Sparkles, Check, Clock, Trash2, Layers, Megaphone, Receipt, Plane, Globe, Briefcase, Type, DollarSign, Activity } from 'lucide-react';
+import { Plus, X, Wallet, TrendingUp, Users, ShieldCheck, Edit3, Sparkles, Check, Clock, Trash2, Layers, Megaphone, Receipt, Plane, Globe, Briefcase, Type, DollarSign, Activity, HelpCircle } from 'lucide-react';
 import { SalaryRecord, User, UserRole, Project, Expense, AdCampaignExpense } from '../types';
 import Modal from './Modal';
 
@@ -28,6 +28,7 @@ const Finances: React.FC<FinancesProps> = ({
   const [activeTab, setActiveTab] = useState<'salaires' | 'frais' | 'ads'>('salaires');
   const [viewMode, setViewMode] = useState<'list' | 'add' | 'edit'>('list');
   const [filterFreq, setFilterFreq] = useState<'all' | 'hebdo' | 'mensuel'>('all');
+  const [showInfo, setShowInfo] = useState(false);
   
   const [salaryForm, setSalaryForm] = useState<Partial<SalaryRecord>>({ userId: '', amount: 0, bonus: 0, frequency: 'mensuel', status: 'pending', projectId: '' });
   const [bonusToAdd, setBonusToAdd] = useState<number>(0);
@@ -72,45 +73,25 @@ const Finances: React.FC<FinancesProps> = ({
     closeModals();
   };
 
-  const getModalTitle = () => {
-    if (activeTab === 'salaires') return viewMode === 'edit' ? 'Mise à jour Flux' : 'Indexation Flux';
-    if (activeTab === 'frais') return 'Nouveau Frais Op.';
-    return 'Indexation ADS';
-  };
-
   return (
     <div className="space-y-10 md:space-y-16 animate-fade-in pb-24">
       <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-8 px-2 md:px-4">
-        <div className="text-left">
-          <p className="text-[11px] md:text-[13px] font-bold uppercase text-amber-400 mb-4 tracking-normal">FINANCIAL CORE SYSTEM • v4.0</p>
-          <h2 className="text-4xl md:text-7xl font-black text-white tracking-tighter uppercase leading-none">Finance</h2>
-          
-          <div className="flex bg-white/5 p-1.5 rounded-[2.5rem] border border-white/5 mt-10 md:mt-12 w-full md:w-fit overflow-x-auto no-scrollbar">
-            {[
-              { id: 'salaires', label: 'Salaires', icon: Users },
-              { id: 'frais', label: 'Dépenses', icon: Receipt },
-              { id: 'ads', label: 'ADS', icon: Megaphone }
-            ].map(tab => (
-              <button 
-                key={tab.id} 
-                onClick={() => { setActiveTab(tab.id as any); setViewMode('list'); }} 
-                className={`flex-1 md:flex-none px-10 md:px-14 py-4 md:py-5 rounded-[2rem] text-[11px] md:text-[13px] font-bold uppercase flex items-center justify-center space-x-4 transition-all whitespace-nowrap tracking-normal ${activeTab === tab.id ? 'bg-amber-400 text-slate-950' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}
-              >
-                <tab.icon size={18}/>
-                <span>{tab.label}</span>
-              </button>
-            ))}
+        <div className="flex items-start space-x-6 text-left">
+          <div>
+            <p className="text-[11px] md:text-[13px] font-bold uppercase text-amber-400 mb-4 tracking-normal">FINANCIAL CORE SYSTEM • v4.0</p>
+            <h2 className="text-4xl md:text-7xl font-black text-white tracking-tighter uppercase leading-none">Finance</h2>
           </div>
+          <button onClick={() => setShowInfo(true)} className="w-12 h-12 rounded-2xl glass flex items-center justify-center text-amber-400 hover:bg-amber-400/10 active-scale transition-all mt-6 md:mt-10">
+             <HelpCircle size={28} />
+          </button>
         </div>
 
         <div className="flex items-center justify-between lg:justify-end space-x-6">
-          {activeTab === 'salaires' && (
-            <div className="flex bg-white/5 p-2 rounded-2xl border border-white/10">
-              {['all', 'hebdo', 'mensuel'].map(f => (
-                <button key={f} onClick={() => setFilterFreq(f as any)} className={`px-5 py-2.5 rounded-xl text-[10px] md:text-[11px] font-bold uppercase transition-all tracking-normal ${filterFreq === f ? 'bg-white/10 text-white' : 'text-slate-600'}`}>{f}</button>
-              ))}
-            </div>
-          )}
+          <div className="flex bg-white/5 p-2 rounded-2xl border border-white/10">
+            {['all', 'hebdo', 'mensuel'].map(f => (
+              <button key={f} onClick={() => setFilterFreq(f as any)} className={`px-5 py-2.5 rounded-xl text-[10px] md:text-[11px] font-bold uppercase transition-all tracking-normal ${filterFreq === f ? 'bg-white/10 text-white' : 'text-slate-600'}`}>{f}</button>
+            ))}
+          </div>
           {isAdmin && (
             <button onClick={() => setViewMode('add')} className="w-16 h-16 md:w-24 md:h-24 bg-amber-400 text-slate-950 rounded-[2rem] md:rounded-[3rem] shadow-2xl active-scale flex items-center justify-center hover:scale-110 transition-transform">
               <Plus size={36} strokeWidth={3} />
@@ -118,6 +99,44 @@ const Finances: React.FC<FinancesProps> = ({
           )}
         </div>
       </header>
+
+      <Modal isOpen={showInfo} onClose={() => setShowInfo(false)} title="Audit Financier" subtitle="Régulations iV">
+         <div className="space-y-6 text-left">
+            <div className="space-y-4">
+               <div className="p-4 bg-amber-400/5 rounded-2xl border border-amber-400/10">
+                  <h4 className="text-amber-400 font-bold text-xs uppercase mb-2">Gestion des Flux</h4>
+                  <p className="text-slate-400 text-xs">Suivez les dépenses opérationnelles et les budgets ADS par projet. Les totaux sont actualisés en temps réel.</p>
+               </div>
+               <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
+                  <h4 className="text-slate-400 font-bold text-xs uppercase mb-2">Salaires & Bonus</h4>
+                  <p className="text-slate-400 text-xs">Le registre salarial permet d'indexer les rémunérations hebdomadaires ou mensuelles avec des bonus de performance modulables.</p>
+               </div>
+               {!isAdmin && (
+                 <div className="p-4 bg-rose-500/10 rounded-2xl border border-rose-500/20">
+                    <h4 className="text-rose-500 font-bold text-xs uppercase mb-2">Accès Limité</h4>
+                    <p className="text-slate-400 text-xs">En tant que membre, vous ne pouvez voir que les données financières liées à vos projets affectés.</p>
+                 </div>
+               )}
+            </div>
+         </div>
+      </Modal>
+
+      <div className="flex bg-white/5 p-1.5 rounded-[2.5rem] border border-white/5 mt-10 md:mt-12 w-full md:w-fit overflow-x-auto no-scrollbar ml-2 md:ml-4">
+        {[
+          { id: 'salaires', label: 'Salaires', icon: Users },
+          { id: 'frais', label: 'Dépenses', icon: Receipt },
+          { id: 'ads', label: 'ADS', icon: Megaphone }
+        ].map(tab => (
+          <button 
+            key={tab.id} 
+            onClick={() => { setActiveTab(tab.id as any); setViewMode('list'); }} 
+            className={`flex-1 md:flex-none px-10 md:px-14 py-4 md:py-5 rounded-[2rem] text-[11px] md:text-[13px] font-bold uppercase flex items-center justify-center space-x-4 transition-all whitespace-nowrap tracking-normal ${activeTab === tab.id ? 'bg-amber-400 text-slate-950' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}
+          >
+            <tab.icon size={18}/>
+            <span>{tab.label}</span>
+          </button>
+        ))}
+      </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-10">
         {[
@@ -245,19 +264,12 @@ const Finances: React.FC<FinancesProps> = ({
             })}
           </div>
         )}
-
-        {activeTab === 'salaires' && salaries.length === 0 && (
-          <div className="crystal-module p-32 rounded-[5rem] text-center flex flex-col items-center opacity-30">
-             <Users size={64} className="text-slate-800 mb-8" />
-             <p className="text-[12px] font-bold uppercase">Registre iV Vierge</p>
-          </div>
-        )}
       </div>
 
       <Modal 
         isOpen={viewMode === 'add' || viewMode === 'edit'} 
         onClose={closeModals}
-        title={getModalTitle()}
+        title={activeTab === 'salaires' ? (viewMode === 'edit' ? 'Mise à jour Flux' : 'Indexation Flux') : (activeTab === 'frais' ? 'Nouveau Frais Op.' : 'Indexation ADS')}
         subtitle="Moteur de Gestion Financière iVISION"
       >
         <form onSubmit={handleSubmit} className="space-y-8 text-left">

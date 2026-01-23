@@ -155,12 +155,18 @@ const App: React.FC = () => {
             if (exists) return prev.map(t => t.id === mappedTask.id ? mappedTask : t);
             return [mappedTask, ...prev];
           });
-          if (mappedTask.status === TaskStatus.BLOCKED && (payload.eventType === 'INSERT' || payload.old.status !== TaskStatus.BLOCKED)) {
+          if (mappedTask.status === TaskStatus.BLOCKED && (payload.eventType === 'INSERT' || (payload.old && payload.old.status !== TaskStatus.BLOCKED))) {
             addNotification("SYSTÈME BLOQUÉ", `La mission "${mappedTask.title}" est bloquée !`, "urgent");
             playSound();
           }
         }
-      }).subscribe();
+      })
+      .on('postgres_changes', { event: '*', table: 'channels' }, (payload) => {
+        if (payload.eventType === 'INSERT') setChannels(prev => [...prev, mapFromDB('channels', payload.new)]);
+        else if (payload.eventType === 'UPDATE') setChannels(prev => prev.map(c => c.id === payload.new.id ? mapFromDB('channels', payload.new) : c));
+        else if (payload.eventType === 'DELETE') setChannels(prev => prev.filter(c => c.id !== payload.old.id));
+      })
+      .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [currentUser, users, addNotification, playSound]);
 
@@ -284,17 +290,48 @@ const AppContent: React.FC<any> = ({ currentUser, users, tasks, clients, leads, 
   const navigate = useNavigate();
   const [currentChannelId, setCurrentChannelId] = useState<string | null>(null);
   useEffect(() => { if (channels.length > 0 && !currentChannelId) setCurrentChannelId(channels[0].id); }, [channels, currentChannelId]);
+  
+  const handleUpdateTask = async (t: any) => {
+    const dbTask = {
+      title: t.title,
+      description: t.description,
+      assignee_id: t.assigneeId,
+      client_id: t.clientId,
+      project_id: t.projectId,
+      due_date: t.dueDate,
+      status: t.status,
+      type: t.type,
+      priority: t.priority
+    };
+    const { error } = await supabase.from('tasks').update(dbTask).eq('id', t.id);
+    if (error) addNotification("Erreur Mission", error.message, "urgent");
+  };
+
+  const handleBulkUpdateTasks = async (ids: string[], updates: any) => {
+    const dbUpdates: any = {};
+    if (updates.status) dbUpdates.status = updates.status;
+    if (updates.priority) dbUpdates.priority = updates.priority;
+    if (updates.assigneeId) dbUpdates.assignee_id = updates.assigneeId;
+    if (updates.type) dbUpdates.type = updates.type;
+    if (updates.dueDate) dbUpdates.due_date = updates.dueDate;
+    if (updates.projectId) dbUpdates.project_id = updates.projectId;
+    if (updates.clientId) dbUpdates.client_id = updates.clientId;
+
+    const { error } = await supabase.from('tasks').update(dbUpdates).in('id', ids);
+    if (error) addNotification("Erreur Bulk", error.message, "urgent");
+    else addNotification("Succès Bulk", `${ids.length} missions mises à jour.`, "success");
+  };
+
   return (
     <Layout currentUser={currentUser} onLogout={async () => { await supabase.auth.signOut(); setCurrentUser(null); navigate('/'); }} messages={messages}>
       <Suspense fallback={<div className="h-full w-full flex items-center justify-center"><Loader2 className="animate-spin text-primary" size={40} /></div>}>
         <Routes>
           <Route path="/dashboard" element={<Dashboard currentUser={currentUser} tasks={tasks} clients={clients} onNavigate={(v:ViewState)=>navigate(`/${v}`)} />} />
-          <Route path="/tasks" element={<Tasks tasks={tasks} users={users} clients={clients} projects={projects} currentUser={currentUser} onUpdateStatus={onUpdateTaskStatus} onAddTask={async (t:any)=> { const dbTask = { ...t, id: generateUUID() }; await supabase.from('tasks').insert(dbTask); }} onUpdateTask={async (t: any) => { await supabase.from('tasks').update(t).eq('id', t.id); }} onDeleteTask={async (id:string)=> { await supabase.from('tasks').delete().eq('id',id); }} />} />
-          {/* Fix: replaced handleUpdateTaskStatus and handleUpdateTaskPriority with the correct prop names onUpdateTaskStatus and onUpdateTaskPriority */}
-          <Route path="/chat" element={<Chat currentUser={currentUser} users={users} tasks={tasks} channels={channels} projects={projects} currentChannelId={currentChannelId} messages={messages} onChannelChange={setCurrentChannelId} onSendMessage={handleSendMessage} onMarkAsRead={handleMarkAsRead} onDeleteMessage={handleDeleteMessage} onUpdateTaskStatus={onUpdateTaskStatus} onUpdateTaskPriority={onUpdateTaskPriority} onAddChannel={async (ch:any)=> { await supabase.from('channels').insert(ch); }} onDeleteChannel={async (id:string)=> { await supabase.from('channels').delete().eq('id',id); }} onUpdateChannelMembers={async (id:string,m:string[])=> { await supabase.from('channels').update({member_ids:m}).eq('id',id); }} />} />
+          <Route path="/tasks" element={<Tasks tasks={tasks} users={users} clients={clients} projects={projects} currentUser={currentUser} onUpdateStatus={onUpdateTaskStatus} onAddTask={async (t:any)=> { const dbTask = { ...t, id: generateUUID(), assignee_id: t.assigneeId, client_id: t.clientId, project_id: t.projectId, due_date: t.dueDate }; delete dbTask.assigneeId; delete dbTask.clientId; delete dbTask.projectId; delete dbTask.dueDate; await supabase.from('tasks').insert(dbTask); }} onUpdateTask={handleUpdateTask} onBulkUpdateTasks={handleBulkUpdateTasks} onDeleteTask={async (id:string)=> { await supabase.from('tasks').delete().eq('id',id); }} />} />
+          <Route path="/chat" element={<Chat currentUser={currentUser} users={users} tasks={tasks} channels={channels} projects={projects} currentChannelId={currentChannelId} messages={messages} onChannelChange={setCurrentChannelId} onSendMessage={handleSendMessage} onMarkAsRead={handleMarkAsRead} onDeleteMessage={handleDeleteMessage} onUpdateTaskStatus={onUpdateTaskStatus} onUpdateTaskPriority={onUpdateTaskPriority} onAddChannel={async (ch:any)=> { if(ch.id) await supabase.from('channels').update({name: ch.name, is_private: ch.is_private, member_ids: ch.member_ids}).eq('id', ch.id); else await supabase.from('channels').insert(ch); }} onDeleteChannel={async (id:string)=> { await supabase.from('channels').delete().eq('id',id); }} onUpdateChannelMembers={async (id:string,m:string[])=> { await supabase.from('channels').update({member_ids:m}).eq('id',id); }} />} />
           <Route path="/finance" element={<Finances salaries={salaries} expenses={expenses} adCampaigns={adCampaigns} users={users} projects={projects} currentUser={currentUser} onAddSalary={async (s:any)=>await supabase.from('salaries').insert(s)} onAddExpense={async (ex:any)=>await supabase.from('expenses').insert(ex)} onAddAdCampaign={async (ad:any)=>await supabase.from('ad_campaigns').insert(ad)} onUpdateSalary={async (s:any)=>await supabase.from('salaries').update(s).eq('id',s.id)} onDeleteSalary={async (id:string)=>await supabase.from('salaries').delete().eq('id',id)} onDeleteExpense={async (id:string)=>await supabase.from('expenses').delete().eq('id',id)} onDeleteAdCampaign={async (id:string)=>await supabase.from('ad_campaigns').delete().eq('id',id)} />} />
           <Route path="/team" element={<Team currentUser={currentUser} users={users} onAddUser={async (u:any)=> { const { data } = await supabase.auth.signUp({ email: u.email, password: u.password }); if (data.user) await supabase.from('users').insert({ id: data.user.id, ...u }); }} onRemoveUser={async (id:string)=>await supabase.rpc('delete_user_completely', { target_user_id: id })} onUpdateMember={async (id:string, up:any) => await supabase.from('users').update(up).eq('id',id)} />} />
-          <Route path="/projects" element={<Projects projects={projects} users={users} clients={clients} salaries={salaries} expenses={expenses} adCampaigns={adCampaigns} currentUser={currentUser} onAddProject={async (p:any)=>await supabase.from('projects').insert(p)} onDeleteProject={async (id:string)=>await supabase.from('projects').delete().eq('id',id)} onUpdateProject={async (p:Project)=>await supabase.from('projects').update(p).eq('id', p.id)} />} />
+          <Route path="/projects" element={<Projects projects={projects} users={users} clients={clients} salaries={salaries} expenses={expenses} adCampaigns={adCampaigns} currentUser={currentUser} onAddProject={async (p:any)=>await supabase.from('projects').insert(p)} onDeleteProject={async (id:string)=>await supabase.from('projects').delete().eq('id',id)} onUpdateProject={async (p:Project, batches?: any[])=>await supabase.from('projects').update(p).eq('id', p.id)} />} />
           <Route path="/leads" element={<Leads leads={leads} onAddLead={async (l:any)=>await supabase.from('leads').insert(l)} onUpdateLead={async (l:any)=>await supabase.from('leads').update(l).eq('id', l.id)} onDeleteLead={async (id:string)=>await supabase.from('leads').delete().eq('id',id)} onConvertToClient={async (l:Lead)=>{ const { data } = await supabase.from('clients').insert(l).select().single(); if(data) await supabase.from('leads').delete().eq('id', l.id); }} currentUser={currentUser} addNotification={addNotification} />} />
           <Route path="/files" element={<Files fileLinks={fileLinks} onAddFileLink={async (n:string,u:string)=>await supabase.from('file_links').insert({name:n, url:u, created_by:currentUser.id})} onDeleteFileLink={async (id:string)=>await supabase.from('file_links').delete().eq('id',id)} currentUser={currentUser} />} />
           <Route path="/settings" element={<Settings currentUser={currentUser} onUpdateProfile={onUpdateProfile} />} />
