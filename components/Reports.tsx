@@ -1,212 +1,382 @@
 
-import React, { useState, useMemo } from 'react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, CartesianGrid } from 'recharts';
-import { Task, User, TaskStatus, Lead, Message, Project, SalaryRecord, Expense, AdCampaignExpense } from '../types';
-import { BarChart3, TrendingUp, FileText, Printer, Calendar, Activity, Briefcase, TrendingDown, Landmark, X } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Task, User, TaskStatus, Lead, Project, SalaryRecord, Expense, AdCampaignExpense } from '../types';
+import { 
+  TrendingUp, TrendingDown, Zap, Users, Briefcase, 
+  Download, DollarSign, CheckCircle2, 
+  Activity, FileText, X, Clock, ListChecks, ArrowUpRight, BarChart3, Target, Calendar, AlertTriangle
+} from 'lucide-react';
 
 const Reports: React.FC<any> = ({ 
   tasks = [], leads = [], messages = [], projects = [], 
-  salaries = [], expenses = [], adCampaigns = [], currentUser 
+  salaries = [], expenses = [], adCampaigns = [], users = [], currentUser 
 }) => {
   const [showWeeklyModal, setShowWeeklyModal] = useState(false);
+  const [lastDownloadDate, setLastDownloadDate] = useState<string | null>(localStorage.getItem('iv_last_report_download'));
 
-  const financialGlobal = useMemo(() => {
-    const totalRevenue = projects.reduce((acc, p) => acc + (p.totalBudget || 0), 0);
-    const totalSalaries = salaries.reduce((acc, s) => {
-      const amount = (s.amount || 0) + (s.bonus || 0);
-      return acc + (s.frequency === 'hebdo' ? amount * 4 : amount);
+  // --- LOGIQUE DE FILTRAGE 30 JOURS (PERMANENT) ---
+  const isWithin30Days = (dateStr?: string) => {
+    if (!dateStr) return false;
+    const date = new Date(dateStr);
+    const threshold = new Date();
+    threshold.setMonth(threshold.getMonth() - 1);
+    return date >= threshold;
+  };
+
+  // --- CALCULS STATISTIQUES MENSUELS ---
+  const stats = useMemo(() => {
+    const rangeTasks = tasks.filter((t: any) => isWithin30Days(t.createdAt || t.dueDate));
+    const rangeLeads = leads.filter((l: any) => isWithin30Days(l.createdAt));
+    
+    const monthlyRevenue = projects.filter(p => p.status === 'active').reduce((acc, p) => acc + (p.totalBudget || 0), 0);
+    const monthlySalaries = salaries.reduce((acc, s) => {
+      const base = (s.amount || 0) + (s.bonus || 0);
+      return acc + (s.frequency === 'hebdo' ? base * 4 : base);
     }, 0);
-    const totalExpenses = expenses.reduce((acc, e) => acc + (e.amount || 0), 0);
-    const totalAds = adCampaigns.reduce((acc, a) => acc + (a.amount || 0), 0);
-    const totalCosts = totalSalaries + totalExpenses + totalAds;
-    const netMargin = totalRevenue - totalCosts;
-    const marginPercent = totalRevenue > 0 ? (netMargin / totalRevenue) * 100 : 0;
+    
+    const monthlyExpenses = expenses.filter((e: any) => isWithin30Days(e.createdAt)).reduce((acc, e) => acc + e.amount, 0);
+    const monthlyAds = adCampaigns.filter((a: any) => isWithin30Days(a.createdAt)).reduce((acc, a) => acc + a.amount, 0);
+    
+    const totalCosts = monthlySalaries + monthlyExpenses + monthlyAds;
+    const netMargin = monthlyRevenue - totalCosts;
 
-    return { totalRevenue, totalSalaries, totalExpenses, totalAds, totalCosts, netMargin, marginPercent };
-  }, [projects, salaries, expenses, adCampaigns]);
+    return {
+      revenue: monthlyRevenue,
+      costs: totalCosts,
+      margin: netMargin,
+      tasksTotal: rangeTasks.length,
+      tasksDone: rangeTasks.filter((t: Task) => t.status === TaskStatus.DONE).length,
+      leadsCount: rangeLeads.length,
+      leadsQualified: rangeLeads.filter((l: Lead) => l.status === 'qualified').length,
+      clientsCount: projects.filter(p => p.status === 'active').length,
+      productivity: rangeTasks.length > 0 ? Math.round((rangeTasks.filter((t: Task) => t.status === TaskStatus.DONE).length / rangeTasks.length) * 100) : 0
+    };
+  }, [tasks, leads, projects, salaries, expenses, adCampaigns]);
 
-  const projectAnalysis = useMemo(() => {
-    return projects.map(p => {
-      const pSalaries = salaries.filter(s => s.projectId === p.id).reduce((acc, s) => acc + (s.amount + (s.bonus || 0)), 0);
-      const pExpenses = expenses.filter(e => e.projectId === p.id).reduce((acc, e) => acc + e.amount, 0);
-      const pAds = adCampaigns.filter(a => a.projectId === p.id).reduce((acc, a) => acc + a.amount, 0);
-      const cost = pSalaries + pExpenses + pAds;
-      const margin = p.totalBudget - cost;
-      return { ...p, cost, margin, marginPercent: p.totalBudget > 0 ? (margin / p.totalBudget) * 100 : 0 };
+  // --- AUDIT DE PRODUCTION INDIVIDUEL (HISTORIQUE COMPLET 30J) ---
+  const employeePerformance = useMemo(() => {
+    return users.map(u => {
+      const allMonthTasks = tasks.filter((t: Task) => t.assigneeId === u.id && isWithin30Days(t.createdAt || t.dueDate));
+      const validated = allMonthTasks.filter((t: Task) => t.status === TaskStatus.DONE);
+      const pending = allMonthTasks.filter((t: Task) => t.status !== TaskStatus.DONE);
+      
+      return {
+        ...u,
+        total: allMonthTasks.length,
+        doneCount: validated.length,
+        pendingCount: pending.length,
+        efficiency: allMonthTasks.length > 0 ? Math.round((validated.length / allMonthTasks.length) * 100) : 0,
+        journalVictoires: validated.map(t => ({ title: t.title, date: t.dueDate })),
+        journalFronts: pending.map(t => ({ title: t.title, date: t.dueDate }))
+      };
+    }).sort((a, b) => b.efficiency - a.efficiency);
+  }, [users, tasks]);
+
+  const handleDownloadReport = () => {
+    const now = new Date().toLocaleString('fr-FR', { 
+      day: '2-digit', month: 'long', year: 'numeric', 
+      hour: '2-digit', minute: '2-digit' 
     });
-  }, [projects, salaries, expenses, adCampaigns]);
+    localStorage.setItem('iv_last_report_download', now);
+    setLastDownloadDate(now);
+    window.print();
+  };
 
-  const analyticSummary = useMemo(() => {
-    if (financialGlobal.marginPercent < 20) return "Rentabilité critique (<20%). Optimisation requise.";
-    if (financialGlobal.marginPercent > 40) return "Performance financière exceptionnelle.";
-    return "Structure financière saine conforme aux standards iVISION.";
-  }, [financialGlobal]);
-
-  const costDistributionData = [
-    { name: 'Salaires (RH)', value: financialGlobal.totalSalaries, color: '#FBBF24' },
-    { name: 'Frais Op.', value: financialGlobal.totalExpenses, color: '#38BDF8' },
-    { name: 'ADS Marketing', value: financialGlobal.totalAds, color: '#34D399' }
-  ].filter(d => d.value > 0);
+  const reportCloseDay = 27;
+  const currentDay = new Date().getDate();
+  const isReportDay = currentDay === reportCloseDay;
 
   return (
-    <div className="space-y-10 animate-fade-in pb-20">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 px-2">
-        <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.4em] text-pink-400 mb-2">DATA ANALYSIS & FINANCE</p>
-          <h2 className="text-4xl font-extrabold text-white tracking-tight uppercase leading-none">Rapports</h2>
-        </div>
-        <div className="flex flex-wrap gap-3">
-          <button 
-            onClick={() => setShowWeeklyModal(true)}
-            className="px-6 py-4 bg-white/5 border border-white/10 text-white font-black rounded-2xl active-scale flex items-center space-x-3 text-[10px] tracking-[0.2em] uppercase transition-all hover:bg-white/10 shadow-xl"
-          >
-            <Calendar size={18} className="text-sky-400" />
-            <span>Générer Bilan Hebdo</span>
-          </button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        <div className="lg:col-span-3 glass-card p-8 md:p-12 rounded-[3.5rem] relative overflow-hidden group">
-           <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-400/5 blur-[100px] rounded-full"></div>
-           <div className="flex flex-col md:flex-row md:items-center justify-between gap-8 relative z-10">
-              <div>
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.4em] mb-4">Bénéfice Net Agence</p>
-                <h3 className={`text-4xl md:text-7xl font-black tracking-tighter leading-none ${financialGlobal.netMargin >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                  {financialGlobal.netMargin.toLocaleString()} <span className="text-xl md:text-2xl opacity-40">DZD</span>
-                </h3>
-                <div className="flex items-center space-x-4 mt-6">
-                  <div className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${financialGlobal.netMargin >= 0 ? 'bg-emerald-400/10 text-emerald-400' : 'bg-rose-400/10 text-rose-400'}`}>
-                    Marge: {Math.round(financialGlobal.marginPercent)}%
-                  </div>
+    <div className="space-y-12 animate-fade-in pb-24 px-2">
+      {/* ALERTE DE CLÔTURE DU 27 */}
+      {isReportDay && (
+        <div className="relative group overflow-hidden rounded-[2.5rem] p-8 md:p-10 border border-emerald-500/30 bg-emerald-500/5 shadow-2xl shadow-emerald-500/10 animate-pulse-subtle">
+           <div className="absolute top-0 right-0 w-40 h-40 bg-emerald-500/10 blur-[80px] rounded-full"></div>
+           <div className="flex flex-col md:flex-row items-center justify-between gap-6 relative z-10 text-left">
+              <div className="flex items-center space-x-6">
+                <div className="w-16 h-16 bg-emerald-500 rounded-3xl flex items-center justify-center text-slate-950 shadow-xl"><AlertTriangle size={32} /></div>
+                <div>
+                   <h3 className="text-xl md:text-2xl font-black text-white uppercase tracking-tight leading-none">Jour de Clôture iVISION</h3>
+                   <p className="text-[10px] md:text-[11px] font-bold text-emerald-400 uppercase tracking-[0.2em] mt-2">Veuillez télécharger le bilan pour réinitialiser les objectifs mensuels.</p>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4 w-full md:w-auto">
-                 <div className="p-5 md:p-6 glass rounded-2xl md:rounded-3xl border border-white/5">
-                   <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1 flex items-center leading-none"><TrendingUp size={10} className="mr-1.5 text-sky-400"/> Chiffre d'Affaires</p>
-                   <p className="text-base md:text-lg font-black text-white">{financialGlobal.totalRevenue.toLocaleString()}</p>
-                 </div>
-                 <div className="p-5 md:p-6 glass rounded-2xl md:rounded-3xl border border-white/5">
-                   <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1 flex items-center leading-none"><TrendingDown size={10} className="mr-1.5 text-amber-400"/> Dépenses</p>
-                   <p className="text-base md:text-lg font-black text-white">{financialGlobal.totalCosts.toLocaleString()}</p>
-                 </div>
+              <button onClick={() => setShowWeeklyModal(true)} className="px-10 py-5 bg-emerald-500 text-slate-950 rounded-2xl font-black uppercase text-[11px] tracking-widest shadow-xl active-scale hover:bg-emerald-400 transition-all">Générer Clôture Mensuelle</button>
+           </div>
+        </div>
+      )}
+
+      {/* HEADER STRATÉGIQUE */}
+      <header className="flex flex-col md:flex-row md:items-end justify-between gap-8 text-left">
+        <div className="space-y-4">
+          <p className="text-[10px] font-black uppercase tracking-[0.4em] text-sky-400 mb-2 leading-none">Agency Intelligence Core • Cycle 30J</p>
+          <h2 className="text-4xl md:text-7xl font-black text-white tracking-tighter uppercase leading-none">Rapports</h2>
+          <div className="flex flex-wrap items-center gap-4 pt-2">
+            {lastDownloadDate && (
+              <div className="flex items-center space-x-3 px-4 py-2 bg-white/5 rounded-full border border-white/10 shadow-inner">
+                <div className="w-2 h-2 rounded-full bg-emerald-400"></div>
+                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none">Dernier Export : {lastDownloadDate}</span>
               </div>
-           </div>
+            )}
+            <div className="flex items-center space-x-3 px-4 py-2 bg-sky-500/10 rounded-full border border-sky-500/20 shadow-inner">
+              <Calendar size={14} className="text-sky-400" />
+              <span className="text-[9px] font-black text-sky-400 uppercase tracking-widest leading-none">Prochaine Clôture : Le {reportCloseDay}</span>
+            </div>
+          </div>
+        </div>
+        
+        {!isReportDay && (
+          <button 
+            onClick={() => setShowWeeklyModal(true)}
+            className="px-10 py-5 bg-sky-500 text-white rounded-[2rem] font-black text-[11px] uppercase flex items-center space-x-4 shadow-2xl shadow-sky-500/20 active-scale hover:bg-sky-400 transition-all tracking-widest"
+          >
+            <Download size={20} />
+            <span>Exporter Bilan 30J</span>
+          </button>
+        )}
+      </header>
+
+      {/* DASHBOARD PRINCIPAL */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* EXECUTIVE BRIEF */}
+        <div className="lg:col-span-2 crystal-module p-10 md:p-14 rounded-[3.5rem] border-white/10 shadow-2xl relative overflow-hidden text-left flex flex-col justify-center">
+          <div className="absolute -top-20 -right-20 w-96 h-96 bg-sky-500/10 blur-[120px] rounded-full"></div>
+          <div className="flex items-center space-x-4 mb-10">
+            <div className="w-14 h-14 bg-sky-500/20 rounded-2xl flex items-center justify-center text-sky-400 border border-sky-400/20 shadow-inner"><BarChart3 size={28} /></div>
+            <h4 className="font-black text-white text-[12px] uppercase tracking-[0.3em]">Analyse de Rentabilité iV</h4>
+          </div>
+          <div className="space-y-8 relative z-10">
+            <h3 className="text-3xl md:text-5xl font-black text-white leading-[1.05] uppercase tracking-tighter max-w-3xl">
+              Performance de <span className="text-sky-400">{stats.productivity}%</span> avec un Revenu Mensuel de <span className="text-emerald-400">{stats.revenue.toLocaleString()} DZD</span>.
+            </h3>
+            <p className="text-slate-400 text-base md:text-lg font-medium leading-relaxed max-w-2xl">
+              Les flux opérationnels sont stables. La marge nette projetée pour ce cycle de 30 jours s'élève à <span className="text-white font-bold">{stats.margin.toLocaleString()} DZD</span>. 
+              {stats.leadsCount} opportunités ont été détectées sur la période.
+            </p>
+          </div>
         </div>
 
-        <div className="glass-card p-8 rounded-[3.5rem] flex flex-col justify-center items-center text-center group">
-           <div className="h-[180px] w-full relative">
-              <ResponsiveContainer width="100%" height="100%">
-                 <PieChart>
-                    <Pie data={costDistributionData} cx="50%" cy="50%" innerRadius={50} outerRadius={70} paddingAngle={8} dataKey="value">
-                       {costDistributionData.map((e, idx) => <Cell key={idx} fill={e.color} stroke="none" />)}
-                    </Pie>
-                    <Tooltip contentStyle={{ background: '#020617', border: 'none', borderRadius: '12px', fontSize: '10px' }} />
-                 </PieChart>
-              </ResponsiveContainer>
-           </div>
-           <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mt-4">Coûts</h4>
+        {/* GROWTH HUB (CRM & LEADS) */}
+        <div className="crystal-module p-10 rounded-[3.5rem] border-white/5 flex flex-col justify-between text-left">
+          <div className="space-y-1">
+            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center"><Target size={12} className="mr-2 text-sky-400"/> Vitalité CRM</p>
+            <div className="flex items-end space-x-4 pt-4">
+              <h4 className="text-6xl font-black text-white leading-none">{stats.clientsCount}</h4>
+              <p className="text-[11px] font-black text-sky-400 uppercase pb-1.5 tracking-widest">Partenaires</p>
+            </div>
+          </div>
+          <div className="h-px bg-white/5 w-full my-8"></div>
+          <div className="space-y-5">
+            <div className="flex justify-between items-center">
+              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Pipeline Mensuel</span>
+              <span className="text-[11px] font-black text-emerald-400">+{stats.leadsCount} Prospects</span>
+            </div>
+            <div className="w-full h-4 bg-white/5 rounded-full overflow-hidden border border-white/5 p-1">
+              <div className="h-full bg-sky-500 rounded-full transition-all duration-1000" style={{ width: `${(stats.leadsQualified / (stats.leadsCount || 1)) * 100}%` }}></div>
+            </div>
+            <div className="flex justify-between">
+               <span className="text-[9px] font-black text-slate-600 uppercase">Taux de Qualification</span>
+               <span className="text-[9px] font-black text-white uppercase">{Math.round((stats.leadsQualified / (stats.leadsCount || 1)) * 100)}%</span>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="glass p-10 md:p-12 rounded-[3rem] md:rounded-[4rem] border border-white/5 shadow-2xl relative overflow-hidden">
-           <div className="flex items-center space-x-4 mb-6 md:mb-10 relative z-10">
-             <div className="w-10 h-10 bg-sky-400 rounded-xl flex items-center justify-center text-slate-950 shadow-lg"><BarChart3 size={20} /></div>
-             <h4 className="font-black text-white text-[10px] md:text-[11px] uppercase tracking-[0.3em] leading-none">Synthèse Analytique</h4>
-           </div>
-           <p className="text-xl md:text-2xl font-extrabold text-white leading-tight border-l-4 border-sky-400 pl-6 md:pl-10 relative z-10 max-w-4xl tracking-tight uppercase">{analyticSummary}</p>
+      {/* MÉTRIQUES FINANCIÈRES */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+        {[
+          { label: 'Revenu Mensuel (MRR)', val: stats.revenue, color: 'text-white', icon: DollarSign, bg: 'bg-white/5' },
+          { label: 'Coûts de Structure', val: stats.costs, color: 'text-rose-400', icon: TrendingDown, bg: 'bg-rose-400/10' },
+          { label: 'Marge d\'Agence', val: stats.margin, color: 'text-emerald-400', icon: TrendingUp, bg: 'bg-emerald-400/10' },
+          { label: 'Productivité Moy.', val: stats.productivity + '%', color: 'text-sky-400', icon: Zap, bg: 'bg-sky-400/10' }
+        ].map((s, i) => (
+          <div key={i} className="crystal-module p-10 rounded-[2.5rem] flex flex-col justify-between h-48 text-left border-white/5 hover:bg-white/[0.04] transition-all group">
+             <div className={`w-14 h-14 rounded-2xl ${s.bg} flex items-center justify-center ${s.color} border border-white/5 transition-transform group-hover:scale-110 shadow-inner`}><s.icon size={28} /></div>
+             <div>
+               <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none">{s.label}</p>
+               <h4 className={`text-2xl font-black ${s.color} mt-3 tracking-tight leading-none`}>
+                 {typeof s.val === 'number' ? s.val.toLocaleString() : s.val} {typeof s.val === 'number' && 'DZD'}
+               </h4>
+             </div>
+          </div>
+        ))}
       </div>
 
-      <div className="space-y-6">
-        <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.4em] px-4 flex items-center leading-none">
-          <Briefcase size={14} className="mr-3 text-emerald-400"/> Rentabilité par Activité
-        </h3>
-        <div className="grid grid-cols-1 gap-4">
-          {projectAnalysis.map(proj => (
-            <div key={proj.id} className="glass group rounded-[2rem] md:rounded-[2.5rem] border border-white/5 p-6 md:p-8 flex flex-col md:flex-row items-center justify-between transition-all hover:bg-white/[0.03]">
-               <div className="flex items-center space-x-6 w-full md:w-auto">
-                 <div className="w-16 h-16 bg-white/5 rounded-2xl flex items-center justify-center text-emerald-400 font-black border border-white/10 group-hover:scale-110 transition-transform flex-shrink-0">
-                   {proj.name.charAt(0)}
-                 </div>
-                 <div className="truncate">
-                   <h4 className="text-lg md:text-xl font-extrabold text-white uppercase tracking-tight truncate">{proj.name}</h4>
-                   <p className="text-[8px] md:text-[9px] text-slate-500 font-black uppercase tracking-widest mt-1">Budget: {proj.totalBudget.toLocaleString()} DZD</p>
-                 </div>
+      {/* AUDIT INDIVIDUEL COMPLET SUR 30 JOURS */}
+      <section className="space-y-10">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 px-4 text-left">
+           <div className="flex items-center space-x-4">
+             <div className="w-12 h-12 bg-sky-500/10 rounded-2xl flex items-center justify-center text-sky-400 border border-sky-400/10 shadow-inner"><Users size={24}/></div>
+             <div>
+               <h3 className="text-2xl font-black text-white uppercase tracking-tight leading-none">Audit Individuel</h3>
+               <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-2 leading-none">Journal d'exécution historique sur 30 jours (NE LAISSE RIEN VIDE)</p>
+             </div>
+           </div>
+        </div>
+        
+        <div className="grid grid-cols-1 gap-8">
+          {employeePerformance.map((emp, i) => (
+            <div key={i} className="crystal-module p-10 rounded-[3.5rem] border-white/5 flex flex-col lg:flex-row gap-12 text-left transition-all hover:border-white/10 hover:bg-white/[0.02] shadow-xl">
+               {/* Profil & KPIs */}
+               <div className="flex flex-col items-center justify-center lg:border-r border-white/5 lg:pr-12 lg:w-64 shrink-0">
+                  <div className="relative mb-6">
+                    <img src={emp.avatar} className="w-28 h-28 rounded-[2.5rem] object-cover border-2 border-white/10 shadow-2xl" alt="" />
+                    <div className="absolute -bottom-3 -right-3 w-14 h-14 bg-slate-950 rounded-2xl flex items-center justify-center border border-white/10 shadow-xl">
+                      <span className="text-[13px] font-black text-sky-400">{emp.efficiency}%</span>
+                    </div>
+                  </div>
+                  <div className="text-center space-y-2">
+                    <h4 className="text-2xl font-black text-white uppercase tracking-tighter leading-none">{emp.name.split(' ')[0]}</h4>
+                    <p className="text-[10px] text-sky-400 font-black uppercase tracking-[0.2em]">{emp.role}</p>
+                  </div>
+                  <div className="mt-8 w-full space-y-4">
+                     <div className="flex justify-between text-[11px] font-black text-slate-500 uppercase tracking-widest">
+                        <span>Production</span>
+                        <span className="text-white">{emp.doneCount}/{emp.total}</span>
+                     </div>
+                     <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+                        <div className={`h-full ${emp.efficiency > 70 ? 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.5)]' : 'bg-sky-500 shadow-[0_0_10px_rgba(14,165,233,0.5)]'}`} style={{ width: `${emp.efficiency}%` }}></div>
+                     </div>
+                  </div>
                </div>
 
-               <div className="grid grid-cols-3 gap-4 md:gap-8 mt-6 md:mt-0 w-full md:w-auto text-center md:text-left">
-                  <div>
-                    <p className="text-[7px] md:text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1 leading-none">Coûts</p>
-                    <p className="text-xs md:text-sm font-black text-rose-400">{proj.cost.toLocaleString()}</p>
+               {/* JOURNAL DE PRODUCTION (JOURS PRÉCÉDENTS ET ACTUELS) */}
+               <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-10">
+                  {/* Journal des Victoires (Historique) */}
+                  <div className="space-y-6">
+                     <div className="flex items-center justify-between border-b border-white/5 pb-5">
+                        <h5 className="text-[12px] font-black text-emerald-400 uppercase tracking-widest flex items-center">
+                          <CheckCircle2 size={18} className="mr-3"/> Victoires du Cycle (30J)
+                        </h5>
+                        <span className="text-[10px] font-black text-slate-400 bg-white/5 px-4 py-1.5 rounded-xl border border-white/5">{emp.doneCount} RÉALISATIONS</span>
+                     </div>
+                     <div className="space-y-4 max-h-[300px] overflow-y-auto no-scrollbar pr-2">
+                        {emp.journalVictoires.length > 0 ? emp.journalVictoires.map((t, idx) => (
+                          <div key={idx} className="group p-5 bg-emerald-400/5 rounded-3xl border border-emerald-400/10 hover:bg-emerald-400/10 transition-all text-left">
+                             <p className="text-[14px] font-bold text-slate-100 uppercase tracking-tight leading-tight">{t.title}</p>
+                             <div className="flex items-center mt-3 opacity-40">
+                                <Clock size={12} className="mr-2 text-emerald-400"/>
+                                <span className="text-[9px] font-black uppercase tracking-widest">Archivé le {new Date(t.date).toLocaleDateString()}</span>
+                             </div>
+                          </div>
+                        )) : (
+                          <div className="h-32 flex flex-col items-center justify-center glass rounded-[2.5rem] opacity-30 border-dashed border-2 border-white/10">
+                             <ListChecks size={24} className="mb-2 text-slate-600"/>
+                             <p className="text-[10px] font-black uppercase tracking-widest">Historique vide</p>
+                          </div>
+                        )}
+                     </div>
                   </div>
-                  <div>
-                    <p className="text-[7px] md:text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1 leading-none">Marge</p>
-                    <p className={`text-xs md:text-sm font-black ${proj.margin >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{proj.margin.toLocaleString()}</p>
-                  </div>
-                  <div>
-                    <p className="text-[7px] md:text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1 leading-none">Ratio</p>
-                    <p className={`text-xs md:text-sm font-black ${proj.marginPercent >= 20 ? 'text-emerald-400' : 'text-amber-400'}`}>{Math.round(proj.marginPercent)}%</p>
+
+                  {/* Fronts Actifs (Pipeline actuel) */}
+                  <div className="space-y-6">
+                     <div className="flex items-center justify-between border-b border-white/5 pb-5">
+                        <h5 className="text-[12px] font-black text-sky-400 uppercase tracking-widest flex items-center">
+                          <Zap size={18} className="mr-3"/> Missions en Cours
+                        </h5>
+                        <span className="text-[10px] font-black text-slate-400 bg-white/5 px-4 py-1.5 rounded-xl border border-white/5">{emp.pendingCount} ACTIVES</span>
+                     </div>
+                     <div className="space-y-4 max-h-[300px] overflow-y-auto no-scrollbar pr-2">
+                        {emp.journalFronts.length > 0 ? emp.journalFronts.map((t, idx) => (
+                          <div key={idx} className="group p-5 bg-sky-400/5 rounded-3xl border border-sky-400/10 hover:bg-sky-400/10 transition-all text-left">
+                             <p className="text-[14px] font-bold text-slate-100 uppercase tracking-tight leading-tight">{t.title}</p>
+                             <div className="flex items-center mt-3 opacity-40">
+                                <Clock size={12} className="mr-2 text-sky-400"/>
+                                <span className="text-[9px] font-black uppercase tracking-widest">Échéance : {new Date(t.date).toLocaleDateString()}</span>
+                             </div>
+                          </div>
+                        )) : (
+                          <div className="h-32 flex flex-col items-center justify-center glass rounded-[2.5rem] opacity-30 border-dashed border-2 border-white/10">
+                             <Zap size={24} className="mb-2 text-slate-600"/>
+                             <p className="text-[10px] font-black uppercase tracking-widest">Flux libre</p>
+                          </div>
+                        )}
+                     </div>
                   </div>
                </div>
             </div>
           ))}
         </div>
-      </div>
+      </section>
 
-      {/* MODAL BILAN - UNIFIED SYSTEM */}
+      {/* MODAL BILAN MENSUEL - DESIGN POUR IMPRESSION */}
       {showWeeklyModal && (
         <div className="modal-overlay">
           <div className="fixed inset-0 cursor-pointer no-print" onClick={() => setShowWeeklyModal(false)}></div>
-          <div className="modal-center-wrapper">
-            <div className="modal-container max-w-4xl">
-              <div className="modal-content-glass animate-fade-in">
-                 <div className="flex justify-between items-center mb-8 md:mb-12 no-print">
-                    <div className="flex items-center space-x-4">
-                      <div className="w-12 h-12 bg-sky-400 rounded-2xl flex items-center justify-center text-slate-950 shadow-xl"><FileText size={24} /></div>
-                      <h3 className="text-xl md:text-3xl font-extrabold text-white uppercase tracking-tighter leading-none">Bilan de Performance</h3>
-                    </div>
-                    <button onClick={() => setShowWeeklyModal(false)} className="w-12 h-12 glass text-slate-500 hover:text-white rounded-xl flex items-center justify-center transition-all flex-shrink-0 active-scale"><X size={24}/></button>
-                 </div>
+          <div className="modal-container max-w-4xl">
+            <div className="modal-content-glass animate-fade-in overflow-hidden">
+               <div className="flex justify-between items-center p-8 border-b border-white/5 no-print bg-slate-900">
+                  <div className="flex items-center space-x-4">
+                    <div className="w-12 h-12 bg-sky-500 rounded-2xl flex items-center justify-center text-slate-950 shadow-xl"><FileText size={24} /></div>
+                    <h3 className="text-xl md:text-2xl font-black text-white uppercase tracking-tighter leading-none">Bilan Mensuel iVISION</h3>
+                  </div>
+                  <button onClick={() => setShowWeeklyModal(false)} className="w-12 h-12 glass text-slate-500 hover:text-white rounded-xl flex items-center justify-center active-scale transition-all"><X size={24}/></button>
+               </div>
 
-                 <div className="printable-report bg-white text-slate-950 p-6 md:p-14 rounded-[2rem] md:rounded-[3rem] shadow-2xl">
-                    <div className="flex justify-between items-start border-b-2 border-slate-100 pb-6 md:pb-10 mb-8 md:mb-12">
-                      <div>
-                        <h1 className="text-2xl md:text-5xl font-black tracking-tighter uppercase text-slate-950 leading-none">iVISION DATA</h1>
-                        <p className="text-[8px] md:text-[10px] font-black text-sky-500 uppercase tracking-[0.4em] mt-2 leading-none">RAPPORT OPÉRATIONNEL</p>
-                      </div>
-                      <div className="text-right">
-                         <p className="text-lg md:text-2xl font-extrabold text-slate-950 leading-none">{new Date().toLocaleDateString('fr-FR')}</p>
-                      </div>
+               <div className="printable-report bg-white text-slate-950 p-10 md:p-16 rounded-b-[2rem] md:rounded-b-[3.5rem] overflow-y-auto max-h-[80vh] no-scrollbar shadow-inner">
+                  <div className="flex justify-between items-start border-b-8 border-slate-950 pb-12 mb-14">
+                    <div className="text-left">
+                      <h1 className="text-5xl font-black tracking-tighter uppercase text-slate-950 leading-none">iVISION CORE</h1>
+                      <p className="text-[12px] font-black text-sky-600 uppercase tracking-[0.4em] mt-4">RAPPORT DE PERFORMANCE & RENTABILITÉ</p>
                     </div>
+                    <div className="text-right">
+                       <p className="text-sm font-black uppercase text-slate-400">Période du Cycle</p>
+                       <p className="text-2xl font-black text-slate-950 leading-none mt-2">{new Date().toLocaleDateString('fr-FR', {month: 'long', year: 'numeric'}).toUpperCase()}</p>
+                    </div>
+                  </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-10 mb-8 md:mb-12">
-                       <div className="p-6 md:p-10 bg-slate-50 rounded-[2rem] border border-slate-100">
-                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4 md:mb-6 leading-none">Indicateurs Financiers</p>
-                          <div className="space-y-4 md:space-y-6">
-                             <div className="flex justify-between items-end border-b border-slate-200 pb-2">
-                                <span className="text-[10px] font-bold text-slate-500 uppercase">Revenue</span>
-                                <span className="text-base md:text-xl font-black">{financialGlobal.totalRevenue.toLocaleString()} DZD</span>
-                             </div>
-                             <div className="flex justify-between items-end border-b border-slate-200 pb-2">
-                                <span className="text-[10px] font-bold text-slate-500 uppercase">Coûts</span>
-                                <span className="text-base md:text-xl font-black text-rose-500">-{financialGlobal.totalCosts.toLocaleString()} DZD</span>
-                             </div>
-                             <div className="flex justify-between items-end">
-                                <span className="text-[10px] font-bold text-slate-500 uppercase">Net</span>
-                                <span className={`text-base md:text-xl font-black ${financialGlobal.netMargin >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{financialGlobal.netMargin.toLocaleString()} DZD</span>
-                             </div>
-                          </div>
+                  <div className="space-y-14">
+                    <section className="text-left">
+                       <h4 className="text-[12px] font-black text-slate-400 uppercase tracking-[0.3em] mb-8 flex items-center leading-none">
+                         <div className="w-2 h-2 bg-sky-500 rounded-full mr-4"></div> ANALYSE DES FLUX FINANCIERS
+                       </h4>
+                       <div className="p-10 bg-slate-50 rounded-[3rem] border border-slate-200">
+                          <div className="flex justify-between mb-5"><span className="font-bold text-slate-500 uppercase text-[11px]">Revenu Mensuel Indexé :</span><span className="font-black text-xl">{stats.revenue.toLocaleString()} DZD</span></div>
+                          <div className="flex justify-between mb-5"><span className="font-bold text-slate-500 uppercase text-[11px]">Coûts Opérationnels Total :</span><span className="font-black text-rose-600 text-xl">-{stats.costs.toLocaleString()} DZD</span></div>
+                          <div className="h-1 bg-slate-200 w-full my-8 rounded-full"></div>
+                          <div className="flex justify-between items-center"><span className="text-2xl font-black uppercase tracking-tight">Marge Nette iV :</span><span className={`text-4xl font-black ${stats.margin >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{stats.margin.toLocaleString()} DZD</span></div>
                        </div>
-                       <div className="p-6 md:p-10 bg-slate-50 rounded-[2rem] border border-slate-100 flex flex-col justify-center">
-                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4 md:mb-6 leading-none">Synthèse iVISION Intelligence</p>
-                          <p className="text-sm md:text-lg font-black uppercase leading-tight text-slate-950">
-                             {analyticSummary}
-                          </p>
+                    </section>
+
+                    <section className="text-left">
+                       <h4 className="text-[12px] font-black text-slate-400 uppercase tracking-[0.3em] mb-8 flex items-center leading-none">
+                         <div className="w-2 h-2 bg-sky-500 rounded-full mr-4"></div> KPI DE PRODUCTION ÉQUIPE
+                       </h4>
+                       <div className="grid grid-cols-3 gap-10">
+                         <div className="p-6 border-l-4 border-slate-950"><p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Tâches Validées</p><p className="text-3xl font-black text-slate-950 leading-none">{stats.tasksDone} / {stats.tasksTotal}</p></div>
+                         <div className="p-6 border-l-4 border-slate-950"><p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Productivité</p><p className="text-3xl font-black text-slate-950 leading-none">{stats.productivity}%</p></div>
+                         <div className="p-6 border-l-4 border-slate-950"><p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Nouveaux Leads</p><p className="text-3xl font-black text-slate-950 leading-none">+{stats.leadsCount}</p></div>
                        </div>
+                    </section>
+
+                    <section className="text-left">
+                       <h4 className="text-[12px] font-black text-slate-400 uppercase tracking-[0.3em] mb-8 flex items-center leading-none">
+                         <div className="w-2 h-2 bg-sky-500 rounded-full mr-4"></div> AUDIT INDIVIDUEL (TOP PERFORMERS)
+                       </h4>
+                       <div className="space-y-6">
+                          {employeePerformance.slice(0, 5).map((e, idx) => (
+                            <div key={idx} className="flex items-center justify-between border-b-2 border-slate-100 pb-5">
+                               <div className="flex items-center space-x-5">
+                                  <div className="w-12 h-12 bg-slate-950 rounded-2xl flex items-center justify-center text-white font-black">{e.name.substring(0, 1)}</div>
+                                  <div><p className="font-black text-lg uppercase leading-none text-slate-950">{e.name}</p><p className="text-[10px] font-bold text-slate-400 uppercase mt-2 tracking-widest">{e.role}</p></div>
+                               </div>
+                               <div className="text-right">
+                                  <p className="font-black text-2xl text-slate-950 leading-none">{e.efficiency}%</p>
+                                  <p className="text-[9px] font-black text-emerald-600 uppercase mt-2">{e.doneCount} Succès archivés</p>
+                               </div>
+                            </div>
+                          ))}
+                       </div>
+                    </section>
+
+                    <div className="pt-14 border-t-2 border-slate-100 text-center">
+                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.6em]">DOCUMENT CONFIDENTIEL GÉNÉRÉ PAR iVISION INTELLIGENCE • {new Date().getFullYear()}</p>
                     </div>
-                    <button onClick={() => window.print()} className="no-print w-full py-5 md:py-7 bg-slate-900 text-white rounded-[1.8rem] md:rounded-[2.5rem] font-black uppercase text-[10px] md:text-[11px] tracking-[0.3em] mt-4 md:mt-8 shadow-2xl active-scale">Imprimer Rapport PDF</button>
-                 </div>
-              </div>
+                  </div>
+
+                  <button onClick={handleDownloadReport} className="no-print w-full py-8 bg-slate-950 text-white rounded-[2.5rem] font-black uppercase text-[12px] tracking-[0.4em] mt-14 shadow-2xl active-scale hover:bg-sky-600 transition-all">
+                     Confirmer & Télécharger le Briefing PDF
+                  </button>
+               </div>
             </div>
           </div>
         </div>

@@ -23,6 +23,7 @@ export interface UserPermissions {
   canManageCampaigns?: boolean;
   canManageFinances?: boolean;
   canManageProjects?: boolean;
+  canViewProjectFinances?: boolean; // Nouvelle permission
 }
 
 export interface User {
@@ -33,7 +34,7 @@ export interface User {
   role: UserRole;
   phoneNumber?: string;
   notificationPref: 'push' | 'all';
-  muteChatNotifications?: boolean; // Nouvelle préférence
+  muteChatNotifications?: boolean;
   status: 'active' | 'pending';
   permissions?: UserPermissions;
   lastSeen?: string;
@@ -127,6 +128,7 @@ export interface Task {
   type: TaskType; 
   priority?: 'low' | 'medium' | 'high';
   attachments?: string[];
+  createdAt?: string;
 }
 
 export interface Channel {

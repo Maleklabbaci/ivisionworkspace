@@ -1,6 +1,6 @@
 
 import React, { useMemo } from 'react';
-import { TrendingUp, Target, Zap, Clock, ChevronRight, Activity, BarChart3, ListChecks } from 'lucide-react';
+import { TrendingUp, Target, Zap, Clock, ChevronRight, Activity, BarChart3, ListChecks, AlertTriangle } from 'lucide-react';
 import { Task, User, ViewState, TaskStatus, UserRole, Client } from '../types';
 
 interface DashboardProps {
@@ -20,6 +20,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], clients 
     return tasks.filter(t => t.assigneeId === currentUser.id);
   }, [tasks, currentUser, isAdminOrManager]);
 
+  const blockedTasks = useMemo(() => tasks.filter(t => t.status === TaskStatus.BLOCKED), [tasks]);
   const overdueCount = useMemo(() => relevantTasks.filter(t => t.dueDate < today && t.status !== TaskStatus.DONE).length, [relevantTasks, today]);
   
   const productivityScore = useMemo(() => {
@@ -49,6 +50,31 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], clients 
            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-tight">{currentUser.role}</span>
         </div>
       </header>
+
+      {/* SECTION BLOCAGES CRITIQUES */}
+      {blockedTasks.length > 0 && (
+        <div className="px-1">
+          <div className="bg-rose-500/10 border border-rose-500/30 p-8 rounded-[2.5rem] flex flex-col md:flex-row items-center justify-between gap-6 shadow-2xl shadow-rose-500/10 animate-pulse-subtle">
+            <div className="flex items-center space-x-6 text-left">
+              <div className="w-16 h-16 bg-rose-500 rounded-3xl flex items-center justify-center text-white shadow-xl">
+                <AlertTriangle size={32} />
+              </div>
+              <div>
+                <h3 className="text-xl font-black text-white uppercase tracking-tight leading-none">Système Bloqué</h3>
+                <p className="text-[11px] font-bold text-rose-400 uppercase tracking-widest mt-2">{blockedTasks.length} MISSION(S) REQUIERT VOTRE INTERVENTION</p>
+              </div>
+            </div>
+            <div className="flex -space-x-3">
+              {blockedTasks.slice(0, 5).map(bt => (
+                <div key={bt.id} title={bt.title} className="w-12 h-12 rounded-xl bg-slate-900 border-2 border-rose-500/50 flex items-center justify-center text-rose-500 font-black text-xs hover:-translate-y-2 transition-transform cursor-help">
+                  {bt.title.substring(0, 2).toUpperCase()}
+                </div>
+              ))}
+              {blockedTasks.length > 5 && <div className="w-12 h-12 rounded-xl bg-rose-500 flex items-center justify-center text-white font-black text-xs">+{blockedTasks.length - 5}</div>}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 px-1">
         {visibleStats.map((s, i) => (
@@ -90,22 +116,16 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], clients 
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
               {relevantTasks.filter(t => t.status !== TaskStatus.DONE).slice(0, 4).map(task => (
-                <div key={task.id} onClick={() => onNavigate('tasks')} className="crystal-module p-5 rounded-[1.5rem] md:rounded-[2rem] border-l-[4px] border-l-sky-500 active-scale flex items-center justify-between group">
+                <div key={task.id} onClick={() => onNavigate('tasks')} className={`crystal-module p-5 rounded-[1.5rem] md:rounded-[2rem] border-l-[4px] active-scale flex items-center justify-between group ${task.status === TaskStatus.BLOCKED ? 'border-l-rose-500 bg-rose-500/5' : 'border-l-sky-500'}`}>
                   <div className="truncate pr-4 flex-1 text-left">
-                    <h4 className="font-bold text-white text-[12px] uppercase truncate group-hover:text-sky-400 transition-colors tracking-tight">{task.title}</h4>
-                    <p className="text-[9px] text-slate-600 font-bold mt-1.5 uppercase tracking-tighter">{task.dueDate}</p>
+                    <h4 className={`font-bold text-[12px] uppercase truncate transition-colors tracking-tight ${task.status === TaskStatus.BLOCKED ? 'text-rose-400' : 'text-white group-hover:text-sky-400'}`}>{task.title}</h4>
+                    <p className="text-[9px] text-slate-600 font-bold mt-1.5 uppercase tracking-tighter">{task.dueDate} {task.status === TaskStatus.BLOCKED && '• BLOQUÉ'}</p>
                   </div>
-                  <div className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase flex-shrink-0 border border-white/5 ${task.priority === 'high' ? 'bg-rose-500/10 text-rose-500' : 'bg-white/5 text-slate-400'}`}>
-                    {task.priority || 'MED'}
+                  <div className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase flex-shrink-0 border ${task.status === TaskStatus.BLOCKED ? 'bg-rose-500 text-white border-rose-400' : task.priority === 'high' ? 'bg-rose-500/10 text-rose-500 border-rose-500/10' : 'bg-white/5 text-slate-400 border-white/5'}`}>
+                    {task.status === TaskStatus.BLOCKED ? 'STOP' : (task.priority || 'MED')}
                   </div>
                 </div>
               ))}
-              {relevantTasks.filter(t => t.status !== TaskStatus.DONE).length === 0 && (
-                <div className="crystal-module p-12 md:p-16 rounded-[2rem] md:rounded-[3rem] text-center border-dashed border-2 border-white/5 w-full flex flex-col items-center col-span-2 opacity-30">
-                  <Activity size={28} className="text-slate-800 mb-3" />
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-700 leading-none">Aucun flux actif</p>
-                </div>
-              )}
             </div>
           </div>
         </div>

@@ -10,7 +10,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
-    storage: window.localStorage, // Utilisation explicite du localStorage
+    storage: window.localStorage,
     flowType: 'pkce'
   },
   global: {
@@ -21,17 +21,24 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 /**
  * Utilitaire pour effectuer des requêtes sans planter en cas d'erreur réseau
  */
-// Fix: Use any for the promise parameter to avoid strict Type checking issues with Supabase builders (PostgrestFilterBuilder)
 export const safeFetch = async <T>(promise: any, fallback: T): Promise<T> => {
   try {
     const { data, error } = await promise;
     if (error) {
-      console.warn('Supabase partial error:', error);
+      // Si l'erreur est liée à une entité non trouvée ou un accès refusé
+      if (error.message?.includes('Requested entity was not found')) {
+        console.error('Supabase: Entity not found');
+      }
       return fallback;
     }
     return data || fallback;
-  } catch (err) {
-    console.error('Network failure (Failed to fetch):', err);
+  } catch (err: any) {
+    // Capture spécifique de l'erreur "Failed to fetch" pour éviter les crashs UI
+    if (err.message === 'Failed to fetch' || err.name === 'TypeError') {
+      console.warn('Système iV: Problème de connexion au serveur Supabase (Failed to fetch). Passage en mode dégradé.');
+    } else {
+      console.error('Erreur Système critique:', err);
+    }
     return fallback;
   }
 };

@@ -14,6 +14,7 @@ const DEFAULT_PERMISSIONS: UserPermissions = {
   canManageCampaigns: false,
   canManageProjects: false,
   canManageFinances: false,
+  canViewProjectFinances: false, // Par défaut à false
 };
 
 const PERMISSION_LABELS: Record<keyof UserPermissions, string> = {
@@ -32,6 +33,7 @@ const PERMISSION_LABELS: Record<keyof UserPermissions, string> = {
   canManageCampaigns: "Gérer les campagnes",
   canManageFinances: "Gérer les finances",
   canManageProjects: "Gérer les projets",
+  canViewProjectFinances: "Voir les finances des projets", // Nouveau label
 };
 
 const PermissionToggle: React.FC<{
