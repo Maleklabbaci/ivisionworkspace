@@ -121,6 +121,37 @@ const App: React.FC = () => {
     }
   }, []);
 
+  const fetchUserData = async (authUser: any) => {
+    try {
+      let { data: userData } = await supabase.from('users').select('*').eq('id', authUser.id).maybeSingle();
+      if (userData) setCurrentUser(mapFromDB('users', userData));
+      const [u, t, c, l, ch, m, f, pr, sl, ex, ad] = await Promise.all([
+        safeFetch(supabase.from('users').select('*'), []),
+        safeFetch(supabase.from('tasks').select('*').order('created_at', { ascending: false }), []),
+        safeFetch(supabase.from('clients').select('*'), []),
+        safeFetch(supabase.from('leads').select('*'), []),
+        safeFetch(supabase.from('channels').select('*'), []),
+        safeFetch(supabase.from('messages').select('*').order('created_at', { ascending: true }), []),
+        safeFetch(supabase.from('file_links').select('*'), []),
+        safeFetch(supabase.from('projects').select('*'), []),
+        safeFetch(supabase.from('salaries').select('*'), []),
+        safeFetch(supabase.from('expenses').select('*'), []),
+        safeFetch(supabase.from('ad_campaigns').select('*'), [])
+      ]);
+      setUsers(u.map(i => mapFromDB('users', i)));
+      setTasks(t.map(i => mapFromDB('tasks', i)));
+      setClients(c);
+      setLeads(l.map(i => mapFromDB('leads', i)));
+      setChannels(ch.map(i => mapFromDB('channels', i)));
+      setMessages(m.map(i => mapFromDB('messages', i)));
+      setFileLinks(f.map(i => mapFromDB('file_links', i)));
+      setProjects(pr.map(i => mapFromDB('projects', i)));
+      setSalaries(sl.map(i => mapFromDB('salaries', i)));
+      setExpenses(ex.map(i => mapFromDB('expenses', i)));
+      setAdCampaigns(ad.map(i => mapFromDB('ad_campaigns', i)));
+    } finally { setLoading(false); }
+  };
+
   // REALTIME HUB
   useEffect(() => {
     if (!currentUser) return;
@@ -166,12 +197,12 @@ const App: React.FC = () => {
         else if (payload.eventType === 'UPDATE') setChannels(prev => prev.map(c => c.id === payload.new.id ? mapFromDB('channels', payload.new) : c));
         else if (payload.eventType === 'DELETE') setChannels(prev => prev.filter(c => c.id !== payload.old.id));
       })
-      .on('postgres_changes', { event: '*', table: 'clients' }, () => {
-        safeFetch(supabase.from('clients').select('*'), []).then(setClients);
-      })
-      .on('postgres_changes', { event: '*', table: 'leads' }, () => {
-        safeFetch(supabase.from('leads').select('*'), []).then(l => setLeads(l.map(i => mapFromDB('leads', i))));
-      })
+      .on('postgres_changes', { event: '*', table: 'clients' }, () => { fetchUserData(currentUser); })
+      .on('postgres_changes', { event: '*', table: 'leads' }, () => { fetchUserData(currentUser); })
+      .on('postgres_changes', { event: '*', table: 'projects' }, () => { fetchUserData(currentUser); })
+      .on('postgres_changes', { event: '*', table: 'salaries' }, () => { fetchUserData(currentUser); })
+      .on('postgres_changes', { event: '*', table: 'expenses' }, () => { fetchUserData(currentUser); })
+      .on('postgres_changes', { event: '*', table: 'ad_campaigns' }, () => { fetchUserData(currentUser); })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [currentUser, users, addNotification, playSound]);
@@ -204,44 +235,11 @@ const App: React.FC = () => {
     return () => authListener.subscription.unsubscribe();
   }, []);
 
-  const fetchUserData = async (authUser: any) => {
-    try {
-      let { data: userData } = await supabase.from('users').select('*').eq('id', authUser.id).maybeSingle();
-      if (userData) setCurrentUser(mapFromDB('users', userData));
-      const [u, t, c, l, ch, m, f, pr, sl, ex, ad] = await Promise.all([
-        safeFetch(supabase.from('users').select('*'), []),
-        safeFetch(supabase.from('tasks').select('*').order('created_at', { ascending: false }), []),
-        safeFetch(supabase.from('clients').select('*'), []),
-        safeFetch(supabase.from('leads').select('*'), []),
-        safeFetch(supabase.from('channels').select('*'), []),
-        safeFetch(supabase.from('messages').select('*').order('created_at', { ascending: true }), []),
-        safeFetch(supabase.from('file_links').select('*'), []),
-        safeFetch(supabase.from('projects').select('*'), []),
-        safeFetch(supabase.from('salaries').select('*'), []),
-        safeFetch(supabase.from('expenses').select('*'), []),
-        safeFetch(supabase.from('ad_campaigns').select('*'), [])
-      ]);
-      setUsers(u.map(i => mapFromDB('users', i)));
-      setTasks(t.map(i => mapFromDB('tasks', i)));
-      setClients(c);
-      setLeads(l.map(i => mapFromDB('leads', i)));
-      setChannels(ch.map(i => mapFromDB('channels', i)));
-      setMessages(m.map(i => mapFromDB('messages', i)));
-      setFileLinks(f.map(i => mapFromDB('file_links', i)));
-      setProjects(pr.map(i => mapFromDB('projects', i)));
-      setSalaries(sl.map(i => mapFromDB('salaries', i)));
-      setExpenses(ex.map(i => mapFromDB('expenses', i)));
-      setAdCampaigns(ad.map(i => mapFromDB('ad_campaigns', i)));
-    } finally { setLoading(false); }
-  };
-
   const handleUpdateTaskStatus = async (id: string, st: TaskStatus) => {
     const { error } = await supabase.from('tasks').update({ status: st }).eq('id', id);
     if (!error) {
       setTasks(prev => prev.map(t => t.id === id ? { ...t, status: st } : t));
-      if (st === TaskStatus.BLOCKED) {
-        addNotification("SYSTÈME BLOQUÉ", "Alerte Rouge déclenchée.", "urgent");
-      }
+      if (st === TaskStatus.BLOCKED) addNotification("SYSTÈME BLOQUÉ", "Alerte Rouge déclenchée.", "urgent");
     }
   };
 
@@ -261,69 +259,38 @@ const App: React.FC = () => {
 
   const handleAddProject = async (p: any, batches?: any[]) => {
     const projId = generateUUID();
-    const dbProj = {
-      id: projId,
-      name: p.name,
-      description: p.description,
-      total_budget: p.totalBudget || 0,
-      spent_budget: 0,
-      status: p.status,
-      client_id: p.clientId || null
-    };
-
+    const dbProj = { id: projId, name: p.name, description: p.description, total_budget: p.totalBudget || 0, status: p.status, client_id: p.clientId || null };
     const { error } = await supabase.from('projects').insert(dbProj);
-    if (error) {
-      addNotification("Erreur Projet", error.message, "urgent");
-      return;
-    }
-
+    if (error) { addNotification("Erreur Projet", error.message, "urgent"); return; }
     if (batches && batches.length > 0) {
       const autoTasks: any[] = [];
       batches.forEach(batch => {
         if (batch.enabled) {
           for (let i = 1; i <= batch.count; i++) {
             autoTasks.push({
-              id: generateUUID(),
-              title: `${batch.prefix} #${i}`,
-              description: `Auto-généré pour le projet ${p.name}`,
-              assignee_id: batch.assigneeId || currentUser?.id,
-              project_id: projId,
-              client_id: p.clientId || null,
+              id: generateUUID(), title: `${batch.prefix} #${i}`, description: `Auto-généré pour ${p.name}`,
+              assignee_id: batch.assigneeId || currentUser?.id, project_id: projId, client_id: p.clientId || null,
               due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-CA'),
-              status: TaskStatus.TODO,
-              type: batch.prefix.toLowerCase().includes('vid') ? 'video' : 
-                    batch.prefix.toLowerCase().includes('des') ? 'design' : 
-                    batch.prefix.toLowerCase().includes('web') ? 'website' : 'admin',
-              priority: 'medium'
+              status: TaskStatus.TODO, priority: 'medium',
+              type: batch.prefix.toLowerCase().includes('vid') ? 'video' : batch.prefix.toLowerCase().includes('des') ? 'design' : batch.prefix.toLowerCase().includes('web') ? 'website' : 'admin'
             });
           }
         }
       });
       if (autoTasks.length > 0) await supabase.from('tasks').insert(autoTasks);
     }
-    
-    addNotification("Projet Déployé", `${p.name} est maintenant actif sur le réseau.`, "success");
+    addNotification("Projet Déployé", `${p.name} est actif.`, "success");
     fetchUserData(currentUser);
   };
 
   const handleConvertToClient = async (lead: Lead) => {
     const clientId = generateUUID();
-    const { error: insertError } = await supabase.from('clients').insert({
-      id: clientId,
-      name: lead.name,
-      company: lead.company,
-      email: lead.email,
-      phone: lead.phone,
-      description: lead.description
-    });
-
+    const { error: insertError } = await supabase.from('clients').insert({ id: clientId, name: lead.name, company: lead.company, email: lead.email, phone: lead.phone, description: lead.description });
     if (!insertError) {
       await supabase.from('leads').delete().eq('id', lead.id);
-      addNotification("Promotion CRM", `${lead.name} a été promu Partenaire iV.`, "success");
+      addNotification("Promotion CRM", `${lead.name} promu Partenaire iV.`, "success");
       fetchUserData(currentUser);
-    } else {
-      addNotification("Erreur Conversion", insertError.message, "urgent");
-    }
+    } else { addNotification("Erreur Conversion", insertError.message, "urgent"); }
   };
 
   if (loading) return <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-950"><Loader2 className="animate-spin text-sky-400 mb-4" size={48} /><p className="text-slate-500 font-bold uppercase text-[11px]">INITIALISATION iVISION...</p></div>;
@@ -338,8 +305,7 @@ const App: React.FC = () => {
             handleSendMessage={handleSendMessage} handleMarkAsRead={async (ids: string[]) => { for (const id of ids) await supabase.from('messages').update({ read_by: [...(messages.find(m => m.id === id)?.readBy || []), currentUser.id] }).eq('id', id); }} 
             handleDeleteMessage={async (id: string) => { await supabase.from('messages').delete().eq('id', id); }}
             onUpdateTaskStatus={handleUpdateTaskStatus} onUpdateTaskPriority={handleUpdateTaskPriority} onUpdateProfile={async (up: any) => { await supabase.from('users').update(up).eq('id', currentUser.id); setCurrentUser(prev => prev ? { ...prev, ...up } : null); }}
-            setLeads={setLeads} setClients={setClients} setProjects={setProjects} setTasks={setTasks} setChannels={setChannels} setSalaries={setSalaries} setExpenses={setExpenses} setAdCampaigns={setAdCampaigns} setUsers={setUsers} addNotification={addNotification} setCurrentUser={setCurrentUser}
-            onAddProject={handleAddProject} onConvertToClient={handleConvertToClient}
+            fetchUserData={fetchUserData} addNotification={addNotification} onAddProject={handleAddProject} onConvertToClient={handleConvertToClient}
           />
         )}
         <ToastContainer notifications={notifications} onDismiss={(id) => setNotifications(prev => prev.filter(n => n.id !== id))} />
@@ -351,10 +317,7 @@ const App: React.FC = () => {
 const AuthUI = ({ handleAuth, email, setEmail, password, setPassword, isAuthProcessing, isSignUp, setIsSignUp }: any) => (
   <div className="fixed inset-0 bg-slate-950 flex flex-col items-center justify-center p-6">
     <div className="w-full max-w-md bg-slate-900/80 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] p-10 shadow-2xl animate-slide-up relative text-center">
-      <div className="flex flex-col items-center mb-12">
-        <div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center text-slate-950 mb-6"><Fingerprint size={40} /></div>
-        <h1 className="text-4xl font-black text-white uppercase tracking-tighter">iVISION</h1>
-      </div>
+      <div className="flex flex-col items-center mb-12"><div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center text-slate-950 mb-6"><Fingerprint size={40} /></div><h1 className="text-4xl font-black text-white uppercase tracking-tighter">iVISION</h1></div>
       <form onSubmit={handleAuth} className="space-y-4">
         <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="votre@agence.com" className="w-full p-5 bg-white/5 border border-white/10 rounded-2xl text-white outline-none focus:border-sky-400" />
         <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" className="w-full p-5 bg-white/5 border border-white/10 rounded-2xl text-white outline-none focus:border-sky-400" />
@@ -365,23 +328,13 @@ const AuthUI = ({ handleAuth, email, setEmail, password, setPassword, isAuthProc
   </div>
 );
 
-const AppContent: React.FC<any> = ({ currentUser, users, tasks, clients, leads, channels, messages, fileLinks, projects, salaries, expenses, adCampaigns, notifications, handleSendMessage, handleMarkAsRead, handleDeleteMessage, onUpdateTaskStatus, onUpdateTaskPriority, onUpdateProfile, setLeads, setClients, setProjects, setTasks, setChannels, setSalaries, setExpenses, setAdCampaigns, setUsers, addNotification, setCurrentUser, onAddProject, onConvertToClient }) => {
+const AppContent: React.FC<any> = ({ currentUser, users, tasks, clients, leads, channels, messages, fileLinks, projects, salaries, expenses, adCampaigns, notifications, handleSendMessage, handleMarkAsRead, handleDeleteMessage, onUpdateTaskStatus, onUpdateTaskPriority, onUpdateProfile, fetchUserData, addNotification, onAddProject, onConvertToClient }) => {
   const navigate = useNavigate();
   const [currentChannelId, setCurrentChannelId] = useState<string | null>(null);
   useEffect(() => { if (channels.length > 0 && !currentChannelId) setCurrentChannelId(channels[0].id); }, [channels, currentChannelId]);
   
   const handleUpdateTask = async (t: any) => {
-    const dbTask = {
-      title: t.title,
-      description: t.description,
-      assignee_id: t.assigneeId,
-      client_id: t.clientId,
-      project_id: t.projectId,
-      due_date: t.dueDate,
-      status: t.status,
-      type: t.type,
-      priority: t.priority
-    };
+    const dbTask = { title: t.title, description: t.description, assignee_id: t.assigneeId, client_id: t.clientId, project_id: t.projectId, due_date: t.dueDate, status: t.status, type: t.type, priority: t.priority };
     const { error } = await supabase.from('tasks').update(dbTask).eq('id', t.id);
     if (error) addNotification("Erreur Mission", error.message, "urgent");
   };
@@ -395,28 +348,42 @@ const AppContent: React.FC<any> = ({ currentUser, users, tasks, clients, leads, 
     if (updates.dueDate) dbUpdates.due_date = updates.dueDate;
     if (updates.projectId) dbUpdates.project_id = updates.projectId;
     if (updates.clientId) dbUpdates.client_id = updates.clientId;
-
     const { error } = await supabase.from('tasks').update(dbUpdates).in('id', ids);
     if (error) addNotification("Erreur Bulk", error.message, "urgent");
     else addNotification("Succès Bulk", `${ids.length} missions mises à jour.`, "success");
   };
 
+  const wrapMut = (op: any) => async (data: any) => {
+    const { error } = await op(data);
+    if (error) addNotification("Erreur Système", error.message, "urgent");
+    else fetchUserData(currentUser);
+  };
+
   return (
-    <Layout currentUser={currentUser} onLogout={async () => { await supabase.auth.signOut(); setCurrentUser(null); navigate('/'); }} messages={messages}>
+    <Layout currentUser={currentUser} onLogout={async () => { await supabase.auth.signOut(); navigate('/'); }} messages={messages}>
       <Suspense fallback={<div className="h-full w-full flex items-center justify-center"><Loader2 className="animate-spin text-primary" size={40} /></div>}>
         <Routes>
           <Route path="/dashboard" element={<Dashboard currentUser={currentUser} tasks={tasks} clients={clients} onNavigate={(v:ViewState)=>navigate(`/${v}`)} />} />
-          <Route path="/tasks" element={<Tasks tasks={tasks} users={users} clients={clients} projects={projects} currentUser={currentUser} onUpdateStatus={onUpdateTaskStatus} onAddTask={async (t:any)=> { const dbTask = { ...t, id: generateUUID(), assignee_id: t.assigneeId, client_id: t.clientId, project_id: t.projectId, due_date: t.dueDate }; delete dbTask.assigneeId; delete dbTask.clientId; delete dbTask.projectId; delete dbTask.dueDate; await supabase.from('tasks').insert(dbTask); }} onUpdateTask={handleUpdateTask} onBulkUpdateTasks={handleBulkUpdateTasks} onDeleteTask={async (id:string)=> { await supabase.from('tasks').delete().eq('id',id); }} />} />
+          <Route path="/tasks" element={<Tasks tasks={tasks} users={users} clients={clients} projects={projects} currentUser={currentUser} onUpdateStatus={onUpdateTaskStatus} onAddTask={async (t:any)=> { const dbT = { ...t, id: generateUUID(), assignee_id: t.assigneeId, client_id: t.clientId, project_id: t.projectId, due_date: t.dueDate }; delete dbT.assigneeId; delete dbT.clientId; delete dbT.projectId; delete dbT.dueDate; await supabase.from('tasks').insert(dbT); }} onUpdateTask={handleUpdateTask} onBulkUpdateTasks={handleBulkUpdateTasks} onDeleteTask={async (id:string)=> { await supabase.from('tasks').delete().eq('id',id); }} />} />
           <Route path="/chat" element={<Chat currentUser={currentUser} users={users} tasks={tasks} channels={channels} projects={projects} currentChannelId={currentChannelId} messages={messages} onChannelChange={setCurrentChannelId} onSendMessage={handleSendMessage} onMarkAsRead={handleMarkAsRead} onDeleteMessage={handleDeleteMessage} onUpdateTaskStatus={onUpdateTaskStatus} onUpdateTaskPriority={onUpdateTaskPriority} onAddChannel={async (ch:any)=> { if(ch.id) await supabase.from('channels').update({name: ch.name, is_private: ch.is_private, member_ids: ch.member_ids}).eq('id', ch.id); else await supabase.from('channels').insert(ch); }} onDeleteChannel={async (id:string)=> { await supabase.from('channels').delete().eq('id',id); }} onUpdateChannelMembers={async (id:string,m:string[])=> { await supabase.from('channels').update({member_ids:m}).eq('id',id); }} />} />
-          <Route path="/finance" element={<Finances salaries={salaries} expenses={expenses} adCampaigns={adCampaigns} users={users} projects={projects} currentUser={currentUser} onAddSalary={async (s:any)=>await supabase.from('salaries').insert(s)} onAddExpense={async (ex:any)=>await supabase.from('expenses').insert(ex)} onAddAdCampaign={async (ad:any)=>await supabase.from('ad_campaigns').insert(ad)} onUpdateSalary={async (s:any)=>await supabase.from('salaries').update(s).eq('id',s.id)} onDeleteSalary={async (id:string)=>await supabase.from('salaries').delete().eq('id',id)} onDeleteExpense={async (id:string)=>await supabase.from('expenses').delete().eq('id',id)} onDeleteAdCampaign={async (id:string)=>await supabase.from('ad_campaigns').delete().eq('id',id)} />} />
+          <Route path="/finance" element={<Finances 
+            salaries={salaries} expenses={expenses} adCampaigns={adCampaigns} users={users} projects={projects} currentUser={currentUser} 
+            onAddSalary={wrapMut((s:any)=>supabase.from('salaries').insert({user_id: s.userId, project_id: s.projectId||null, amount: s.amount, bonus: s.bonus||0, frequency: s.frequency, status: s.status}))} 
+            onAddExpense={wrapMut((ex:any)=>supabase.from('expenses').insert({name: ex.name, amount: ex.amount, type: ex.type, project_id: ex.projectId||null, status: ex.status}))} 
+            onAddAdCampaign={wrapMut((ad:any)=>supabase.from('ad_campaigns').insert({name: ad.name, platform: ad.platform, amount: ad.amount, project_id: ad.projectId||null, status: ad.status}))} 
+            onUpdateSalary={wrapMut((s:any)=>supabase.from('salaries').update({amount: s.amount, bonus: s.bonus, status: s.status, project_id: s.projectId||null}).eq('id', s.id))} 
+            onDeleteSalary={wrapMut((id:string)=>supabase.from('salaries').delete().eq('id', id))} 
+            onDeleteExpense={wrapMut((id:string)=>supabase.from('expenses').delete().eq('id', id))} 
+            onDeleteAdCampaign={wrapMut((id:string)=>supabase.from('ad_campaigns').delete().eq('id', id))} 
+          />} />
           <Route path="/team" element={<Team currentUser={currentUser} users={users} onAddUser={async (u:any)=> { const { data } = await supabase.auth.signUp({ email: u.email, password: u.password }); if (data.user) await supabase.from('users').insert({ id: data.user.id, ...u }); }} onRemoveUser={async (id:string)=>await supabase.rpc('delete_user_completely', { target_user_id: id })} onUpdateMember={async (id:string, up:any) => await supabase.from('users').update(up).eq('id',id)} />} />
-          <Route path="/projects" element={<Projects projects={projects} users={users} clients={clients} salaries={salaries} expenses={expenses} adCampaigns={adCampaigns} currentUser={currentUser} onAddProject={onAddProject} onDeleteProject={async (id:string)=>await supabase.from('projects').delete().eq('id',id)} onUpdateProject={async (p:Project)=>await supabase.from('projects').update(p).eq('id', p.id)} />} />
-          <Route path="/leads" element={<Leads leads={leads} onAddLead={async (l:any)=>await supabase.from('leads').insert(l)} onUpdateLead={async (l:any)=>await supabase.from('leads').update(l).eq('id', l.id)} onDeleteLead={async (id:string)=>await supabase.from('leads').delete().eq('id',id)} onConvertToClient={onConvertToClient} currentUser={currentUser} addNotification={addNotification} />} />
-          <Route path="/files" element={<Files fileLinks={fileLinks} onAddFileLink={async (n:string,u:string)=>await supabase.from('file_links').insert({name:n, url:u, created_by:currentUser.id})} onDeleteFileLink={async (id:string)=>await supabase.from('file_links').delete().eq('id',id)} currentUser={currentUser} />} />
+          <Route path="/projects" element={<Projects projects={projects} users={users} clients={clients} salaries={salaries} expenses={expenses} adCampaigns={adCampaigns} currentUser={currentUser} onAddProject={onAddProject} onDeleteProject={async (id:string)=> { await supabase.from('projects').delete().eq('id',id); fetchUserData(currentUser); }} onUpdateProject={async (p:Project)=> { await supabase.from('projects').update({name: p.name, description: p.description, total_budget: p.totalBudget, status: p.status, client_id: p.clientId}).eq('id', p.id); fetchUserData(currentUser); }} />} />
+          <Route path="/leads" element={<Leads leads={leads} onAddLead={async (l:any)=> { await supabase.from('leads').insert({name: l.name, company: l.company, email: l.email, phone: l.phone, status: l.status, value_min: l.valueMin, value_max: l.valueMax, description: l.description}); fetchUserData(currentUser); }} onUpdateLead={async (l:any)=> { await supabase.from('leads').update({name: l.name, company: l.company, email: l.email, phone: l.phone, status: l.status, value_min: l.valueMin, value_max: l.valueMax, description: l.description}).eq('id', l.id); fetchUserData(currentUser); }} onDeleteLead={async (id:string)=> { await supabase.from('leads').delete().eq('id',id); fetchUserData(currentUser); }} onConvertToClient={onConvertToClient} currentUser={currentUser} addNotification={addNotification} />} />
+          <Route path="/files" element={<Files fileLinks={fileLinks} onAddFileLink={async (n:string,u:string)=> { await supabase.from('file_links').insert({name:n, url:u, created_by:currentUser.id}); fetchUserData(currentUser); }} onDeleteFileLink={async (id:string)=> { await supabase.from('file_links').delete().eq('id',id); fetchUserData(currentUser); }} currentUser={currentUser} />} />
           <Route path="/settings" element={<Settings currentUser={currentUser} onUpdateProfile={onUpdateProfile} />} />
           <Route path="/reports" element={<Reports tasks={tasks} leads={leads} messages={messages} projects={projects} salaries={salaries} expenses={expenses} adCampaigns={adCampaigns} currentUser={currentUser} users={users} />} />
-          <Route path="/clients" element={<Clients clients={clients} tasks={tasks} projects={projects} onAddClient={async (c:any)=>await supabase.from('clients').insert(c)} onUpdateClient={async (up:Client)=>await supabase.from('clients').update(up).eq('id', up.id)} onDeleteClient={async (id:string)=>await supabase.from('clients').delete().eq('id',id)} currentUser={currentUser} />} />
-          <Route path="/calendar" element={<Calendar tasks={tasks} onAddTask={async (t:any)=>await supabase.from('tasks').insert(t)} onUpdateStatus={onUpdateTaskStatus} currentUser={currentUser} users={users} clients={clients} projects={projects} />} />
+          <Route path="/clients" element={<Clients clients={clients} tasks={tasks} projects={projects} onAddClient={async (c:any)=> { await supabase.from('clients').insert(c); fetchUserData(currentUser); }} onUpdateClient={async (up:Client)=> { await supabase.from('clients').update(up).eq('id', up.id); fetchUserData(currentUser); }} onDeleteClient={async (id:string)=> { await supabase.from('clients').delete().eq('id',id); fetchUserData(currentUser); }} currentUser={currentUser} />} />
+          <Route path="/calendar" element={<Calendar tasks={tasks} onAddTask={async (t:any)=> { const dbT = { ...t, id: generateUUID(), assignee_id: t.assigneeId, client_id: t.clientId, project_id: t.projectId, due_date: t.dueDate }; delete dbT.assigneeId; delete dbT.clientId; delete dbT.projectId; delete dbT.dueDate; await supabase.from('tasks').insert(dbT); fetchUserData(currentUser); }} onUpdateStatus={onUpdateTaskStatus} currentUser={currentUser} users={users} clients={clients} projects={projects} />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </Suspense>
