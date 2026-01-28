@@ -41,6 +41,8 @@ export interface User {
   lastSeen?: string;
 }
 
+export type ProjectBillingType = 'monthly' | 'one-shot';
+
 export interface Project {
   id: string;
   name: string;
@@ -48,6 +50,7 @@ export interface Project {
   totalBudget: number;
   spentBudget: number;
   status: 'active' | 'completed' | 'on_hold';
+  billingType: ProjectBillingType;
   clientId?: string;
   createdAt: string;
 }

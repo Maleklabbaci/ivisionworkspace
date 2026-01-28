@@ -38,12 +38,26 @@ const Finances: React.FC<FinancesProps> = ({
   const isAdmin = currentUser.role === UserRole.ADMIN;
 
   const financialStats = useMemo(() => {
+    const now = new Date();
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(now.getDate() - 30);
+
+    // 1. Salaires : Coût mensuel total projeté
     const salaryTotal = salaries.reduce((acc, s) => {
       const total = (s.amount || 0) + (s.bonus || 0);
       return acc + (s.frequency === 'hebdo' ? total * 4 : total);
     }, 0);
-    const expenseTotal = expenses.reduce((acc, e) => acc + (e.amount || 0), 0);
-    const adsTotal = adCampaigns.reduce((acc, a) => acc + (a.amount || 0), 0);
+
+    // 2. Frais : Uniquement ceux des 30 derniers jours (Burn Rate)
+    const expenseTotal = expenses
+      .filter(e => new Date(e.createdAt) >= thirtyDaysAgo)
+      .reduce((acc, e) => acc + (e.amount || 0), 0);
+
+    // 3. ADS : Uniquement ceux des 30 derniers jours (Burn Rate)
+    const adsTotal = adCampaigns
+      .filter(a => new Date(a.createdAt) >= thirtyDaysAgo)
+      .reduce((acc, a) => acc + (a.amount || 0), 0);
+
     return { salaryTotal, expenseTotal, adsTotal, grandTotal: salaryTotal + expenseTotal + adsTotal };
   }, [salaries, expenses, adCampaigns]);
 
@@ -66,9 +80,9 @@ const Finances: React.FC<FinancesProps> = ({
         onAddSalary(data);
       }
     } else if (activeTab === 'frais') {
-      onAddExpense(expenseForm);
+      onAddExpense({ ...expenseForm, createdAt: new Date().toISOString() });
     } else if (activeTab === 'ads') {
-      onAddAdCampaign(adsForm);
+      onAddAdCampaign({ ...adsForm, createdAt: new Date().toISOString() });
     }
     closeModals();
   };
@@ -140,10 +154,10 @@ const Finances: React.FC<FinancesProps> = ({
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-10">
         {[
-          { label: 'Flux Salarial', val: `${financialStats.salaryTotal.toLocaleString()} DZD`, icon: Users, color: 'text-amber-400', bg: 'bg-amber-400/10' },
-          { label: 'Frais Op.', val: `${financialStats.expenseTotal.toLocaleString()} DZD`, icon: Receipt, color: 'text-sky-400', bg: 'bg-sky-400/10' },
-          { label: 'Budget ADS', val: `${financialStats.adsTotal.toLocaleString()} DZD`, icon: Megaphone, color: 'text-emerald-400', bg: 'bg-emerald-400/10' },
-          { label: 'Burn Rate', val: `${financialStats.grandTotal.toLocaleString()} DZD`, icon: TrendingUp, color: 'text-rose-400', bg: 'bg-rose-400/10' }
+          { label: 'Flux RH Mensuel', val: `${financialStats.salaryTotal.toLocaleString()} DZD`, icon: Users, color: 'text-amber-400', bg: 'bg-amber-400/10' },
+          { label: 'Dépenses 30J', val: `${financialStats.expenseTotal.toLocaleString()} DZD`, icon: Receipt, color: 'text-sky-400', bg: 'bg-sky-400/10' },
+          { label: 'Budget ADS 30J', val: `${financialStats.adsTotal.toLocaleString()} DZD`, icon: Megaphone, color: 'text-emerald-400', bg: 'bg-emerald-400/10' },
+          { label: 'Burn Rate Total', val: `${financialStats.grandTotal.toLocaleString()} DZD`, icon: TrendingUp, color: 'text-rose-400', bg: 'bg-rose-400/10' }
         ].map((s, i) => (
           <div key={i} className="crystal-module p-8 md:p-12 rounded-[2.5rem] md:rounded-[3.5rem] flex flex-col justify-between group relative overflow-hidden h-44 md:h-56">
             <div className={`absolute top-0 right-0 w-40 h-40 ${s.bg} blur-[60px] md:blur-[80px] opacity-40 translate-x-12 -translate-y-12 group-hover:opacity-60 transition-opacity`}></div>

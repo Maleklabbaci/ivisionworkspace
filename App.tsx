@@ -65,6 +65,7 @@ const mapFromDB = (table: string, item: any) => {
     mapped.spentBudget = item.spent_budget;
     mapped.clientId = item.client_id;
     mapped.createdAt = item.created_at;
+    mapped.billingType = item.billing_type;
   } else if (table === 'salaries') {
     mapped.userId = item.user_id;
     mapped.projectId = item.project_id;
@@ -115,6 +116,7 @@ const App: React.FC = () => {
   }, []);
 
   const fetchUserData = async (authUser: any) => {
+    if (!authUser) return;
     try {
       let { data: userData } = await supabase.from('users').select('*').eq('id', authUser.id).maybeSingle();
       if (userData) setCurrentUser(mapFromDB('users', userData));
@@ -186,11 +188,52 @@ const App: React.FC = () => {
             onUpdateTaskStatus={handleUpdateTaskStatus} onUpdateTaskPriority={async (id:string, p:any) => { await supabase.from('tasks').update({ priority: p }).eq('id', id); fetchUserData(currentUser); }} onUpdateProfile={async (up: any) => { await supabase.from('users').update(up).eq('id', currentUser.id); setCurrentUser(prev => prev ? { ...prev, ...up } : null); }}
             fetchUserData={fetchUserData} addNotification={addNotification} 
             onAddProject={async (p:any, b:any[])=> { 
+              let targetClientId = p.clientId || null;
+              
+              if (p.isCreatingNewClient && p.newClientName) {
+                targetClientId = generateUUID();
+                const { error: clientError } = await supabase.from('clients').insert({
+                  id: targetClientId, 
+                  name: p.newClientName,
+                  description: `Généré automatiquement via le projet "${p.name}"`
+                });
+                if (clientError) {
+                  addNotification("CRM", "Erreur lors de l'ajout du client", "urgent");
+                  return;
+                }
+                addNotification("CRM", `Client "${p.newClientName}" indexé avec succès`, "success");
+              }
+
               const projId = generateUUID();
-              await supabase.from('projects').insert({id: projId, name: p.name, description: p.description, total_budget: p.totalBudget, status: p.status, client_id: p.clientId || null});
+              await supabase.from('projects').insert({
+                id: projId, 
+                name: p.name, 
+                description: p.description, 
+                total_budget: p.totalBudget, 
+                status: p.status, 
+                client_id: targetClientId,
+                billing_type: p.billingType
+              });
+              
               if(b && b.length > 0) {
                  const tks: any[] = [];
-                 b.forEach(batch => { if(batch.enabled) for(let i=1; i<=batch.count; i++) tks.push({id: generateUUID(), title: `${batch.prefix} #${i}`, assignee_id: batch.assigneeId || currentUser.id, project_id: projId, client_id: p.clientId || null, due_date: new Date(Date.now()+7*24*3600*1000).toLocaleDateString('en-CA'), status: TaskStatus.TODO, type: 'admin', priority: 'medium'}); });
+                 b.forEach(batch => { 
+                   if(batch.enabled) {
+                     for(let i=1; i<=batch.count; i++) {
+                       tks.push({
+                         id: generateUUID(), 
+                         title: `${batch.prefix} #${i}`, 
+                         assignee_id: batch.assigneeId || currentUser.id, 
+                         project_id: projId, 
+                         client_id: targetClientId, 
+                         due_date: new Date(Date.now()+7*24*3600*1000).toLocaleDateString('en-CA'), 
+                         status: TaskStatus.TODO, 
+                         type: 'admin', 
+                         priority: 'medium'
+                       }); 
+                     }
+                   }
+                 });
                  if(tks.length > 0) await supabase.from('tasks').insert(tks);
               }
               fetchUserData(currentUser);
