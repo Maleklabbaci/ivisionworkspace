@@ -51,6 +51,7 @@ const Projects: React.FC<any> = ({
     return filteredProjects.map(project => {
       const isMonthly = project.billingType === 'monthly' || !project.billingType;
 
+      // 1. Salaires (RH) - Coût mensuel projeté
       const projSalaries = salaries
         .filter((s: SalaryRecord) => s.projectId === project.id)
         .reduce((acc: number, s: SalaryRecord) => {
@@ -58,6 +59,7 @@ const Projects: React.FC<any> = ({
           return acc + (s.frequency === 'hebdo' ? total * 4 : total);
         }, 0);
 
+      // 2. Frais (Ops) 
       const projExpenses = expenses
         .filter((e: Expense) => {
           if (e.projectId !== project.id) return false;
@@ -66,6 +68,7 @@ const Projects: React.FC<any> = ({
         })
         .reduce((acc: number, e: Expense) => acc + (e.amount || 0), 0);
 
+      // 3. Budgets ADS
       const projAds = adCampaigns
         .filter((a: AdCampaignExpense) => {
           if (a.projectId !== project.id) return false;
@@ -81,10 +84,13 @@ const Projects: React.FC<any> = ({
       const expensePerc = realSpent > 0 ? (projExpenses / realSpent) * 100 : 0;
       const adsPerc = realSpent > 0 ? (projAds / realSpent) * 100 : 0;
 
+      const progress = project.totalBudget > 0 ? (realSpent / project.totalBudget) * 100 : 0;
+
       return { 
         ...project, 
         realSpent, 
         remaining,
+        progress,
         breakdown: {
           rh: projSalaries,
           ops: projExpenses,
@@ -107,7 +113,8 @@ const Projects: React.FC<any> = ({
     e.preventDefault();
     const activeConfigs = autoBatches.filter(b => b.enabled && b.count > 0);
     
-    const finalData = { 
+    // On capture les états locaux pour l'ajout de client
+    const submissionData = { 
       ...formData,
       isCreatingNewClient,
       newClientName: isCreatingNewClient ? newClientName : null
@@ -115,13 +122,13 @@ const Projects: React.FC<any> = ({
 
     if (!canViewFinances && viewMode === 'edit') {
         const existing = projects.find(p => p.id === selectedProjectId);
-        finalData.totalBudget = existing?.totalBudget || 0;
+        submissionData.totalBudget = existing?.totalBudget || 0;
     }
 
     if (viewMode === 'edit' && selectedProjectId) {
-      onUpdateProject({ ...finalData, id: selectedProjectId } as Project, activeConfigs);
+      onUpdateProject({ ...submissionData, id: selectedProjectId } as Project);
     } else {
-      onAddProject({ ...finalData, spentBudget: 0 }, activeConfigs);
+      onAddProject({ ...submissionData, spentBudget: 0 }, activeConfigs);
     }
     closeModal();
   };
@@ -142,9 +149,10 @@ const Projects: React.FC<any> = ({
       description: project.description, 
       totalBudget: project.totalBudget, 
       status: project.status, 
-      clientId: project.clientId,
+      clientId: project.clientId || '',
       billingType: project.billingType || 'monthly'
     });
+    setIsCreatingNewClient(false);
     setViewMode('edit');
   };
 
@@ -220,7 +228,6 @@ const Projects: React.FC<any> = ({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {projectsWithFinancials.map(project => {
           const client = clients.find(c => c.id === project.clientId);
-          const progress = project.totalBudget > 0 ? (project.realSpent / project.totalBudget) * 100 : 0;
           const isOverBudget = project.remaining < 0;
           const isOneShot = project.billingType === 'one-shot';
           
@@ -258,21 +265,21 @@ const Projects: React.FC<any> = ({
                   <div className="mb-6 px-1 space-y-4 relative z-10">
                     <div className="space-y-2">
                       <div className="flex justify-between items-end">
-                         <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Utilisation Budget</p>
-                         <p className={`text-[9px] font-black ${isOverBudget ? 'text-rose-400' : 'text-white'}`}>{Math.round(progress)}%</p>
+                         <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Consommation Budget</p>
+                         <p className={`text-[9px] font-black ${isOverBudget ? 'text-rose-400' : 'text-white'}`}>{Math.round(project.progress)}%</p>
                       </div>
                       <div className="h-2 bg-white/5 rounded-full overflow-hidden border border-white/5">
                         <div 
                           className={`h-full transition-all duration-1000 ${isOverBudget ? 'bg-rose-500 shadow-[0_0_10px_#f43f5e]' : 'bg-emerald-400 shadow-[0_0_10px_#10b981]'}`} 
-                          style={{ width: `${Math.min(progress, 100)}%` }}
+                          style={{ width: `${Math.min(project.progress, 100)}%` }}
                         />
                       </div>
                     </div>
 
                     <div className="space-y-2">
                       <div className="flex justify-between items-end">
-                         <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Analyse Rentabilité (Répartition)</p>
-                         <p className="text-[9px] font-black text-slate-500 uppercase">Coûts Réels</p>
+                         <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Répartition des Coûts</p>
+                         <p className="text-[9px] font-black text-slate-500 uppercase">Dépenses Réelles</p>
                       </div>
                       <div className="h-3 bg-white/5 rounded-full overflow-hidden flex border border-white/5">
                         <div className="h-full bg-amber-400 transition-all duration-700" style={{ width: `${project.breakdown.percs.rh}%` }} title="RH"></div>
@@ -302,7 +309,10 @@ const Projects: React.FC<any> = ({
       <Modal isOpen={viewMode === 'add' || viewMode === 'edit'} onClose={closeModal} title="Configurateur de Projet" subtitle="Système d'Indexation iVISION">
         <form onSubmit={handleSubmit} className="space-y-8 text-left">
           <div className="space-y-5">
-            <div className="text-left"><label className="label-iv"><Type size={12} className="text-emerald-400"/> Désignation du dossier</label><input required className="input-iv" placeholder="Nom du projet" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} /></div>
+            <div className="text-left">
+              <label className="label-iv"><Type size={12} className="text-emerald-400"/> Désignation du dossier</label>
+              <input required className="input-iv" placeholder="Nom du projet" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+            </div>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 text-left">
               <div>
@@ -320,13 +330,15 @@ const Projects: React.FC<any> = ({
               <div>
                 <div className="flex items-center justify-between">
                   <label className="label-iv"><Briefcase size={12} className="text-emerald-400"/> Client CRM</label>
-                  <button type="button" onClick={() => setIsCreatingNewClient(!isCreatingNewClient)} className="text-[8px] font-black text-emerald-400 uppercase tracking-widest hover:underline mb-2 px-2 flex items-center">
-                    {isCreatingNewClient ? <Users size={10} className="mr-1"/> : <Plus size={10} className="mr-1"/>}
-                    {isCreatingNewClient ? 'Sélectionner' : 'Nouveau'}
-                  </button>
+                  {viewMode === 'add' && (
+                    <button type="button" onClick={() => setIsCreatingNewClient(!isCreatingNewClient)} className="text-[8px] font-black text-emerald-400 uppercase tracking-widest hover:underline mb-2 px-2 flex items-center">
+                      {isCreatingNewClient ? <Users size={10} className="mr-1"/> : <Plus size={10} className="mr-1"/>}
+                      {isCreatingNewClient ? 'SÉLECTIONNER' : 'NOUVEAU'}
+                    </button>
+                  )}
                 </div>
                 
-                {isCreatingNewClient ? (
+                {isCreatingNewClient && viewMode === 'add' ? (
                   <div className="relative animate-fade-in">
                     <input required className="input-iv" placeholder="Nom du nouveau client" value={newClientName} onChange={e => setNewClientName(e.target.value)} />
                     <UserPlus size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-emerald-400 opacity-50" />
@@ -352,42 +364,44 @@ const Projects: React.FC<any> = ({
               <textarea className="input-iv h-24 resize-none leading-relaxed" placeholder="Spécifications opérationnelles..." value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
             </div>
 
-            <div className="p-5 md:p-8 bg-emerald-400/5 rounded-[2rem] border border-emerald-400/10 space-y-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3"><Zap size={18} className="text-emerald-400" /><span className="text-[10px] md:text-[11px] font-black text-white uppercase tracking-widest leading-none">Déploiement Automatique</span></div>
-                <button type="button" onClick={addBatch} className="text-[9px] font-black uppercase text-emerald-400 bg-emerald-400/10 px-4 py-2 rounded-xl border border-emerald-400/10 hover:bg-emerald-400 hover:text-slate-950 transition-all">+ Ajouter Lot</button>
-              </div>
+            {viewMode === 'add' && (
+              <div className="p-5 md:p-8 bg-emerald-400/5 rounded-[2rem] border border-emerald-400/10 space-y-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3"><Zap size={18} className="text-emerald-400" /><span className="text-[10px] md:text-[11px] font-black text-white uppercase tracking-widest leading-none">Déploiement Automatique</span></div>
+                  <button type="button" onClick={addBatch} className="text-[9px] font-black uppercase text-emerald-400 bg-emerald-400/10 px-4 py-2 rounded-xl border border-emerald-400/10 hover:bg-emerald-400 hover:text-slate-950 transition-all">+ Ajouter Lot</button>
+                </div>
 
-              <div className="space-y-4 max-h-[300px] overflow-y-auto no-scrollbar pr-1">
-                {autoBatches.map((batch, index) => (
-                  <div key={batch.id} className="p-4 bg-slate-950/40 rounded-3xl border border-white/5 space-y-4 relative group/batch text-left">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-3">
-                        <button type="button" onClick={() => updateBatch(batch.id, { enabled: !batch.enabled })} className={`w-10 h-5 rounded-full p-1 transition-all ${batch.enabled ? 'bg-emerald-400' : 'bg-white/10'}`}><div className={`w-3 h-3 bg-white rounded-full transition-transform ${batch.enabled ? 'translate-x-5' : 'translate-x-0'}`} /></button>
-                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Lot #{index+1}</span>
+                <div className="space-y-4 max-h-[300px] overflow-y-auto no-scrollbar pr-1">
+                  {autoBatches.map((batch, index) => (
+                    <div key={batch.id} className="p-4 bg-slate-950/40 rounded-3xl border border-white/5 space-y-4 relative group/batch text-left">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                          <button type="button" onClick={() => updateBatch(batch.id, { enabled: !batch.enabled })} className={`w-10 h-5 rounded-full p-1 transition-all ${batch.enabled ? 'bg-emerald-400' : 'bg-white/10'}`}><div className={`w-3 h-3 bg-white rounded-full transition-transform ${batch.enabled ? 'translate-x-5' : 'translate-x-0'}`} /></button>
+                          <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Lot #{index+1}</span>
+                        </div>
+                        <button type="button" onClick={() => removeBatch(batch.id)} className="p-2 text-slate-700 hover:text-rose-400 transition-colors"><Trash2 size={14}/></button>
                       </div>
-                      <button type="button" onClick={() => removeBatch(batch.id)} className="p-2 text-slate-700 hover:text-rose-400 transition-colors"><Trash2 size={14}/></button>
+
+                      {batch.enabled && (
+                        <div className="space-y-4 animate-fade-in text-left">
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1"><label className="label-iv text-[8px] opacity-50">Quantité</label><input type="number" min="1" max="50" className="input-iv h-10 bg-slate-900/50" value={batch.count} onChange={e => updateBatch(batch.id, { count: Number(e.target.value) })} /></div>
+                            <div className="space-y-1"><label className="label-iv text-[8px] opacity-50">Préfixe</label><input className="input-iv h-10 bg-slate-900/50" placeholder="Ex: Audit" value={batch.prefix} onChange={e => updateBatch(batch.id, { prefix: e.target.value })} /></div>
+                          </div>
+                          <div className="space-y-1">
+                            <label className="label-iv text-[8px] opacity-50">Responsable</label>
+                            <select className="input-iv h-10 bg-slate-900/50 cursor-pointer" value={batch.assigneeId} onChange={e => updateBatch(batch.id, { assigneeId: e.target.value })}>
+                              <option value="">Affectation auto</option>
+                              {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                            </select>
+                          </div>
+                        </div>
+                      )}
                     </div>
-
-                    {batch.enabled && (
-                      <div className="space-y-4 animate-fade-in text-left">
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-1"><label className="label-iv text-[8px] opacity-50">Quantité</label><input type="number" min="1" max="50" className="input-iv h-10 bg-slate-900/50" value={batch.count} onChange={e => updateBatch(batch.id, { count: Number(e.target.value) })} /></div>
-                          <div className="space-y-1"><label className="label-iv text-[8px] opacity-50">Préfixe</label><input className="input-iv h-10 bg-slate-900/50" placeholder="Ex: Audit" value={batch.prefix} onChange={e => updateBatch(batch.id, { prefix: e.target.value })} /></div>
-                        </div>
-                        <div className="space-y-1">
-                          <label className="label-iv text-[8px] opacity-50">Responsable</label>
-                          <select className="input-iv h-10 bg-slate-900/50 cursor-pointer" value={batch.assigneeId} onChange={e => updateBatch(batch.id, { assigneeId: e.target.value })}>
-                            <option value="">Affectation auto</option>
-                            {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                          </select>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="text-left"><label className="label-iv"><Activity size={12} className="text-emerald-400"/> Statut du dossier</label><select className="input-iv appearance-none cursor-pointer" value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as any})}><option value="active">Actif</option><option value="completed">Terminé</option><option value="on_hold">En Pause</option></select></div>
           </div>

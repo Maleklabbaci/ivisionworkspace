@@ -1,5 +1,6 @@
+
 import React, { useMemo, useState } from 'react';
-import { TrendingUp, Target, Zap, Clock, ChevronRight, Activity, BarChart3, ListChecks, AlertTriangle, Info, HelpCircle, AlertCircle } from 'lucide-react';
+import { TrendingUp, Target, Zap, Clock, ChevronRight, Activity, BarChart3, ListChecks, AlertTriangle, Info, HelpCircle, AlertCircle, Calendar } from 'lucide-react';
 import { Task, User, ViewState, TaskStatus, UserRole, Client } from '../types';
 import Modal from './Modal';
 
@@ -24,6 +25,20 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], clients 
   const blockedTasks = useMemo(() => tasks.filter(t => t.status === TaskStatus.BLOCKED), [tasks]);
   const overdueCount = useMemo(() => relevantTasks.filter(t => t.dueDate < today && t.status !== TaskStatus.DONE).length, [relevantTasks, today]);
   
+  // Calcul des missions critiques (Bloquées ou en Retard)
+  const urgentAlertTasks = useMemo(() => {
+    return relevantTasks
+      .filter(t => (t.status === TaskStatus.BLOCKED) || (t.dueDate < today && t.status !== TaskStatus.DONE))
+      .sort((a, b) => {
+        // Priorité haute en premier
+        if (a.priority === 'high' && b.priority !== 'high') return -1;
+        if (a.priority !== 'high' && b.priority === 'high') return 1;
+        // Puis par date d'échéance la plus ancienne
+        return a.dueDate.localeCompare(b.dueDate);
+      })
+      .slice(0, 3);
+  }, [relevantTasks, today]);
+
   const productivityScore = useMemo(() => {
     if (relevantTasks.length === 0) return 0;
     const completed = relevantTasks.filter(t => t.status === TaskStatus.DONE).length;
@@ -150,23 +165,57 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, tasks = [], clients 
           </div>
         </div>
 
-        <div className="crystal-module p-10 md:p-12 rounded-[2.5rem] md:rounded-[3.5rem] flex flex-col items-center justify-center text-center space-y-8 relative overflow-hidden group shadow-xl border-white/5">
-          <div className="absolute top-0 right-0 w-40 h-40 bg-sky-400/5 blur-[80px] rounded-full"></div>
-          <div className="relative">
-            <div className="w-40 h-40 md:w-48 md:h-48 rounded-full border-[10px] border-white/5 border-t-sky-400 flex items-center justify-center shadow-[0_0_40px_rgba(14,165,233,0.1)]">
-               <span className="text-4xl md:text-5xl font-black text-white tracking-tighter leading-none">{productivityScore}<span className="text-xl text-sky-400 opacity-60">%</span></span>
+        <div className="space-y-6">
+          <div className="crystal-module p-10 md:p-12 rounded-[2.5rem] md:rounded-[3.5rem] flex flex-col items-center justify-center text-center space-y-8 relative overflow-hidden group shadow-xl border-white/5">
+            <div className="absolute top-0 right-0 w-40 h-40 bg-sky-400/5 blur-[80px] rounded-full"></div>
+            <div className="relative">
+              <div className="w-40 h-40 md:w-48 md:h-48 rounded-full border-[10px] border-white/5 border-t-sky-400 flex items-center justify-center shadow-[0_0_40px_rgba(14,165,233,0.1)]">
+                 <span className="text-4xl md:text-5xl font-black text-white tracking-tighter leading-none">{productivityScore}<span className="text-xl text-sky-400 opacity-60">%</span></span>
+              </div>
             </div>
+            <div>
+              <h4 className="text-xl md:text-2xl font-black text-white uppercase tracking-tight leading-none">Rendement iV</h4>
+              <p className="text-slate-600 text-[10px] mt-2 font-black uppercase tracking-tight">Efficacité calculée</p>
+            </div>
+            <button 
+              onClick={() => canViewReports ? onNavigate('reports') : onNavigate('tasks')} 
+              className="w-full py-4 bg-white text-slate-950 rounded-2xl font-black text-[10px] uppercase active-scale shadow-2xl hover:bg-sky-400 hover:text-white transition-all tracking-widest"
+            >
+              {canViewReports ? "Audit Système" : "Vérifier Missions"}
+            </button>
           </div>
-          <div>
-            <h4 className="text-xl md:text-2xl font-black text-white uppercase tracking-tight leading-none">Rendement iV</h4>
-            <p className="text-slate-600 text-[10px] mt-2 font-black uppercase tracking-tight">Efficacité calculée</p>
-          </div>
-          <button 
-            onClick={() => canViewReports ? onNavigate('reports') : onNavigate('tasks')} 
-            className="w-full py-4 bg-white text-slate-950 rounded-2xl font-black text-[10px] uppercase active-scale shadow-2xl hover:bg-sky-400 hover:text-white transition-all tracking-widest"
-          >
-            {canViewReports ? "Audit Système" : "Vérifier Missions"}
-          </button>
+
+          {/* SECTION ALERTES CRITIQUES SOUS LE GRAPHIQUE */}
+          {urgentAlertTasks.length > 0 && (
+            <div className="space-y-4 animate-slide-up">
+              <div className="flex items-center justify-between px-2">
+                <h3 className="text-[10px] font-black uppercase text-rose-500 tracking-widest flex items-center">
+                  <AlertTriangle size={14} className="mr-2" /> Alertes Critiques
+                </h3>
+                <span className="px-2 py-0.5 bg-rose-500/10 rounded text-[8px] font-black text-rose-500 uppercase tracking-tighter">{urgentAlertTasks.length} OBJ.</span>
+              </div>
+              <div className="space-y-3">
+                {urgentAlertTasks.map(task => (
+                  <div 
+                    key={task.id} 
+                    onClick={() => onNavigate('tasks')}
+                    className="p-4 rounded-[1.5rem] bg-rose-500/5 border border-rose-500/20 flex items-center space-x-4 group cursor-pointer active-scale transition-all hover:bg-rose-500/10"
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-rose-500/20 flex items-center justify-center text-rose-500 border border-rose-500/20 shrink-0">
+                      {task.status === TaskStatus.BLOCKED ? <Activity size={18} /> : <Calendar size={18} />}
+                    </div>
+                    <div className="min-w-0 flex-1 text-left">
+                      <p className="text-[12px] font-black text-white uppercase truncate group-hover:text-rose-400 transition-colors leading-tight">{task.title}</p>
+                      <p className="text-[9px] font-bold text-slate-600 uppercase mt-1 tracking-widest">
+                        {task.status === TaskStatus.BLOCKED ? 'Bloqué' : `Retard (${task.dueDate})`}
+                      </p>
+                    </div>
+                    <ChevronRight size={14} className="text-slate-700 group-hover:text-rose-500" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
