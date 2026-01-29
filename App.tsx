@@ -1,8 +1,7 @@
 
 import React, { useState, useEffect, useCallback, Suspense, lazy, useRef } from 'react';
 import { supabase, safeFetch } from './services/supabaseClient';
-import { HashRouter } from 'react-router-dom';
-import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router';
+import { HashRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import Layout from './components/Layout';
 import ToastContainer from './components/Toast';
 import { User, UserRole, Task, TaskStatus, Channel, ToastNotification, Message, Client, FileLink, Lead, UserPermissions, ViewState, Project, SalaryRecord, Expense, AdCampaignExpense } from './types';
@@ -84,7 +83,7 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   const addNotification = useCallback((title: string, message: any, type: 'info' | 'success' | 'urgent' = 'info') => {
-    const displayMessage = typeof message === 'string' ? message : (message?.message || "Erreur inconnue");
+    const displayMessage = typeof message === 'string' ? message : (message?.message || "Action effectuée");
     setNotifications(prev => [...prev, { id: generateUUID(), title, message: displayMessage, type }]);
   }, []);
 
@@ -95,30 +94,27 @@ const App: React.FC = () => {
     }
     
     try {
-      // 1. Récupération ou Création du profil utilisateur
       let { data: userData, error: userError } = await supabase.from('users').select('*').eq('id', authUser.id).maybeSingle();
       
       if (!userData && !userError) {
-        // L'utilisateur existe en Auth mais pas en DB (Premier login)
         const newProfile = {
           id: authUser.id,
           name: authUser.email.split('@')[0].toUpperCase(),
           email: authUser.email,
           role: UserRole.MEMBER,
           avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${authUser.id}`,
-          status: 'active'
+          status: 'active',
+          notificationPref: 'push'
         };
-        const { data: createdUser } = await supabase.from('users').insert(newProfile).select().single();
+        const { data: createdUser, error: insertError } = await supabase.from('users').insert(newProfile).select().single();
+        if (insertError) throw insertError;
         userData = createdUser;
       }
 
       if (userData) {
         setCurrentUser(mapFromDB('users', userData));
-      } else {
-        throw new Error("Impossible de synchroniser le profil utilisateur");
       }
 
-      // 2. Fetch du reste des données
       const results = await Promise.allSettled([
         safeFetch(supabase.from('users').select('*'), []),
         safeFetch(supabase.from('tasks').select('*').order('created_at', { ascending: false }), []),
@@ -148,7 +144,8 @@ const App: React.FC = () => {
       setAdCampaigns(data[10].map((i:any) => mapFromDB('ad_campaigns', i)));
 
     } catch (err: any) {
-      addNotification("Erreur de connexion", err.message, "urgent");
+      console.error("Fetch Error:", err);
+      addNotification("Alerte Système", "Erreur lors du chargement des données.", "urgent");
     } finally {
       setLoading(false);
     }
@@ -157,8 +154,10 @@ const App: React.FC = () => {
   useEffect(() => {
     let mounted = true;
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (mounted && session?.user) fetchUserData(session.user);
-      else if (mounted) setLoading(false);
+      if (mounted) {
+        if (session?.user) fetchUserData(session.user);
+        else setLoading(false);
+      }
     });
 
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -171,22 +170,38 @@ const App: React.FC = () => {
     return () => { mounted = false; authListener.subscription.unsubscribe(); };
   }, []);
 
-  if (loading) return <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-950"><Loader2 className="animate-spin text-sky-400 mb-4" size={48} /><p className="text-slate-500 font-bold uppercase text-[10px] tracking-widest animate-pulse">Initialisation iVISION Core...</p></div>;
+  if (loading) return (
+    <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-950">
+      <Loader2 className="animate-spin text-sky-400 mb-4" size={48} />
+      <p className="text-slate-500 font-bold uppercase text-[10px] tracking-widest animate-pulse">Initialisation iVISION Core...</p>
+    </div>
+  );
 
   return (
     <HashRouter>
       <div className="min-h-screen bg-slate-950 text-slate-200">
-        {!currentUser ? <AuthUI handleAuth={async (e: any) => {
-          e.preventDefault();
-          setIsAuthProcessing(true);
-          try {
-            const { error } = isSignUp 
-              ? await supabase.auth.signUp({ email: email.toLowerCase().trim(), password })
-              : await supabase.auth.signInWithPassword({ email: email.toLowerCase().trim(), password });
-            if (error) throw error;
-          } catch (error: any) { addNotification("Alerte Sécurité", error.message, "urgent"); }
-          finally { setIsAuthProcessing(false); }
-        }} email={email} setEmail={setEmail} password={password} setPassword={setPassword} isAuthProcessing={isAuthProcessing} isSignUp={isSignUp} setIsSignUp={setIsSignUp} /> : (
+        {!currentUser ? (
+          <AuthUI 
+            handleAuth={async (e: any) => {
+              e.preventDefault();
+              setIsAuthProcessing(true);
+              try {
+                const { error } = isSignUp 
+                  ? await supabase.auth.signUp({ email: email.toLowerCase().trim(), password })
+                  : await supabase.auth.signInWithPassword({ email: email.toLowerCase().trim(), password });
+                if (error) throw error;
+              } catch (error: any) { 
+                addNotification("Sécurité", error.message, "urgent"); 
+              } finally { 
+                setIsAuthProcessing(false); 
+              }
+            }} 
+            email={email} setEmail={setEmail} 
+            password={password} setPassword={setPassword} 
+            isAuthProcessing={isAuthProcessing} 
+            isSignUp={isSignUp} setIsSignUp={setIsSignUp} 
+          />
+        ) : (
           <AppContent 
             currentUser={currentUser} users={users} tasks={tasks} clients={clients} leads={leads} channels={channels} messages={messages} fileLinks={fileLinks} projects={projects} salaries={salaries} expenses={expenses} adCampaigns={adCampaigns} notifications={notifications} 
             handleSendMessage={async (c:string, ch:string) => { await supabase.from('messages').insert({ user_id: currentUser.id, channel_id: ch, content: c, read_by: [currentUser.id] }); fetchUserData(currentUser); }} 
