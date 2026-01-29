@@ -1,5 +1,6 @@
+
 import React, { useState, useMemo } from 'react';
-import { Plus, X, Calendar as CalendarIcon, CheckCircle2, RotateCcw, Check, Trash2, Video, Palette, Globe, Megaphone, Send, Layers, ChevronRight, Zap, HelpCircle, CheckSquare, Save, User as UserIcon, ListChecks, Filter, Eye, EyeOff, AlertCircle, AlertTriangle } from 'lucide-react';
+import { Plus, X, Calendar as CalendarIcon, CheckCircle2, RotateCcw, Check, Trash2, Video, Palette, Globe, Megaphone, Send, Layers, ChevronRight, Zap, HelpCircle, CheckSquare, Save, User as UserIcon, ListChecks, Filter, Eye, EyeOff, AlertCircle, AlertTriangle, Search } from 'lucide-react';
 import { Task, TaskStatus, User, Client, Project, UserRole, TaskType } from '../types';
 import Modal from './Modal';
 
@@ -74,6 +75,7 @@ const Tasks = ({ tasks = [], users = [], clients = [], projects = [], currentUse
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'add' | 'edit' | 'bulk'>('list');
   const [typeFilter, setTypeFilter] = useState<TaskType | 'all'>('all');
+  const [searchTerm, setSearchTerm] = useState('');
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
   const [showArchived, setShowArchived] = useState(false);
@@ -86,19 +88,35 @@ const Tasks = ({ tasks = [], users = [], clients = [], projects = [], currentUse
 
   const [bulkData, setBulkData] = useState<any>({ status: '', priority: '', assigneeId: '', type: '', dueDate: '', projectId: '', clientId: '' });
 
-  const clientMap = useMemo(() => new Map<string, Client>((clients as any[]).map((c: any) => [c.id, c])), [clients]);
   const userMap = useMemo(() => new Map<string, User>((users as any[]).map((u: any) => [u.id, u])), [users]);
+  const clientMap = useMemo(() => new Map<string, Client>((clients as any[]).map((c: any) => [c.id, c])), [clients]);
   const projectMap = useMemo(() => new Map<string, Project>((projects as any[]).map((p: any) => [p.id, p])), [projects]);
 
   const canSwitchView = !!currentUser.permissions?.canViewAllTasks || currentUser.role === UserRole.ADMIN;
 
   const filteredTasksBase = useMemo(() => {
     let base = tasks;
+    
+    // Filtre Vue Personnelle
     if (personalViewOnly) {
       base = base.filter((t: Task) => t.assigneeId === currentUser.id);
     }
+    
+    // Barre de recherche globale (Titre, Description, Responsable)
+    if (searchTerm.trim()) {
+      const lowerSearch = searchTerm.toLowerCase();
+      base = base.filter((t: Task) => {
+        const assignee = userMap.get(t.assigneeId);
+        return (
+          t.title.toLowerCase().includes(lowerSearch) ||
+          t.description.toLowerCase().includes(lowerSearch) ||
+          (assignee && assignee.name.toLowerCase().includes(lowerSearch))
+        );
+      });
+    }
+    
     return base;
-  }, [tasks, personalViewOnly, currentUser.id]);
+  }, [tasks, personalViewOnly, currentUser.id, searchTerm, userMap]);
 
   const groupedActiveTasks = useMemo(() => {
     const active = filteredTasksBase.filter((t: Task) => t.status !== TaskStatus.DONE);
@@ -152,17 +170,29 @@ const Tasks = ({ tasks = [], users = [], clients = [], projects = [], currentUse
           </div>
 
           <div className="flex flex-col items-end gap-5 w-full md:w-auto">
-             <div className="flex items-center space-x-3 w-full justify-end">
-                <button 
-                  onClick={() => { setIsSelectionMode(!isSelectionMode); setSelectedTaskIds([]); }} 
-                  className={`h-14 px-6 rounded-2xl text-[10px] font-black uppercase transition-all flex items-center space-x-3 shadow-2xl ${isSelectionMode ? 'bg-sky-500 text-white' : 'glass text-slate-500'}`}
-                >
-                  {isSelectionMode ? <X size={20}/> : <CheckSquare size={20}/>}
-                  <span className="hidden sm:inline">{isSelectionMode ? 'Annuler' : 'Sélection Lot'}</span>
-                </button>
-                <button onClick={() => { setFormData({ title: '', description: '', dueDate: new Date().toLocaleDateString('en-CA'), priority: 'medium', assigneeId: currentUser.id, type: 'video', status: TaskStatus.TODO }); setViewMode('add'); }} className="w-14 h-14 bg-sky-500 text-white rounded-2xl shadow-xl active-scale flex items-center justify-center transition-transform hover:scale-105">
-                  <Plus size={32} strokeWidth={3} />
-                </button>
+             <div className="flex flex-col sm:flex-row items-center gap-4 w-full justify-end">
+                <div className="relative group w-full sm:w-80">
+                  <Search size={18} className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-sky-400 transition-colors" />
+                  <input 
+                    type="text" 
+                    placeholder="TITRE, RESPONSABLE..." 
+                    value={searchTerm} 
+                    onChange={e => setSearchTerm(e.target.value)} 
+                    className="w-full pl-14 pr-6 py-4 bg-white/5 border border-white/10 rounded-full text-[11px] font-black uppercase tracking-widest text-white outline-none focus:border-sky-400 transition-all placeholder-slate-700" 
+                  />
+                </div>
+                <div className="flex items-center space-x-3">
+                  <button 
+                    onClick={() => { setIsSelectionMode(!isSelectionMode); setSelectedTaskIds([]); }} 
+                    className={`h-14 px-6 rounded-2xl text-[10px] font-black uppercase transition-all flex items-center space-x-3 shadow-2xl ${isSelectionMode ? 'bg-sky-500 text-white' : 'glass text-slate-500'}`}
+                  >
+                    {isSelectionMode ? <X size={20}/> : <CheckSquare size={20}/>}
+                    <span className="hidden sm:inline">{isSelectionMode ? 'Annuler' : 'Sélection Lot'}</span>
+                  </button>
+                  <button onClick={() => { setFormData({ title: '', description: '', dueDate: new Date().toLocaleDateString('en-CA'), priority: 'medium', assigneeId: currentUser.id, type: 'video', status: TaskStatus.TODO }); setViewMode('add'); }} className="w-14 h-14 bg-sky-500 text-white rounded-2xl shadow-xl active-scale flex items-center justify-center transition-transform hover:scale-105">
+                    <Plus size={32} strokeWidth={3} />
+                  </button>
+                </div>
              </div>
              
              <div className="flex bg-slate-950/40 p-1.5 rounded-full border border-white/5 w-full overflow-x-auto no-scrollbar shadow-inner backdrop-blur-xl">
@@ -201,6 +231,13 @@ const Tasks = ({ tasks = [], users = [], clients = [], projects = [], currentUse
                 </div>
               </section>
           ))}
+
+          {Object.keys(groupedActiveTasks).length === 0 && searchTerm && (
+            <div className="py-20 glass rounded-[3rem] border-dashed border-2 border-white/5 flex flex-col items-center justify-center opacity-30 text-center">
+              <Search size={40} className="mb-4 text-slate-500" />
+              <p className="text-[10px] font-black uppercase tracking-[0.2em]">Aucun résultat pour "{searchTerm}"</p>
+            </div>
+          )}
           
           {filteredTasksBase.filter(t => t.status === TaskStatus.DONE).length > 0 && (
             <section className="pt-16 border-t border-white/5">
