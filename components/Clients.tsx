@@ -1,9 +1,9 @@
 
 import React, { useState, useMemo } from 'react';
 import { Client, Task, User, UserRole, Project, TaskStatus, SalaryRecord, Expense, AdCampaignExpense, FileLink } from '../types';
-// Added missing ExternalLink icon import
+// Fixed: Import hooks from react-router to resolve missing exports in react-router-dom
+import { useNavigate } from 'react-router';
 import { Plus, Search, Mail, Phone, MapPin, X, Briefcase, ChevronRight, Trash2, Edit2, Globe, Activity, Info, Lock, Layers, CheckCircle2, Clock, ListChecks, ArrowUpRight, Save, Zap, AlertTriangle, Wallet, DollarSign, Target, FileText, ExternalLink } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 import Modal from './Modal';
 
 const Clients: React.FC<any> = ({ clients = [], tasks = [], projects = [], salaries = [], expenses = [], adCampaigns = [], fileLinks = [], onAddClient, onUpdateClient, onDeleteClient, currentUser }) => {

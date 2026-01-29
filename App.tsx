@@ -1,7 +1,9 @@
 
 import React, { useState, useEffect, useCallback, Suspense, lazy, useRef } from 'react';
 import { supabase, safeFetch } from './services/supabaseClient';
-import { HashRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
+// Fixed: Split imports between react-router-dom and react-router to resolve missing exports
+import { HashRouter } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router';
 import Layout from './components/Layout';
 import ToastContainer from './components/Toast';
 import { User, UserRole, Task, TaskStatus, Channel, ToastNotification, Message, Client, FileLink, Lead, UserPermissions, ViewState, Project, SalaryRecord, Expense, AdCampaignExpense } from './types';
@@ -188,7 +190,7 @@ const App: React.FC = () => {
             onUpdateTaskStatus={handleUpdateTaskStatus} onUpdateTaskPriority={async (id:string, p:any) => { await supabase.from('tasks').update({ priority: p }).eq('id', id); fetchUserData(currentUser); }} onUpdateProfile={async (up: any) => { await supabase.from('users').update(up).eq('id', currentUser.id); setCurrentUser(prev => prev ? { ...prev, ...up } : null); }}
             fetchUserData={fetchUserData} addNotification={addNotification} 
             onAddProject={async (p:any, b:any[])=> { 
-              let targetClientId = p.clientId || null;
+              let targetClientId = (p.clientId && p.clientId.trim() !== "") ? p.clientId : null;
               
               if (p.isCreatingNewClient && p.newClientName) {
                 targetClientId = generateUUID();
@@ -198,6 +200,7 @@ const App: React.FC = () => {
                   description: `Généré automatiquement via le projet "${p.name}"`
                 });
                 if (clientError) {
+                  console.error("Client creation error:", clientError);
                   addNotification("CRM", "Erreur lors de l'ajout du client", "urgent");
                   return;
                 }
@@ -205,19 +208,40 @@ const App: React.FC = () => {
               }
 
               const projId = generateUUID();
+              // Tentative d'insertion complète
               const { error: projError } = await supabase.from('projects').insert({
                 id: projId, 
                 name: p.name, 
-                description: p.description, 
-                total_budget: p.totalBudget, 
-                status: p.status, 
+                description: p.description || "", 
+                total_budget: isNaN(Number(p.totalBudget)) ? 0 : Number(p.totalBudget), 
+                spent_budget: 0,
+                status: p.status || "active", 
                 client_id: targetClientId,
-                billing_type: p.billingType
+                billing_type: p.billing_type || "monthly"
               });
 
               if (projError) {
-                addNotification("Projets", "Erreur lors du déploiement", "urgent");
-                return;
+                console.error("Project deployment error:", projError);
+                // Si l'erreur concerne billing_type, on tente un fallback sans cette colonne pour ne pas bloquer l'utilisateur
+                if (projError.message?.includes('billing_type')) {
+                   const { error: retryError } = await supabase.from('projects').insert({
+                    id: projId, 
+                    name: p.name, 
+                    description: p.description || "", 
+                    total_budget: isNaN(Number(p.totalBudget)) ? 0 : Number(p.totalBudget), 
+                    spent_budget: 0,
+                    status: p.status || "active", 
+                    client_id: targetClientId
+                   });
+                   if (retryError) {
+                     addNotification("Projets", "Échec critique du déploiement", "urgent");
+                     return;
+                   }
+                   addNotification("Système", "Projet déployé (billing_type ignoré : SQL requis)", "info");
+                } else {
+                  addNotification("Projets", "Erreur lors du déploiement", "urgent");
+                  return;
+                }
               }
               
               if(b && b.length > 0) {

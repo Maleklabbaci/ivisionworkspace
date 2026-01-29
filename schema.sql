@@ -1,26 +1,41 @@
 
--- iVISION AGENCY FULL SYSTEM SCHEMA v4.7
--- Mise à jour pour les accusés de lecture
+-- iVISION AGENCY FULL SYSTEM SCHEMA v4.8
+-- Correction de la structure des projets
 
--- 1. AJOUT DE LA COLONNE READ_BY
+-- 1. MISE À JOUR DE LA TABLE PROJECTS
+-- Ajout de la colonne billing_type si elle n'existe pas
+DO $$ 
+BEGIN 
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='projects' AND column_name='billing_type') THEN
+        ALTER TABLE public.projects ADD COLUMN billing_type TEXT DEFAULT 'monthly';
+    END IF;
+END $$;
+
+-- Assurer que total_budget et spent_budget existent
+DO $$ 
+BEGIN 
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='projects' AND column_name='total_budget') THEN
+        ALTER TABLE public.projects ADD COLUMN total_budget NUMERIC DEFAULT 0;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='projects' AND column_name='spent_budget') THEN
+        ALTER TABLE public.projects ADD COLUMN spent_budget NUMERIC DEFAULT 0;
+    END IF;
+END $$;
+
+-- 2. ACCUSÉS DE LECTURE MESSAGES
 ALTER TABLE public.messages 
 ADD COLUMN IF NOT EXISTS read_by UUID[] DEFAULT '{}';
 
--- 2. CRÉATION DU BUCKET (Si non existant)
+-- 3. CRÉATION DU BUCKET AVATARS
 INSERT INTO storage.buckets (id, name, public)
 VALUES ('avatars', 'avatars', true)
 ON CONFLICT (id) DO NOTHING;
 
--- 3. POLITIQUES DE SÉCURITÉ POUR LE STOCKAGE
+-- 4. POLITIQUES DE SÉCURITÉ
 DROP POLICY IF EXISTS "Tout le monde peut voir les avatars" ON storage.objects;
-DROP POLICY IF EXISTS "Les utilisateurs connectés peuvent uploader des avatars" ON storage.objects;
-DROP POLICY IF EXISTS "Les utilisateurs peuvent modifier leurs propres avatars" ON storage.objects;
-
 CREATE POLICY "Tout le monde peut voir les avatars" ON storage.objects FOR SELECT USING ( bucket_id = 'avatars' );
-CREATE POLICY "Les utilisateurs connectés peuvent uploader des avatars" ON storage.objects FOR INSERT WITH CHECK ( bucket_id = 'avatars' AND auth.role() = 'authenticated' );
-CREATE POLICY "Les utilisateurs peuvent modifier leurs propres avatars" ON storage.objects FOR UPDATE USING ( bucket_id = 'avatars' AND auth.uid()::text = (storage.foldername(name))[1] );
 
--- 4. FONCTION DE SUPPRESSION TOTALE
+-- 5. FONCTION DE SUPPRESSION TOTALE
 CREATE OR REPLACE FUNCTION public.delete_user_completely(target_user_id UUID)
 RETURNS void
 LANGUAGE plpgsql

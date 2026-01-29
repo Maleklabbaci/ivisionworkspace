@@ -2,7 +2,8 @@
 import React, { useState, useMemo } from 'react';
 import { LogOut, Plus, X, LayoutGrid as LayoutIcon, CheckSquare as TaskIcon, MessageSquare as ChatIcon, Briefcase as ClientIcon, Target as LeadIcon, FileText as FileIcon, Calendar as CalIcon, BarChart3 as ReportIcon, Users as TeamIcon, Settings as SettingsIcon, Layers, Wallet } from 'lucide-react';
 import { User, UserPermissions, UserRole, Message, Channel } from '../types';
-import { useLocation, useNavigate } from 'react-router-dom';
+// Fixed: Import hooks from react-router to resolve missing exports in react-router-dom
+import { useLocation, useNavigate } from 'react-router';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -106,7 +107,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, onLogout, messag
         </main>
         
         {/* Navigation Mobile */}
-        <nav className="lg:hidden fixed bottom-5 left-1/2 -translate-x-1/2 w-[90%] max-w-sm h-16 bg-white/10 backdrop-blur-3xl rounded-[2rem] flex justify-between items-center px-4 z-[100] shadow-2xl border border-white/10">
+        <nav className="lg:hidden fixed bottom-5 left-1/2 -translate-x-1/2 w-[90%] max-sm h-16 bg-white/10 backdrop-blur-3xl rounded-[2rem] flex justify-between items-center px-4 z-[100] shadow-2xl border border-white/10">
           {visibleNavItems.slice(0, 4).map(item => (
             <button 
               key={item.id} 
