@@ -14,6 +14,8 @@ interface FinancesProps {
   tasks: Task[];
   currentUser: User;
   onUpdateSalary: (salary: SalaryRecord) => void;
+  onUpdateExpense: (expense: Expense) => void;
+  onUpdateAdCampaign: (campaign: AdCampaignExpense) => void;
   onAddSalary: (salary: any) => void;
   onDeleteSalary: (id: string) => void;
   onAddExpense: (expense: any) => void;
@@ -24,7 +26,7 @@ interface FinancesProps {
 
 const Finances: React.FC<FinancesProps> = ({ 
   salaries = [], expenses = [], adCampaigns = [], users = [], projects = [], clients = [], tasks = [],
-  currentUser, onUpdateSalary, onAddSalary, onDeleteSalary, 
+  currentUser, onUpdateSalary, onUpdateExpense, onUpdateAdCampaign, onAddSalary, onDeleteSalary, 
   onAddExpense, onDeleteExpense, onAddAdCampaign, onDeleteAdCampaign 
 }) => {
   const [activeTab, setActiveTab] = useState<'salaires' | 'frais' | 'ads'>('salaires');
@@ -85,16 +87,23 @@ const Finances: React.FC<FinancesProps> = ({
         onAddSalary(data);
       }
     } else if (activeTab === 'frais') {
-      onAddExpense({ ...expenseForm, createdAt: new Date().toISOString() });
+      if (viewMode === 'edit') {
+        onUpdateExpense(expenseForm as Expense);
+      } else {
+        onAddExpense({ ...expenseForm, createdAt: new Date().toISOString() });
+      }
     } else if (activeTab === 'ads') {
-      onAddAdCampaign({ ...adsForm, createdAt: new Date().toISOString() });
+      if (viewMode === 'edit') {
+        onUpdateAdCampaign(adsForm as AdCampaignExpense);
+      } else {
+        onAddAdCampaign({ ...adsForm, createdAt: new Date().toISOString() });
+      }
     }
     closeModals();
   };
 
   const filteredSalaries = salaries.filter(s => filterFreq === 'all' || s.frequency === filterFreq);
 
-  // Filtrage des missions publicitaires disponibles pour liaison
   const availableAdTasks = useMemo(() => {
     if (!adsForm.projectId) return [];
     return tasks.filter(t => t.projectId === adsForm.projectId && t.type === 'ads');
@@ -228,9 +237,14 @@ const Finances: React.FC<FinancesProps> = ({
                     <p className="text-[9px] text-slate-500 font-black uppercase mt-1 truncate">{expense.type}</p>
                   </div>
                 </div>
-                <div className="flex items-center space-x-4">
-                  <span className="text-lg font-black text-white">{Number(expense.amount).toLocaleString()} DZD</span>
-                  {isAdmin && <button onClick={() => confirm('Supprimer ?') && onDeleteExpense(expense.id)} className="p-2.5 glass rounded-lg text-slate-600 hover:text-rose-400 transition-all"><Trash2 size={16}/></button>}
+                <div className="flex items-center space-x-2">
+                  <span className="text-lg font-black text-white mr-4">{Number(expense.amount).toLocaleString()} DZD</span>
+                  {isAdmin && (
+                    <>
+                      <button onClick={() => { setExpenseForm(expense); setViewMode('edit'); }} className="p-2.5 glass rounded-lg text-amber-400 hover:bg-amber-400/10 transition-all"><Edit3 size={16}/></button>
+                      <button onClick={() => confirm('Supprimer ?') && onDeleteExpense(expense.id)} className="p-2.5 glass rounded-lg text-slate-600 hover:text-rose-400 transition-all"><Trash2 size={16}/></button>
+                    </>
+                  )}
                 </div>
               </div>
             ))}
@@ -245,7 +259,6 @@ const Finances: React.FC<FinancesProps> = ({
               const assignee = users.find(u => u.id === ad.assigneeId);
               const isLive = !!ad.startDate;
               
-              // Calcul de fin théorique
               let endDateStr = 'Non lancé';
               if (isLive) {
                  const start = new Date(ad.startDate!);
@@ -266,8 +279,11 @@ const Finances: React.FC<FinancesProps> = ({
                         <p className="text-[10px] text-slate-500 font-black uppercase mt-3 truncate tracking-widest">{ad.platform} • {project?.name || 'Projet inconnu'}</p>
                       </div>
                     </div>
-                    <div className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase border ${isLive ? 'bg-emerald-400/10 border-emerald-400/20 text-emerald-400' : 'bg-white/5 border-white/10 text-slate-500'}`}>
-                      {isLive ? 'En Diffusion' : 'En attente mission'}
+                    <div className="flex items-center space-x-3">
+                       {isAdmin && <button onClick={() => { setAdsForm(ad); setViewMode('edit'); }} className="p-2.5 glass rounded-xl text-amber-400 hover:bg-amber-400/10 transition-all"><Edit3 size={18}/></button>}
+                       <div className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase border ${isLive ? 'bg-emerald-400/10 border-emerald-400/20 text-emerald-400' : 'bg-white/5 border-white/10 text-slate-500'}`}>
+                         {isLive ? 'En Diffusion' : 'En attente mission'}
+                       </div>
                     </div>
                   </div>
 
@@ -305,7 +321,7 @@ const Finances: React.FC<FinancesProps> = ({
         )}
       </div>
 
-      <Modal isOpen={viewMode === 'add' || viewMode === 'edit'} onClose={closeModals} title={activeTab === 'ads' ? "Activation Campagne ADS" : activeTab === 'salaires' ? "Flux Salarial" : "Nouvelle Dépense"}>
+      <Modal isOpen={viewMode === 'add' || viewMode === 'edit'} onClose={closeModals} title={activeTab === 'ads' ? "Gestion Flux ADS" : activeTab === 'salaires' ? "Flux Salarial" : "Gestion Dépense"}>
         <form onSubmit={handleSubmit} className="space-y-6 text-left">
           {activeTab === 'salaires' && (
             <>
@@ -367,6 +383,13 @@ const Finances: React.FC<FinancesProps> = ({
                   </select>
                 </div>
               </div>
+              <div className="space-y-2">
+                <label className="label-iv">Projet Associé</label>
+                <select className="input-iv" value={expenseForm.projectId} onChange={e => setExpenseForm({...expenseForm, projectId: e.target.value})}>
+                  <option value="">Interne iVISION</option>
+                  {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </div>
             </>
           )}
 
@@ -414,7 +437,6 @@ const Finances: React.FC<FinancesProps> = ({
                            <option key={t.id} value={t.id}>{t.title} ({t.status})</option>
                          ))}
                       </select>
-                      <p className="text-[8px] font-black text-slate-500 uppercase mt-2 px-2">Le sponsoring démarrera dès que cette mission sera validée.</p>
                    </div>
                 </div>
 
@@ -443,7 +465,7 @@ const Finances: React.FC<FinancesProps> = ({
 
           <button type="submit" className="w-full py-7 bg-amber-400 text-slate-950 font-black rounded-[2rem] shadow-2xl active-scale uppercase text-[11px] tracking-widest mt-6 hover:bg-amber-500 transition-all flex items-center justify-center space-x-3">
              <Sparkles size={20} />
-             <span>{viewMode === 'add' ? 'Indexation du Flux ADS' : 'Actualiser Données'}</span>
+             <span>{viewMode === 'add' ? `Indexation du Flux ${activeTab.toUpperCase()}` : 'Actualiser Données'}</span>
           </button>
         </form>
       </Modal>

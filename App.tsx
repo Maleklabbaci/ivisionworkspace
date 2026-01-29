@@ -327,15 +327,33 @@ const AppContent: React.FC<any> = ({ currentUser, users, tasks, clients, leads, 
             else addNotification("Erreur", "Échec de la mise à jour groupée.", "urgent");
           }} onDeleteTask={async (id:string)=> { await supabase.from('tasks').delete().eq('id',id); fetchUserData(currentUser); }} />} />
           <Route path="/chat" element={<Chat currentUser={currentUser} users={users} tasks={tasks} channels={channels} projects={projects} currentChannelId={currentChannelId} messages={messages} onChannelChange={setCurrentChannelId} onSendMessage={handleSendMessage} onMarkAsRead={handleMarkAsRead} onDeleteMessage={handleDeleteMessage} onUpdateTaskStatus={onUpdateTaskStatus} onUpdateTaskPriority={onUpdateTaskPriority} onAddChannel={async (ch:any)=> { if(ch.id) await supabase.from('channels').update(ch).eq('id', ch.id); else await supabase.from('channels').insert(ch); fetchUserData(currentUser); }} onDeleteChannel={async (id:string)=> { await supabase.from('channels').delete().eq('id',id); fetchUserData(currentUser); }} onUpdateChannelMembers={async (id:string,m:string[])=> { await supabase.from('channels').update({member_ids:m}).eq('id',id); fetchUserData(currentUser); }} />} />
-          <Route path="/finance" element={<Finances salaries={salaries} expenses={expenses} adCampaigns={adCampaigns} users={users} projects={projects} clients={clients} tasks={tasks} currentUser={currentUser} onAddSalary={async(s:any)=>{ await supabase.from('salaries').insert({ id: generateUUID(), user_id: s.userId, project_id: s.projectId || null, amount: s.amount, bonus: s.bonus, frequency: s.frequency, status: s.status }); fetchUserData(currentUser); }} onAddExpense={async(ex:any)=>{ await supabase.from('expenses').insert({ id: generateUUID(), name: ex.name, amount: ex.amount, type: ex.type, project_id: ex.projectId || null, status: ex.status, created_at: ex.createdAt }); fetchUserData(currentUser); }} onAddAdCampaign={async(ad:any)=>{ 
-            await supabase.from('ad_campaigns').insert({ 
-              id: generateUUID(), name: ad.name, amount: ad.amount, platform: ad.platform, 
-              project_id: ad.projectId || null, client_id: ad.clientId || null, assignee_id: ad.assigneeId || null,
-              task_id: ad.taskId || null, duration_days: ad.durationDays || 30,
-              status: ad.status, created_at: ad.createdAt 
-            }); 
-            fetchUserData(currentUser); 
-          }} onUpdateSalary={async(s:any)=>{ await supabase.from('salaries').update({ amount: s.amount, bonus: s.bonus, frequency: s.frequency, status: s.status, project_id: s.projectId || null }).eq('id', s.id); fetchUserData(currentUser); }} onDeleteSalary={async(id:string)=>{ await supabase.from('salaries').delete().eq('id', id); fetchUserData(currentUser); }} onDeleteExpense={async(id:string)=>{ await supabase.from('expenses').delete().eq('id', id); fetchUserData(currentUser); }} onDeleteAdCampaign={async(id:string)=>{ await supabase.from('ad_campaigns').delete().eq('id', id); fetchUserData(currentUser); }} />} />
+          <Route path="/finance" element={<Finances 
+            salaries={salaries} 
+            expenses={expenses} 
+            adCampaigns={adCampaigns} 
+            users={users} 
+            projects={projects} 
+            clients={clients} 
+            tasks={tasks} 
+            currentUser={currentUser} 
+            onAddSalary={async(s:any)=>{ await supabase.from('salaries').insert({ id: generateUUID(), user_id: s.userId, project_id: s.projectId || null, amount: s.amount, bonus: s.bonus, frequency: s.frequency, status: s.status }); fetchUserData(currentUser); }} 
+            onAddExpense={async(ex:any)=>{ await supabase.from('expenses').insert({ id: generateUUID(), name: ex.name, amount: ex.amount, type: ex.type, project_id: ex.projectId || null, status: ex.status, created_at: ex.createdAt }); fetchUserData(currentUser); }} 
+            onAddAdCampaign={async(ad:any)=>{ 
+              await supabase.from('ad_campaigns').insert({ 
+                id: generateUUID(), name: ad.name, amount: ad.amount, platform: ad.platform, 
+                project_id: ad.projectId || null, client_id: ad.clientId || null, assignee_id: ad.assigneeId || null,
+                task_id: ad.taskId || null, duration_days: ad.durationDays || 30,
+                status: ad.status, created_at: ad.createdAt 
+              }); 
+              fetchUserData(currentUser); 
+            }} 
+            onUpdateSalary={async(s:any)=>{ await supabase.from('salaries').update({ amount: s.amount, bonus: s.bonus, frequency: s.frequency, status: s.status, project_id: s.projectId || null }).eq('id', s.id); fetchUserData(currentUser); }} 
+            onUpdateExpense={async(ex:any)=>{ await supabase.from('expenses').update({ name: ex.name, amount: ex.amount, type: ex.type, project_id: ex.projectId || null, status: ex.status }).eq('id', ex.id); fetchUserData(currentUser); }}
+            onUpdateAdCampaign={async(ad:any)=>{ await supabase.from('ad_campaigns').update({ name: ad.name, amount: ad.amount, platform: ad.platform, project_id: ad.projectId || null, client_id: ad.clientId || null, assignee_id: ad.assigneeId || null, task_id: ad.taskId || null, duration_days: ad.durationDays || 30, status: ad.status }).eq('id', ad.id); fetchUserData(currentUser); }}
+            onDeleteSalary={async(id:string)=>{ await supabase.from('salaries').delete().eq('id', id); fetchUserData(currentUser); }} 
+            onDeleteExpense={async(id:string)=>{ await supabase.from('expenses').delete().eq('id', id); fetchUserData(currentUser); }} 
+            onDeleteAdCampaign={async(id:string)=>{ await supabase.from('ad_campaigns').delete().eq('id', id); fetchUserData(currentUser); }} 
+          />} />
           <Route path="/team" element={<Team currentUser={currentUser} users={users} onAddUser={async (u:any)=> { const { data } = await supabase.auth.signUp({ email: u.email, password: u.password }); if (data.user) await supabase.from('users').insert({ id: data.user.id, ...u }); fetchUserData(currentUser); }} onRemoveUser={async (id:string)=> { await supabase.rpc('delete_user_completely', { target_user_id: id }); fetchUserData(currentUser); }} onUpdateMember={async (id:string, up:any) => { await supabase.from('users').update(up).eq('id',id); fetchUserData(currentUser); }} />} />
           <Route path="/projects" element={<Projects projects={projects} users={users} clients={clients} salaries={salaries} expenses={expenses} adCampaigns={adCampaigns} currentUser={currentUser} onAddProject={onAddProject} onDeleteProject={async (id:string)=> { await supabase.from('projects').delete().eq('id',id); fetchUserData(currentUser); }} onUpdateProject={async (p:Project)=> { await supabase.from('projects').update({name: p.name, description: p.description, total_budget: p.totalBudget, status: p.status, client_id: p.clientId || null, billing_type: p.billingType}).eq('id', p.id); fetchUserData(currentUser); }} />} />
           <Route path="/leads" element={<Leads leads={leads} onAddLead={async (l:any)=> { await supabase.from('leads').insert(l); fetchUserData(currentUser); }} onUpdateLead={async (l:any)=> { await supabase.from('leads').update(l).eq('id', l.id); fetchUserData(currentUser); }} onDeleteLead={async (id:string)=> { await supabase.from('leads').delete().eq('id',id); fetchUserData(currentUser); }} onConvertToClient={onConvertToClient} currentUser={currentUser} addNotification={addNotification} />} />
@@ -351,5 +369,4 @@ const AppContent: React.FC<any> = ({ currentUser, users, tasks, clients, leads, 
   );
 };
 
-// Added missing default export for App component
 export default App;
