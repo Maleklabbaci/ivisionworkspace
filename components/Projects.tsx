@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { Plus, X, Briefcase, DollarSign, Activity, Calendar, MoreVertical, Search, Layers, TrendingUp, Filter, TrendingDown, Target, Wallet, Edit3, Type, Info, User as UserIcon, Zap, Sparkles, Trash2, Receipt, Megaphone, Users, Lock, Repeat, ZapOff, UserPlus, LayoutGrid, List } from 'lucide-react';
+import { Plus, X, Briefcase, DollarSign, Activity, Calendar, MoreVertical, Search, Layers, TrendingUp, Filter, TrendingDown, Target, Wallet, Edit3, Type, Info, User as UserIcon, Zap, Sparkles, Trash2, Receipt, Megaphone, Users, Lock, Repeat, ZapOff, UserPlus, LayoutGrid, List, Clock } from 'lucide-react';
 import { Project, Client, UserRole, User, SalaryRecord, Expense, AdCampaignExpense, ProjectBillingType } from '../types';
 import Modal from './Modal';
 
@@ -244,6 +244,7 @@ const Projects: React.FC<any> = ({
             const client = clients.find(c => c.id === project.clientId);
             const isOverBudget = project.remaining < 0;
             const isOneShot = project.billingType === 'one-shot';
+            const creationDate = project.createdAt ? new Date(project.createdAt).toLocaleDateString('fr-FR') : null;
             
             return (
               <div key={project.id} className="bg-slate-900/40 backdrop-blur-3xl p-8 md:p-10 rounded-[3rem] border border-white/5 relative overflow-hidden group hover:border-emerald-400/20 transition-all text-left">
@@ -252,11 +253,19 @@ const Projects: React.FC<any> = ({
                     <div className={`w-14 h-14 rounded-2xl flex items-center justify-center border flex-shrink-0 ${isOneShot ? 'bg-amber-400/10 text-amber-400 border-amber-400/10' : 'bg-emerald-400/10 text-emerald-400 border-emerald-400/10'}`}><Briefcase size={24} /></div>
                     <div className="truncate text-left">
                       <h3 className="text-xl font-black text-white uppercase tracking-tight truncate leading-none">{project.name}</h3>
-                      <div className="flex items-center space-x-2 mt-2">
-                        <p className="text-[9px] text-slate-500 font-bold uppercase truncate">{client?.name || 'Projet Interne'}</p>
-                        <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-md ${isOneShot ? 'bg-amber-400/10 text-amber-400' : 'bg-emerald-400/10 text-emerald-400'}`}>
-                          {isOneShot ? 'ONE-SHOT' : 'MENSUEL'}
-                        </span>
+                      <div className="flex flex-col space-y-1 mt-2">
+                        <div className="flex items-center space-x-2">
+                          <p className="text-[9px] text-slate-500 font-bold uppercase truncate">{client?.name || 'Projet Interne'}</p>
+                          <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-md ${isOneShot ? 'bg-amber-400/10 text-amber-400' : 'bg-emerald-400/10 text-emerald-400'}`}>
+                            {isOneShot ? 'ONE-SHOT' : 'MENSUEL'}
+                          </span>
+                        </div>
+                        {creationDate && (
+                          <div className="flex items-center space-x-2 text-[8px] font-black text-slate-600 uppercase tracking-widest">
+                            <Clock size={10} />
+                            <span>Initié le: {creationDate}</span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>

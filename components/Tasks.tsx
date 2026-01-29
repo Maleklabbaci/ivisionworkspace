@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { Plus, X, Calendar as CalendarIcon, CheckCircle2, RotateCcw, Check, Trash2, Video, Palette, Globe, Megaphone, Send, Layers, ChevronRight, Zap, HelpCircle, CheckSquare, Save, User as UserIcon, ListChecks, Filter, Eye, EyeOff, AlertCircle, AlertTriangle, Search } from 'lucide-react';
+import { Plus, X, Calendar as CalendarIcon, CheckCircle2, RotateCcw, Check, Trash2, Video, Palette, Globe, Megaphone, Send, Layers, ChevronRight, Zap, HelpCircle, CheckSquare, Save, User as UserIcon, ListChecks, Filter, Eye, EyeOff, AlertCircle, AlertTriangle, Search, Clock } from 'lucide-react';
 import { Task, TaskStatus, User, Client, Project, UserRole, TaskType } from '../types';
 import Modal from './Modal';
 
@@ -20,6 +20,8 @@ const TaskCard = ({ task, onClick, projectName, assignee, onUpdateStatus, isSele
   const isUrgent = task.priority === 'high' && !isDone;
   const config = TYPE_CONFIG[task.type as TaskType] || TYPE_CONFIG.admin;
   
+  const creationDate = task.createdAt ? new Date(task.createdAt).toLocaleDateString('fr-FR') : null;
+
   return (
     <div 
       onClick={() => isSelectionMode ? onToggleSelect(task.id) : onClick()}
@@ -54,6 +56,12 @@ const TaskCard = ({ task, onClick, projectName, assignee, onUpdateStatus, isSele
       <div className="text-left pr-4">
         <h4 className={`font-black text-[15px] leading-tight transition-colors ${isBlocked ? 'text-rose-400' : isUrgent ? 'text-amber-400' : 'text-white'}`}>{task.title}</h4>
         <p className="text-[9px] text-slate-500 font-bold uppercase mt-1.5 tracking-widest truncate">{projectName || 'Interne'}</p>
+        {creationDate && (
+          <div className="flex items-center space-x-2 text-[8px] font-black text-slate-600 uppercase mt-2 tracking-widest">
+            <Clock size={10} />
+            <span>Créé le: {creationDate}</span>
+          </div>
+        )}
       </div>
       
       {!isSelectionMode && (

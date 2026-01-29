@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
-import { Plus, X, Wallet, TrendingUp, Users, ShieldCheck, Edit3, Sparkles, Check, Clock, Trash2, Layers, Megaphone, Receipt, Plane, Globe, Briefcase, Type, DollarSign, Activity, HelpCircle } from 'lucide-react';
-import { SalaryRecord, User, UserRole, Project, Expense, AdCampaignExpense } from '../types';
+import { Plus, X, Wallet, TrendingUp, Users, ShieldCheck, Edit3, Sparkles, Check, Clock, Trash2, Layers, Megaphone, Receipt, Plane, Globe, Briefcase, Type, DollarSign, Activity, HelpCircle, Calendar, Target, UserCheck } from 'lucide-react';
+import { SalaryRecord, User, UserRole, Project, Expense, AdCampaignExpense, Client, Task, TaskStatus } from '../types';
 import Modal from './Modal';
 
 interface FinancesProps {
@@ -10,6 +10,8 @@ interface FinancesProps {
   adCampaigns: AdCampaignExpense[];
   users: User[];
   projects: Project[];
+  clients: Client[];
+  tasks: Task[];
   currentUser: User;
   onUpdateSalary: (salary: SalaryRecord) => void;
   onAddSalary: (salary: any) => void;
@@ -21,7 +23,7 @@ interface FinancesProps {
 }
 
 const Finances: React.FC<FinancesProps> = ({ 
-  salaries = [], expenses = [], adCampaigns = [], users = [], projects = [], 
+  salaries = [], expenses = [], adCampaigns = [], users = [], projects = [], clients = [], tasks = [],
   currentUser, onUpdateSalary, onAddSalary, onDeleteSalary, 
   onAddExpense, onDeleteExpense, onAddAdCampaign, onDeleteAdCampaign 
 }) => {
@@ -33,7 +35,10 @@ const Finances: React.FC<FinancesProps> = ({
   const [salaryForm, setSalaryForm] = useState<Partial<SalaryRecord>>({ userId: '', amount: 0, bonus: 0, frequency: 'mensuel', status: 'pending', projectId: '' });
   const [bonusToAdd, setBonusToAdd] = useState<number>(0);
   const [expenseForm, setExpenseForm] = useState<Partial<Expense>>({ name: '', amount: 0, type: 'other', projectId: '', status: 'pending' });
-  const [adsForm, setAdsForm] = useState<Partial<AdCampaignExpense>>({ name: '', amount: 0, platform: 'facebook', projectId: '', status: 'active' });
+  const [adsForm, setAdsForm] = useState<Partial<AdCampaignExpense>>({ 
+    name: '', amount: 0, platform: 'facebook', projectId: '', status: 'active',
+    clientId: '', assigneeId: '', durationDays: 30, taskId: ''
+  });
 
   const isAdmin = currentUser.role === UserRole.ADMIN;
 
@@ -42,18 +47,15 @@ const Finances: React.FC<FinancesProps> = ({
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(now.getDate() - 30);
 
-    // 1. Salaires : Coût mensuel total projeté
     const salaryTotal = salaries.reduce((acc, s) => {
       const total = (Number(s.amount) || 0) + (Number(s.bonus) || 0);
       return acc + (s.frequency === 'hebdo' ? total * 4 : total);
     }, 0);
 
-    // 2. Frais : Uniquement ceux des 30 derniers jours (Burn Rate)
     const expenseTotal = expenses
       .filter(e => new Date(e.createdAt) >= thirtyDaysAgo)
       .reduce((acc, e) => acc + (Number(e.amount) || 0), 0);
 
-    // 3. ADS : Uniquement ceux des 30 derniers jours (Burn Rate)
     const adsTotal = adCampaigns
       .filter(a => new Date(a.createdAt) >= thirtyDaysAgo)
       .reduce((acc, a) => acc + (Number(a.amount) || 0), 0);
@@ -65,7 +67,10 @@ const Finances: React.FC<FinancesProps> = ({
     setViewMode('list');
     setSalaryForm({ userId: '', amount: 0, bonus: 0, frequency: 'mensuel', status: 'pending', projectId: '' });
     setExpenseForm({ name: '', amount: 0, type: 'other', projectId: '', status: 'pending' });
-    setAdsForm({ name: '', amount: 0, platform: 'facebook', projectId: '', status: 'active' });
+    setAdsForm({ 
+      name: '', amount: 0, platform: 'facebook', projectId: '', status: 'active',
+      clientId: '', assigneeId: '', durationDays: 30, taskId: ''
+    });
     setBonusToAdd(0);
   };
 
@@ -88,6 +93,12 @@ const Finances: React.FC<FinancesProps> = ({
   };
 
   const filteredSalaries = salaries.filter(s => filterFreq === 'all' || s.frequency === filterFreq);
+
+  // Filtrage des missions publicitaires disponibles pour liaison
+  const availableAdTasks = useMemo(() => {
+    if (!adsForm.projectId) return [];
+    return tasks.filter(t => t.projectId === adsForm.projectId && t.type === 'ads');
+  }, [tasks, adsForm.projectId]);
 
   return (
     <div className="space-y-10 md:space-y-16 animate-fade-in pb-24">
@@ -168,7 +179,7 @@ const Finances: React.FC<FinancesProps> = ({
                 const project = projects.find(p => p.id === salary.projectId);
                 return (
                   <div key={salary.id} className="crystal-module p-6 md:p-10 rounded-[2.5rem] md:rounded-[3.5rem] flex flex-col md:flex-row items-center justify-between group">
-                    <div className="flex items-center space-x-6 w-full md:w-auto">
+                    <div className="flex items-center space-x-6 w-full md:w-auto text-left">
                       <div className="w-16 h-16 md:w-24 md:h-24 bg-white/5 rounded-2xl flex items-center justify-center text-white font-black text-2xl md:text-5xl border border-white/10">
                         {user?.name?.substring(0, 1) || '?'}
                       </div>
@@ -194,7 +205,6 @@ const Finances: React.FC<FinancesProps> = ({
                             {salary.status === 'paid' ? 'ANNULER' : 'RÉGLER'}
                           </button>
                           <button onClick={() => { setSalaryForm(salary); setBonusToAdd(0); setViewMode('edit'); }} className="w-14 h-14 glass text-amber-400 rounded-2xl flex items-center justify-center hover:bg-amber-400/10 active-scale"><Edit3 size={20}/></button>
-                          <button onClick={() => confirm('Supprimer ce flux ?') && onDeleteSalary(salary.id)} className="w-14 h-14 glass text-rose-500 rounded-2xl flex items-center justify-center hover:bg-rose-500/10 active-scale"><Trash2 size={20}/></button>
                         </div>
                       )}
                     </div>
@@ -207,26 +217,23 @@ const Finances: React.FC<FinancesProps> = ({
 
         {activeTab === 'frais' && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {expenses.map(expense => {
-              const project = projects.find(p => p.id === expense.projectId);
-              return (
-                <div key={expense.id} className="crystal-module p-6 rounded-3xl border border-white/5 flex items-center justify-between group">
-                  <div className="flex items-center space-x-4 truncate">
-                    <div className="w-12 h-12 bg-sky-400/10 rounded-xl flex items-center justify-center text-sky-400">
-                      <Receipt size={20} />
-                    </div>
-                    <div className="truncate">
-                      <h3 className="font-bold text-white text-sm uppercase truncate">{expense.name}</h3>
-                      <p className="text-[9px] text-slate-500 font-black uppercase mt-1 truncate">{expense.type} {project ? `• ${project.name}` : ''}</p>
-                    </div>
+            {expenses.map(expense => (
+              <div key={expense.id} className="crystal-module p-6 rounded-3xl border border-white/5 flex items-center justify-between group">
+                <div className="flex items-center space-x-4 truncate text-left">
+                  <div className="w-12 h-12 bg-sky-400/10 rounded-xl flex items-center justify-center text-sky-400">
+                    <Receipt size={20} />
                   </div>
-                  <div className="flex items-center space-x-4">
-                    <span className="text-lg font-black text-white">{Number(expense.amount).toLocaleString()} DZD</span>
-                    {isAdmin && <button onClick={() => confirm('Supprimer ?') && onDeleteExpense(expense.id)} className="p-2.5 glass rounded-lg text-slate-600 hover:text-rose-400 transition-all"><Trash2 size={16}/></button>}
+                  <div className="truncate">
+                    <h3 className="font-bold text-white text-sm uppercase truncate">{expense.name}</h3>
+                    <p className="text-[9px] text-slate-500 font-black uppercase mt-1 truncate">{expense.type}</p>
                   </div>
                 </div>
-              );
-            })}
+                <div className="flex items-center space-x-4">
+                  <span className="text-lg font-black text-white">{Number(expense.amount).toLocaleString()} DZD</span>
+                  {isAdmin && <button onClick={() => confirm('Supprimer ?') && onDeleteExpense(expense.id)} className="p-2.5 glass rounded-lg text-slate-600 hover:text-rose-400 transition-all"><Trash2 size={16}/></button>}
+                </div>
+              </div>
+            ))}
           </div>
         )}
 
@@ -234,23 +241,62 @@ const Finances: React.FC<FinancesProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {adCampaigns.map(ad => {
               const project = projects.find(p => p.id === ad.projectId);
+              const client = clients.find(c => c.id === ad.clientId);
+              const assignee = users.find(u => u.id === ad.assigneeId);
+              const isLive = !!ad.startDate;
+              
+              // Calcul de fin théorique
+              let endDateStr = 'Non lancé';
+              if (isLive) {
+                 const start = new Date(ad.startDate!);
+                 start.setDate(start.getDate() + (ad.durationDays || 30));
+                 endDateStr = start.toLocaleDateString();
+              }
+
               return (
-                <div key={ad.id} className="crystal-module p-6 rounded-3xl border border-white/5 flex items-center justify-between group">
-                  <div className="flex items-center space-x-4 truncate">
-                    <div className="w-12 h-12 bg-emerald-400/10 rounded-xl flex items-center justify-center text-emerald-400">
-                      <Megaphone size={20} />
+                <div key={ad.id} className={`crystal-module p-8 rounded-[2.5rem] border flex flex-col group relative overflow-hidden ${isLive ? 'border-emerald-500/30' : 'border-white/5'}`}>
+                  {isLive && <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/10 blur-2xl"></div>}
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center space-x-4 truncate text-left">
+                      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${isLive ? 'bg-emerald-400 text-white shadow-lg' : 'bg-emerald-400/10 text-emerald-400'}`}>
+                        <Megaphone size={24} />
+                      </div>
+                      <div className="truncate">
+                        <h3 className="font-black text-white text-base md:text-lg uppercase truncate leading-none">{ad.name}</h3>
+                        <p className="text-[10px] text-slate-500 font-black uppercase mt-3 truncate tracking-widest">{ad.platform} • {project?.name || 'Projet inconnu'}</p>
+                      </div>
                     </div>
-                    <div className="truncate">
-                      <h3 className="font-bold text-white text-sm uppercase truncate">{ad.name}</h3>
-                      <p className="text-[9px] text-slate-500 font-black uppercase mt-1 truncate">{ad.platform} {project ? `• ${project.name}` : ''}</p>
+                    <div className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase border ${isLive ? 'bg-emerald-400/10 border-emerald-400/20 text-emerald-400' : 'bg-white/5 border-white/10 text-slate-500'}`}>
+                      {isLive ? 'En Diffusion' : 'En attente mission'}
                     </div>
                   </div>
-                  <div className="flex items-center space-x-4 text-right">
-                    <div>
-                      <span className="text-lg font-black text-white block">{Number(ad.amount).toLocaleString()} DZD</span>
-                      <span className={`text-[8px] font-black uppercase ${ad.status === 'active' ? 'text-emerald-400' : 'text-slate-500'}`}>{ad.status}</span>
-                    </div>
-                    {isAdmin && <button onClick={() => confirm('Supprimer ?') && onDeleteAdCampaign(ad.id)} className="p-2.5 glass rounded-lg text-slate-600 hover:text-rose-400 transition-all"><Trash2 size={16}/></button>}
+
+                  <div className="grid grid-cols-2 gap-4 mb-6">
+                     <div className="p-4 bg-white/5 rounded-2xl border border-white/5 text-left">
+                        <p className="text-[8px] font-black text-slate-500 uppercase mb-1">Partenaire</p>
+                        <p className="text-[11px] font-black text-white truncate uppercase">{client?.name || 'Interne'}</p>
+                     </div>
+                     <div className="p-4 bg-white/5 rounded-2xl border border-white/5 text-left">
+                        <p className="text-[8px] font-black text-slate-500 uppercase mb-1">Responsable</p>
+                        <p className="text-[11px] font-black text-white truncate uppercase">{assignee?.name || 'Non assigné'}</p>
+                     </div>
+                  </div>
+
+                  <div className="space-y-4 pt-4 border-t border-white/5 text-left">
+                     <div className="flex justify-between items-center">
+                        <div className="flex items-center space-x-2">
+                           <Calendar size={12} className="text-slate-500"/>
+                           <p className="text-[9px] font-black text-slate-500 uppercase">Fin de campagne : <span className="text-white">{endDateStr}</span></p>
+                        </div>
+                        <p className="text-xl font-black text-white">{Number(ad.amount).toLocaleString()} DZD</p>
+                     </div>
+                     <div className="flex justify-between items-center">
+                        <div className="flex items-center space-x-2">
+                           <Clock size={12} className="text-slate-500"/>
+                           <p className="text-[9px] font-black text-slate-500 uppercase">Durée : <span className="text-white">{ad.durationDays || 30} jours</span></p>
+                        </div>
+                        {isAdmin && <button onClick={() => confirm('Supprimer ?') && onDeleteAdCampaign(ad.id)} className="p-3 glass rounded-xl text-slate-600 hover:text-rose-400 transition-all"><Trash2 size={18}/></button>}
+                     </div>
                   </div>
                 </div>
               );
@@ -259,7 +305,7 @@ const Finances: React.FC<FinancesProps> = ({
         )}
       </div>
 
-      <Modal isOpen={viewMode === 'add' || viewMode === 'edit'} onClose={closeModals} title={activeTab === 'salaires' ? "Flux Salarial" : "Nouvelle Dépense"}>
+      <Modal isOpen={viewMode === 'add' || viewMode === 'edit'} onClose={closeModals} title={activeTab === 'ads' ? "Activation Campagne ADS" : activeTab === 'salaires' ? "Flux Salarial" : "Nouvelle Dépense"}>
         <form onSubmit={handleSubmit} className="space-y-6 text-left">
           {activeTab === 'salaires' && (
             <>
@@ -326,38 +372,92 @@ const Finances: React.FC<FinancesProps> = ({
 
           {activeTab === 'ads' && (
             <>
-              <div className="space-y-2">
-                <label className="label-iv">Campagne</label>
-                <input required className="input-iv" value={adsForm.name} onChange={e => setAdsForm({...adsForm, name: e.target.value})} />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-4">
                 <div className="space-y-2">
-                  <label className="label-iv">Plateforme</label>
-                  <select className="input-iv" value={adsForm.platform} onChange={e => setAdsForm({...adsForm, platform: e.target.value as any})}>
-                    <option value="facebook">Facebook/Insta</option>
-                    <option value="google">Google Ads</option>
-                    <option value="tiktok">TikTok</option>
-                    <option value="other">Autre</option>
-                  </select>
+                  <label className="label-iv">Identifiant Campagne</label>
+                  <input required className="input-iv" placeholder="Ex: Campagne Hiver 2024" value={adsForm.name} onChange={e => setAdsForm({...adsForm, name: e.target.value})} />
                 </div>
-                <div className="space-y-2">
-                  <label className="label-iv">Budget</label>
-                  <input type="number" required className="input-iv" value={adsForm.amount} onChange={e => setAdsForm({...adsForm, amount: Number(e.target.value)})} />
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                   <div className="space-y-2">
+                      <label className="label-iv">Projet iVISION</label>
+                      <select required className="input-iv" value={adsForm.projectId} onChange={e => {
+                         const proj = projects.find(p => p.id === e.target.value);
+                         setAdsForm({...adsForm, projectId: e.target.value, clientId: proj?.clientId || ''});
+                      }}>
+                         <option value="">Sélectionner un projet...</option>
+                         {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      </select>
+                   </div>
+                   <div className="space-y-2">
+                      <label className="label-iv">Partenaire CRM</label>
+                      <select required className="input-iv" value={adsForm.clientId} onChange={e => setAdsForm({...adsForm, clientId: e.target.value})}>
+                         <option value="">Interne iVISION</option>
+                         {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                   </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                   <div className="space-y-2">
+                      <label className="label-iv">Expert Assigné</label>
+                      <select required className="input-iv" value={adsForm.assigneeId} onChange={e => setAdsForm({...adsForm, assigneeId: e.target.value})}>
+                         <option value="">Choisir un expert...</option>
+                         {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                      </select>
+                   </div>
+                   <div className="space-y-2">
+                      <label className="label-iv">Liaison Mission Opérationnelle</label>
+                      <select className="input-iv" value={adsForm.taskId} onChange={e => setAdsForm({...adsForm, taskId: e.target.value})}>
+                         <option value="">Aucune liaison directe</option>
+                         {availableAdTasks.map(t => (
+                           <option key={t.id} value={t.id}>{t.title} ({t.status})</option>
+                         ))}
+                      </select>
+                      <p className="text-[8px] font-black text-slate-500 uppercase mt-2 px-2">Le sponsoring démarrera dès que cette mission sera validée.</p>
+                   </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                   <div className="space-y-2">
+                      <label className="label-iv">Plateforme</label>
+                      <select className="input-iv" value={adsForm.platform} onChange={e => setAdsForm({...adsForm, platform: e.target.value as any})}>
+                        <option value="facebook">Facebook/Insta</option>
+                        <option value="google">Google Ads</option>
+                        <option value="tiktok">TikTok</option>
+                        <option value="other">Autre</option>
+                      </select>
+                   </div>
+                   <div className="space-y-2">
+                      <label className="label-iv">Budget DZD</label>
+                      <input type="number" required className="input-iv" value={adsForm.amount} onChange={e => setAdsForm({...adsForm, amount: Number(e.target.value)})} />
+                   </div>
+                   <div className="space-y-2">
+                      <label className="label-iv">Durée (Jours)</label>
+                      <input type="number" min="1" required className="input-iv" value={adsForm.durationDays} onChange={e => setAdsForm({...adsForm, durationDays: Number(e.target.value)})} />
+                   </div>
                 </div>
               </div>
             </>
           )}
 
-          <button type="submit" className="w-full py-6 bg-amber-400 text-slate-950 font-black rounded-3xl shadow-2xl active-scale uppercase text-[11px] tracking-widest mt-4">
-             {viewMode === 'add' ? 'Déployer le Flux' : 'Sauvegarder'}
+          <button type="submit" className="w-full py-7 bg-amber-400 text-slate-950 font-black rounded-[2rem] shadow-2xl active-scale uppercase text-[11px] tracking-widest mt-6 hover:bg-amber-500 transition-all flex items-center justify-center space-x-3">
+             <Sparkles size={20} />
+             <span>{viewMode === 'add' ? 'Indexation du Flux ADS' : 'Actualiser Données'}</span>
           </button>
         </form>
       </Modal>
 
-      <Modal isOpen={showInfo} onClose={() => setShowInfo(false)} title="Assistance Finance">
-        <div className="space-y-4 text-left p-2">
-           <p className="text-slate-300 text-sm leading-relaxed">Les totaux "RH Mensuel" incluent les salaires mensuels plus une projection (x4) des salaires hebdomadaires.</p>
-           <p className="text-slate-300 text-sm leading-relaxed">Les dépenses et budgets ADS sont cumulés sur les 30 derniers jours pour refléter votre Burn Rate opérationnel actuel.</p>
+      <Modal isOpen={showInfo} onClose={() => setShowInfo(false)} title="Gestion Temporelle ADS">
+        <div className="space-y-6 text-left p-2">
+           <div className="p-5 bg-white/5 rounded-3xl border border-white/5 flex items-start space-x-4">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-400/10 flex items-center justify-center text-emerald-400 shrink-0"><Check size={24}/></div>
+              <p className="text-slate-300 text-sm leading-relaxed font-medium">Les campagnes publicitaires liées à une mission <span className="text-white font-black">ADVERTISING</span> ne débutent que lorsque l'expert valide techniquement le lancement dans le module Missions.</p>
+           </div>
+           <div className="p-5 bg-white/5 rounded-3xl border border-white/5 flex items-start space-x-4">
+              <div className="w-12 h-12 rounded-2xl bg-sky-400/10 flex items-center justify-center text-sky-400 shrink-0"><Calendar size={24}/></div>
+              <p className="text-slate-300 text-sm leading-relaxed font-medium">La date de fin de diffusion est calculée dynamiquement à partir du moment de la validation, en ajoutant le nombre de jours de sponsoring défini.</p>
+           </div>
         </div>
       </Modal>
     </div>

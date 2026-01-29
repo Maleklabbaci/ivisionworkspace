@@ -1,26 +1,14 @@
 
--- iVISION AGENCY FULL SYSTEM SCHEMA v4.8
--- Correction de la structure des projets
+-- iVISION AGENCY FULL SYSTEM SCHEMA v4.9
+-- Extension de la gestion financière ADS
 
--- 1. MISE À JOUR DE LA TABLE PROJECTS
--- Ajout de la colonne billing_type si elle n'existe pas
-DO $$ 
-BEGIN 
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='projects' AND column_name='billing_type') THEN
-        ALTER TABLE public.projects ADD COLUMN billing_type TEXT DEFAULT 'monthly';
-    END IF;
-END $$;
-
--- Assurer que total_budget et spent_budget existent
-DO $$ 
-BEGIN 
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='projects' AND column_name='total_budget') THEN
-        ALTER TABLE public.projects ADD COLUMN total_budget NUMERIC DEFAULT 0;
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='projects' AND column_name='spent_budget') THEN
-        ALTER TABLE public.projects ADD COLUMN spent_budget NUMERIC DEFAULT 0;
-    END IF;
-END $$;
+-- 1. MISE À JOUR DE LA TABLE AD_CAMPAIGNS
+ALTER TABLE public.ad_campaigns 
+ADD COLUMN IF NOT EXISTS client_id UUID REFERENCES public.clients(id) ON DELETE SET NULL,
+ADD COLUMN IF NOT EXISTS assignee_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
+ADD COLUMN IF NOT EXISTS task_id UUID REFERENCES public.tasks(id) ON DELETE SET NULL,
+ADD COLUMN IF NOT EXISTS duration_days INTEGER DEFAULT 30,
+ADD COLUMN IF NOT EXISTS start_date TIMESTAMP WITH TIME ZONE;
 
 -- 2. ACCUSÉS DE LECTURE MESSAGES
 ALTER TABLE public.messages 

@@ -11,7 +11,7 @@ export interface UserPermissions {
   canCreateTasks?: boolean;
   canEditAllTasks?: boolean;
   canDeleteTasks?: boolean;
-  canViewAllTasks?: boolean; // Nouvelle permission critique
+  canViewAllTasks?: boolean;
   canManageChat?: boolean;
   canViewFiles?: boolean;
   canDeleteFiles?: boolean;
@@ -64,6 +64,7 @@ export interface SalaryRecord {
   frequency: 'hebdo' | 'mensuel';
   status: 'paid' | 'pending';
   lastPaidDate?: string;
+  createdAt?: string;
 }
 
 export interface Expense {
@@ -83,6 +84,11 @@ export interface AdCampaignExpense {
   platform: 'facebook' | 'google' | 'tiktok' | 'instagram' | 'other';
   amount: number;
   projectId?: string;
+  clientId?: string;
+  assigneeId?: string;
+  taskId?: string;
+  durationDays?: number;
+  startDate?: string;
   status: 'active' | 'paused' | 'completed';
   createdAt: string;
 }

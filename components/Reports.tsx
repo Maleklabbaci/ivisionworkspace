@@ -1,304 +1,442 @@
-
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { Task, User, TaskStatus, Lead, Project, SalaryRecord, Expense, AdCampaignExpense } from '../types';
 import { 
   TrendingUp, TrendingDown, Zap, Users, Briefcase, 
   Download, DollarSign, CheckCircle2, 
-  Activity, FileText, X, Clock, ListChecks, ArrowUpRight, BarChart3, Target, Calendar, AlertTriangle, Layers, Repeat
+  Activity, FileText, X, Clock, ListChecks, ArrowUpRight, BarChart3, Target, Calendar, AlertTriangle, Printer, ClipboardList, Receipt, ShieldCheck, PieChart, Star, Megaphone, Loader2
 } from 'lucide-react';
+import Modal from './Modal';
+
+declare var html2pdf: any;
 
 const Reports: React.FC<any> = ({ 
   tasks = [], leads = [], messages = [], projects = [], 
   salaries = [], expenses = [], adCampaigns = [], users = [], currentUser 
 }) => {
-  const [showWeeklyModal, setShowWeeklyModal] = useState(false);
-  const [lastDownloadDate, setLastDownloadDate] = useState<string | null>(localStorage.getItem('iv_last_report_download'));
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportRange, setExportRange] = useState<7 | 30>(30);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const reportRef = useRef<HTMLDivElement>(null);
 
-  // --- LOGIQUE DE FILTRAGE 30 JOURS ---
-  const isWithin30Days = (dateStr?: string) => {
-    if (!dateStr) return false;
-    const date = new Date(dateStr);
-    const threshold = new Date();
-    threshold.setMonth(threshold.getMonth() - 1);
-    return date >= threshold;
+  // --- LOGIQUE DE FILTRAGE TEMPOREL ---
+  const getDaysAgo = (days: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() - days);
+    return d;
   };
 
-  // --- CALCULS STATISTIQUES ---
-  const stats = useMemo(() => {
-    const rangeTasks = tasks.filter((t: any) => isWithin30Days(t.createdAt || t.dueDate));
-    const rangeLeads = leads.filter((l: any) => isWithin30Days(l.createdAt));
-    
-    // REVENU MENSUEL ACTIF (MRR)
-    const activeMonthlyProjects = projects.filter(p => p.status === 'active' && (p.billingType === 'monthly' || !p.billingType));
-    const mrr = activeMonthlyProjects.reduce((acc, p) => acc + (p.totalBudget || 0), 0);
-    
-    // REVENU ONE-SHOT ACTIF (Projets non terminés)
-    const activeOneShotProjects = projects.filter(p => p.status === 'active' && p.billingType === 'one-shot');
-    const oneShotTotal = activeOneShotProjects.reduce((acc, p) => acc + (p.totalBudget || 0), 0);
+  const isWithinRange = (dateStr?: string, days: number = 30) => {
+    if (!dateStr) return false;
+    const date = new Date(dateStr);
+    return date >= getDaysAgo(days);
+  };
 
-    // CHARGES RH (Mensuel projeté)
+  // --- MOTEUR ANALYTIQUE ---
+  const analytics = useMemo(() => {
+    const rangeTasks = tasks.filter((t: any) => isWithinRange(t.createdAt || t.dueDate, exportRange));
+    const rangeLeads = leads.filter((l: any) => isWithinRange(l.createdAt, exportRange));
+    const rangeExpenses = expenses.filter((e: any) => isWithinRange(e.createdAt, exportRange));
+    const rangeAds = adCampaigns.filter((a: any) => isWithinRange(a.createdAt, exportRange));
+    
+    // Calcul Financier Global
+    const activeProjects = projects.filter(p => p.status === 'active');
+    const revenue = activeProjects.reduce((acc, p) => acc + (p.totalBudget || 0), 0);
+
     const monthlySalaries = salaries.reduce((acc, s) => {
       const base = (s.amount || 0) + (s.bonus || 0);
       return acc + (s.frequency === 'hebdo' ? base * 4 : base);
     }, 0);
     
-    // CHARGES OPÉRATIONNELLES (30 derniers jours)
-    const monthlyExpenses = expenses.filter((e: any) => isWithin30Days(e.createdAt)).reduce((acc, e) => acc + e.amount, 0);
-    const monthlyAds = adCampaigns.filter((a: any) => isWithin30Days(a.createdAt)).reduce((acc, a) => acc + a.amount, 0);
+    const operationalCosts = rangeExpenses.reduce((acc, e) => acc + (e.amount || 0), 0);
+    const adsCosts = rangeAds.reduce((acc, a) => acc + (a.amount || 0), 0);
     
-    const totalCosts = monthlySalaries + monthlyExpenses + monthlyAds;
-    
-    // La marge nette ici est vue comme le "Surplus Cashflow" mensuel : (MRR + CA One Shot Actif) - (Coûts 30J)
-    // C'est une vision de trésorerie opérationnelle
-    const netMargin = (mrr + oneShotTotal) - totalCosts;
+    const totalCosts = monthlySalaries + operationalCosts + adsCosts;
+    const netMargin = revenue - totalCosts;
 
-    return {
-      revenue: mrr + oneShotTotal,
-      mrr: mrr,
-      oneShot: oneShotTotal,
-      costs: totalCosts,
-      margin: netMargin,
-      tasksTotal: rangeTasks.length,
-      tasksDone: rangeTasks.filter((t: Task) => t.status === TaskStatus.DONE).length,
-      leadsCount: rangeLeads.length,
-      leadsQualified: rangeLeads.filter((l: Lead) => l.status === 'qualified').length,
-      clientsCount: projects.filter(p => p.status === 'active').length,
-      productivity: rangeTasks.length > 0 ? Math.round((rangeTasks.filter((t: Task) => t.status === TaskStatus.DONE).length / rangeTasks.length) * 100) : 0
-    };
-  }, [tasks, leads, projects, salaries, expenses, adCampaigns]);
+    // Performance Projets (ROI)
+    const projectPerformance = activeProjects.map(p => {
+      const projExpenses = expenses.filter(e => e.projectId === p.id).reduce((acc, e) => acc + (e.amount || 0), 0);
+      const projAds = adCampaigns.filter(a => a.projectId === p.id).reduce((acc, a) => acc + (a.amount || 0), 0);
+      const projSalaries = salaries.filter(s => s.projectId === p.id).reduce((acc, s) => {
+         const total = (s.amount || 0) + (s.bonus || 0);
+         return acc + (s.frequency === 'hebdo' ? total * 4 : total);
+      }, 0);
+      const spent = projExpenses + projAds + projSalaries;
+      const progress = p.totalBudget > 0 ? (spent / p.totalBudget) * 100 : 0;
+      return { ...p, spent, progress, margin: p.totalBudget - spent };
+    }).sort((a, b) => b.spent - a.spent);
 
-  const employeePerformance = useMemo(() => {
-    return users.map(u => {
-      const allMonthTasks = tasks.filter((t: Task) => t.assigneeId === u.id && isWithin30Days(t.createdAt || t.dueDate));
-      const validated = allMonthTasks.filter((t: Task) => t.status === TaskStatus.DONE);
-      const pending = allMonthTasks.filter((t: Task) => t.status !== TaskStatus.DONE);
-      
+    // Performance Équipe
+    const teamStats = users.map(u => {
+      const userTasks = rangeTasks.filter((t: Task) => t.assigneeId === u.id);
+      const validated = userTasks.filter((t: Task) => t.status === TaskStatus.DONE);
       return {
-        ...u,
-        total: allMonthTasks.length,
-        doneCount: validated.length,
-        pendingCount: pending.length,
-        efficiency: allMonthTasks.length > 0 ? Math.round((validated.length / allMonthTasks.length) * 100) : 0,
-        journalVictoires: validated.map(t => ({ title: t.title, date: t.dueDate })),
-        journalFronts: pending.map(t => ({ title: t.title, date: t.dueDate }))
+        id: u.id,
+        name: u.name,
+        avatar: u.avatar,
+        total: userTasks.length,
+        done: validated.length,
+        efficiency: userTasks.length > 0 ? Math.round((validated.length / userTasks.length) * 100) : 0
       };
     }).sort((a, b) => b.efficiency - a.efficiency);
-  }, [users, tasks]);
 
-  const handleDownloadReport = () => {
-    const now = new Date().toLocaleString('fr-FR', { 
-      day: '2-digit', month: 'long', year: 'numeric', 
-      hour: '2-digit', minute: '2-digit' 
-    });
-    localStorage.setItem('iv_last_report_download', now);
-    setLastDownloadDate(now);
-    window.print();
+    // Flux d'activité récent (10 derniers événements)
+    const recentActivity = [
+      ...rangeTasks.map(t => ({ type: 'task', date: t.createdAt || t.dueDate, label: t.title, status: t.status, user: users.find(u => u.id === t.assigneeId)?.name })),
+      ...rangeLeads.map(l => ({ type: 'lead', date: l.createdAt, label: `Nouveau Lead: ${l.name}`, status: l.status, user: 'CRM System' }))
+    ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 10);
+
+    return {
+      revenue,
+      costs: totalCosts,
+      margin: netMargin,
+      salaryCost: monthlySalaries,
+      opCost: operationalCosts,
+      adCost: adsCosts,
+      tasks: rangeTasks,
+      leads: rangeLeads,
+      expenses: rangeExpenses,
+      ads: rangeAds,
+      team: teamStats,
+      projects: projectPerformance,
+      activity: recentActivity,
+      productivity: rangeTasks.length > 0 ? Math.round((rangeTasks.filter((t: Task) => t.status === TaskStatus.DONE).length / rangeTasks.length) * 100) : 0
+    };
+  }, [tasks, leads, projects, salaries, expenses, adCampaigns, exportRange, users]);
+
+  const handleDownloadPDF = async () => {
+    if (!reportRef.current) return;
+    setIsDownloading(true);
+
+    const element = reportRef.current.querySelector('.report-pdf-content');
+    const opt = {
+      margin: 10,
+      filename: `iVISION_Audit_${new Date().toISOString().split('T')[0]}.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true, logging: false },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+
+    try {
+      await html2pdf().set(opt).from(element).save();
+    } catch (error) {
+      console.error("Erreur téléchargement PDF:", error);
+    } finally {
+      setIsDownloading(false);
+    }
   };
-
-  const reportCloseDay = 27;
-  const currentDay = new Date().getDate();
-  const isReportDay = currentDay === reportCloseDay;
 
   return (
     <div className="space-y-12 animate-fade-in pb-24 px-2">
-      {isReportDay && (
-        <div className="relative group overflow-hidden rounded-[2.5rem] p-8 md:p-10 border border-emerald-500/30 bg-emerald-500/5 shadow-2xl shadow-emerald-500/10 animate-pulse-subtle">
-           <div className="absolute top-0 right-0 w-40 h-40 bg-emerald-500/10 blur-[80px] rounded-full"></div>
-           <div className="flex flex-col md:flex-row items-center justify-between gap-6 relative z-10 text-left">
-              <div className="flex items-center space-x-6">
-                <div className="w-16 h-16 bg-emerald-500 rounded-3xl flex items-center justify-center text-slate-950 shadow-xl"><AlertTriangle size={32} /></div>
-                <div>
-                   <h3 className="text-xl md:text-2xl font-black text-white uppercase tracking-tight leading-none">Clôture du Cycle iV</h3>
-                   <p className="text-[10px] md:text-[11px] font-bold text-emerald-400 uppercase tracking-[0.2em] mt-2">Bilan mensuel requis pour validation des performances.</p>
-                </div>
-              </div>
-              <button onClick={() => setShowWeeklyModal(true)} className="px-10 py-5 bg-emerald-500 text-slate-950 rounded-2xl font-black uppercase text-[11px] tracking-widest shadow-xl active-scale">Générer Clôture</button>
-           </div>
-        </div>
-      )}
-
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-8 text-left">
         <div className="space-y-4">
-          <p className="text-[10px] font-black uppercase tracking-[0.4em] text-sky-400 mb-2 leading-none">Agency Intelligence Core</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.4em] text-sky-400 mb-2 leading-none">Intelligence Hub iV</p>
           <h2 className="text-4xl md:text-7xl font-black text-white tracking-tighter uppercase leading-none">Rapports</h2>
-          <div className="flex flex-wrap items-center gap-4 pt-2">
-            <div className="flex items-center space-x-3 px-4 py-2 bg-sky-500/10 rounded-full border border-sky-500/20 shadow-inner">
-              <Calendar size={14} className="text-sky-400" />
-              <span className="text-[9px] font-black text-sky-400 uppercase tracking-widest leading-none">Cycle 30J Actif</span>
-            </div>
+          <div className="flex items-center space-x-6">
+             <div className="flex items-center space-x-3 px-4 py-2 bg-emerald-500/10 rounded-full border border-emerald-500/20">
+               <ShieldCheck size={14} className="text-emerald-400" />
+               <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest">Système Audité</span>
+             </div>
+             <div className="flex items-center space-x-3 px-4 py-2 bg-white/5 rounded-full border border-white/10">
+               <Clock size={14} className="text-slate-400" />
+               <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Dernière MaJ: {new Date().toLocaleTimeString()}</span>
+             </div>
           </div>
         </div>
         
         <button 
-          onClick={() => setShowWeeklyModal(true)}
-          className="px-10 py-5 bg-sky-500 text-white rounded-[2rem] font-black text-[11px] uppercase flex items-center space-x-4 shadow-2xl active-scale hover:bg-sky-400 transition-all tracking-widest"
+          onClick={() => setShowExportModal(true)}
+          className="px-10 py-5 bg-white text-slate-950 rounded-[2rem] font-black text-[11px] uppercase flex items-center space-x-4 shadow-2xl active-scale hover:bg-sky-400 hover:text-white transition-all tracking-widest border-4 border-sky-500/20"
         >
           <Download size={20} />
-          <span>Exporter Audit 30J</span>
+          <span>Générer Audit Expert (PDF)</span>
         </button>
       </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 crystal-module p-10 md:p-14 rounded-[3.5rem] border-white/10 shadow-2xl relative overflow-hidden text-left flex flex-col justify-center">
-          <div className="absolute -top-20 -right-20 w-96 h-96 bg-sky-500/10 blur-[120px] rounded-full"></div>
-          <div className="flex items-center space-x-4 mb-10">
-            <div className="w-14 h-14 bg-sky-500/20 rounded-2xl flex items-center justify-center text-sky-400 border border-sky-400/20 shadow-inner"><BarChart3 size={28} /></div>
-            <h4 className="font-black text-white text-[12px] uppercase tracking-[0.3em]">Briefing de Performance</h4>
-          </div>
-          <div className="space-y-8 relative z-10">
-            <h3 className="text-3xl md:text-5xl font-black text-white leading-[1.05] uppercase tracking-tighter max-w-3xl">
-              CA Total Actif : <span className="text-sky-400">{stats.revenue.toLocaleString()} DZD</span>. 
-              Marge Opé : <span className="text-emerald-400">{stats.margin.toLocaleString()} DZD</span>.
-            </h3>
-            <div className="flex flex-wrap gap-4 mt-4">
-               <div className="px-6 py-3 bg-white/5 border border-white/10 rounded-2xl">
-                  <p className="text-[9px] font-black text-slate-500 uppercase mb-1">Récurrent Mensuel (MRR)</p>
-                  <p className="text-lg font-black text-sky-400">{stats.mrr.toLocaleString()} DZD</p>
-               </div>
-               <div className="px-6 py-3 bg-white/5 border border-white/10 rounded-2xl">
-                  <p className="text-[9px] font-black text-slate-500 uppercase mb-1">One-Shot en cours</p>
-                  <p className="text-lg font-black text-amber-400">{stats.oneShot.toLocaleString()} DZD</p>
-               </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="crystal-module p-10 rounded-[3.5rem] border-white/5 flex flex-col justify-between text-left">
-          <div className="space-y-1">
-            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center"><Target size={12} className="mr-2 text-sky-400"/> Vitalité CRM</p>
-            <div className="flex items-end space-x-4 pt-4">
-              <h4 className="text-6xl font-black text-white leading-none">{stats.clientsCount}</h4>
-              <p className="text-[11px] font-black text-sky-400 uppercase pb-1.5 tracking-widest">Contrats</p>
-            </div>
-          </div>
-          <div className="h-px bg-white/5 w-full my-8"></div>
-          <div className="space-y-5">
-            <div className="flex justify-between items-center">
-              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Pipeline Mensuel</span>
-              <span className="text-[11px] font-black text-emerald-400">+{stats.leadsCount} Prospects</span>
-            </div>
-            <div className="w-full h-4 bg-white/5 rounded-full overflow-hidden border border-white/5 p-1">
-              <div className="h-full bg-sky-500 rounded-full transition-all duration-1000" style={{ width: `${(stats.leadsQualified / (stats.leadsCount || 1)) * 100}%` }}></div>
-            </div>
-          </div>
-        </div>
-      </div>
-
+      {/* Grid Principal - KPI Stratégiques */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
         {[
-          { label: 'Revenu Total Actif', val: stats.revenue, color: 'text-white', icon: DollarSign, bg: 'bg-white/5' },
-          { label: 'Burn Rate Mensuel', val: stats.costs, color: 'text-rose-400', icon: TrendingDown, bg: 'bg-rose-400/10' },
-          { label: 'Marge Cashflow iV', val: stats.margin, color: 'text-emerald-400', icon: TrendingUp, bg: 'bg-emerald-400/10' },
-          { label: 'Taux de Complétion', val: stats.productivity + '%', color: 'text-sky-400', icon: Zap, bg: 'bg-sky-400/10' }
+          { label: 'Revenu Sous Gestion', val: analytics.revenue, color: 'text-white', icon: DollarSign, bg: 'bg-white/5' },
+          { label: 'Indice de Burn Rate', val: analytics.costs, color: 'text-rose-400', icon: TrendingDown, bg: 'bg-rose-400/10' },
+          { label: 'Profitabilité Nette', val: analytics.margin, color: 'text-emerald-400', icon: TrendingUp, bg: 'bg-emerald-400/10' },
+          { label: 'Efficience Opérationnelle', val: analytics.productivity + '%', color: 'text-sky-400', icon: Zap, bg: 'bg-sky-400/10' }
         ].map((s, i) => (
-          <div key={i} className="crystal-module p-10 rounded-[2.5rem] flex flex-col justify-between h-48 text-left border-white/5 hover:bg-white/[0.04] transition-all group">
-             <div className={`w-14 h-14 rounded-2xl ${s.bg} flex items-center justify-center ${s.color} border border-white/5 shadow-inner`}><s.icon size={28} /></div>
+          <div key={i} className="crystal-module p-8 rounded-[2.5rem] flex flex-col justify-between h-44 text-left group hover:translate-y-[-4px] transition-all duration-500">
+             <div className={`w-12 h-12 rounded-2xl ${s.bg} flex items-center justify-center ${s.color} border border-white/5 shadow-inner`}><s.icon size={24} /></div>
              <div>
-               <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none">{s.label}</p>
-               <h4 className={`text-2xl font-black ${s.color} mt-3 tracking-tight leading-none`}>
-                 {typeof s.val === 'number' ? s.val.toLocaleString() : s.val} {typeof s.val === 'number' && 'DZD'}
-               </h4>
+               <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest leading-none mb-2">{s.label}</p>
+               <h4 className={`text-xl md:text-2xl font-black ${s.color} tracking-tight`}>{typeof s.val === 'number' ? s.val.toLocaleString() : s.val} {typeof s.val === 'number' && 'DZD'}</h4>
              </div>
           </div>
         ))}
       </div>
 
-      {/* AUDIT INDIVIDUEL */}
-      <section className="space-y-10">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 px-4 text-left">
-           <div className="flex items-center space-x-4">
-             <div className="w-12 h-12 bg-sky-500/10 rounded-2xl flex items-center justify-center text-sky-400 border border-sky-400/10 shadow-inner"><Users size={24}/></div>
-             <div>
-               <h3 className="text-2xl font-black text-white uppercase tracking-tight leading-none">Journal d'Audit</h3>
-               <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-2">Suivi historique de la production individuelle sur 30 jours.</p>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        {/* Performance Projets */}
+        <div className="lg:col-span-2 space-y-8">
+          <section className="crystal-module rounded-[3rem] p-8 md:p-10 border-white/5 text-left">
+            <div className="flex items-center justify-between mb-8">
+              <h3 className="text-xl font-black text-white uppercase tracking-tighter flex items-center">
+                <Briefcase className="mr-3 text-emerald-400" size={24}/>
+                Santé des Projets
+              </h3>
+              <span className="text-[10px] font-black text-slate-500 uppercase">{analytics.projects.length} ACTIFS</span>
+            </div>
+            <div className="space-y-6">
+              {analytics.projects.slice(0, 5).map(p => (
+                <div key={p.id} className="space-y-2">
+                  <div className="flex justify-between items-end">
+                    <div>
+                      <p className="text-[13px] font-bold text-white uppercase truncate max-w-[200px]">{p.name}</p>
+                      <p className="text-[9px] font-black text-slate-600 uppercase mt-1">Budget: {p.totalBudget.toLocaleString()} DZD</p>
+                    </div>
+                    <p className={`text-[11px] font-black ${p.margin < 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                      {p.margin > 0 ? '+' : ''}{p.margin.toLocaleString()} DZD
+                    </p>
+                  </div>
+                  <div className="h-2 bg-white/5 rounded-full overflow-hidden border border-white/5">
+                    <div 
+                      className={`h-full transition-all duration-1000 ${p.progress > 90 ? 'bg-rose-500' : p.progress > 50 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                      style={{ width: `${Math.min(p.progress, 100)}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="crystal-module rounded-[3rem] p-8 md:p-10 border-white/5 text-left">
+             <h3 className="text-xl font-black text-white uppercase tracking-tighter flex items-center mb-8">
+                <Activity className="mr-3 text-sky-400" size={24}/>
+                Journal d'Activité iV
+             </h3>
+             <div className="space-y-4">
+                {analytics.activity.map((act, i) => (
+                  <div key={i} className="flex items-center justify-between p-4 bg-white/[0.02] border border-white/5 rounded-2xl hover:bg-white/5 transition-all">
+                    <div className="flex items-center space-x-4">
+                       <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${act.type === 'task' ? 'bg-sky-400/10 text-sky-400' : 'bg-orange-400/10 text-orange-400'}`}>
+                         {act.type === 'task' ? <CheckCircle2 size={18}/> : <Target size={18}/>}
+                       </div>
+                       <div className="truncate">
+                          <p className="text-[13px] font-bold text-white uppercase truncate max-w-[250px]">{act.label}</p>
+                          <p className="text-[9px] font-black text-slate-500 uppercase mt-1">{act.user} • {new Date(act.date).toLocaleDateString()}</p>
+                       </div>
+                    </div>
+                    <span className={`text-[8px] font-black px-3 py-1 rounded-md uppercase border ${act.status === 'Terminé' ? 'bg-emerald-400/10 border-emerald-400/20 text-emerald-400' : 'bg-white/5 border-white/10 text-slate-500'}`}>
+                      {act.status}
+                    </span>
+                  </div>
+                ))}
              </div>
+          </section>
+        </div>
+
+        <div className="space-y-8">
+          <section className="crystal-module rounded-[3rem] p-8 md:p-10 border-white/5 text-left">
+             <h3 className="text-xl font-black text-white uppercase tracking-tighter flex items-center mb-8">
+                <Star className="mr-3 text-amber-400" size={24}/>
+                Efficience Équipe
+             </h3>
+             <div className="space-y-6">
+                {analytics.team.map((member, i) => (
+                  <div key={member.id} className="flex items-center justify-between group">
+                    <div className="flex items-center space-x-4">
+                       <div className="relative">
+                          <img src={member.avatar} className="w-12 h-12 rounded-2xl bg-slate-800 border border-white/10 object-cover" alt="" />
+                          {i === 0 && <div className="absolute -top-2 -right-2 w-5 h-5 bg-amber-400 rounded-full flex items-center justify-center text-slate-950 border-2 border-slate-950"><Star size={10} fill="currentColor"/></div>}
+                       </div>
+                       <div>
+                          <p className="text-[12px] font-black text-white uppercase leading-none">{member.name}</p>
+                          <p className="text-[9px] font-bold text-slate-500 uppercase mt-2">{member.done} missions validées</p>
+                       </div>
+                    </div>
+                    <div className="text-right">
+                       <p className={`text-lg font-black ${member.efficiency > 80 ? 'text-emerald-400' : 'text-sky-400'}`}>{member.efficiency}%</p>
+                       <p className="text-[8px] font-black text-slate-600 uppercase">Ratio iV</p>
+                    </div>
+                  </div>
+                ))}
+             </div>
+          </section>
+
+          <section className="crystal-module rounded-[3rem] p-8 md:p-10 border-white/5 text-left overflow-hidden relative">
+             <div className="absolute top-0 right-0 w-32 h-32 bg-orange-400/5 blur-3xl"></div>
+             <h3 className="text-xl font-black text-white uppercase tracking-tighter flex items-center mb-8">
+                <Target className="mr-3 text-orange-400" size={24}/>
+                Pipe Commercial
+             </h3>
+             <div className="grid grid-cols-2 gap-4">
+                <div className="p-5 bg-white/5 rounded-3xl border border-white/5">
+                   <p className="text-[8px] font-black text-slate-500 uppercase mb-1">Nouveaux Leads</p>
+                   <p className="text-2xl font-black text-orange-400">{analytics.leads.length}</p>
+                </div>
+                <div className="p-5 bg-white/5 rounded-3xl border border-white/5">
+                   <p className="text-[8px] font-black text-slate-500 uppercase mb-1">Potentiel (DZD)</p>
+                   <p className="text-[14px] font-black text-white truncate">
+                     {analytics.leads.reduce((acc, l) => acc + (l.valueMin || 0), 0).toLocaleString()}
+                   </p>
+                </div>
+             </div>
+             <button onClick={() => setShowExportModal(true)} className="w-full mt-6 py-4 glass text-white font-black rounded-2xl uppercase text-[9px] tracking-widest hover:bg-white/5 transition-all">Analyser Pipeline</button>
+          </section>
+        </div>
+      </div>
+
+      <Modal isOpen={showExportModal} onClose={() => setShowExportModal(false)} title="Audit Systémique iV" subtitle="Génération de rapport PDF haute-fidélité">
+        <div className="space-y-8 text-left">
+           <div className="space-y-4">
+              <label className="label-iv">Focalisation Temporelle</label>
+              <div className="grid grid-cols-2 gap-3 bg-white/5 p-2 rounded-2xl border border-white/5">
+                 <button onClick={() => setExportRange(7)} className={`py-4 rounded-xl text-[10px] font-black uppercase transition-all ${exportRange === 7 ? 'bg-sky-500 text-white shadow-lg' : 'text-slate-500 hover:text-slate-200'}`}>Cycle 7 Jours</button>
+                 <button onClick={() => setExportRange(30)} className={`py-4 rounded-xl text-[10px] font-black uppercase transition-all ${exportRange === 30 ? 'bg-sky-500 text-white shadow-lg' : 'text-slate-500 hover:text-slate-200'}`}>Cycle 30 Jours</button>
+              </div>
+           </div>
+
+           {/* CONTENEUR EXPORT - CACHÉ DANS L'UI MAIS UTILISÉ PAR HTML2PDF */}
+           <div ref={reportRef} className="border border-white/10 rounded-[2.5rem] bg-slate-950/80 p-6 md:p-10 overflow-y-auto max-h-[50vh] no-scrollbar shadow-inner">
+              <div className="report-pdf-content bg-white p-8 md:p-14 text-slate-950 rounded-2xl min-h-full font-sans">
+                 
+                 {/* Header PDF */}
+                 <div className="flex justify-between items-start border-b-[4pt] border-slate-950 pb-10 mb-12">
+                    <div className="text-left">
+                      <h1 className="text-4xl font-black uppercase tracking-tighter">iVISION AGENCY</h1>
+                      <p className="text-[12px] font-black text-sky-700 uppercase tracking-[0.3em] mt-3">Rapport d'Audit Stratégique Opérationnel</p>
+                      <p className="text-[10px] font-bold text-slate-400 mt-2 italic">Strictement Confidentiel • Propriété de iVISION CORE</p>
+                    </div>
+                    <div className="text-right">
+                       <p className="text-[10px] font-black text-slate-400 uppercase">Généré par iV Intelligence</p>
+                       <p className="text-sm font-black uppercase mt-1">{new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
+                       <p className="text-[10px] font-bold text-slate-500 mt-1 uppercase">Période: {exportRange} jours</p>
+                    </div>
+                 </div>
+
+                 {/* 1. SYNTHÈSE FINANCIÈRE */}
+                 <section className="mb-14">
+                    <h3 className="section-title text-xl font-black border-b-2 border-slate-950 mb-6 pb-2">1. Bilan de Santé Financière</h3>
+                    <div className="grid grid-cols-3 gap-6 mb-8 flex w-full">
+                       <div className="p-6 bg-slate-50 border border-slate-200 text-center flex-1">
+                          <p className="text-[9px] font-black text-slate-400 uppercase mb-2">Revenu Projeté</p>
+                          <p className="text-xl font-black">{analytics.revenue.toLocaleString()} DZD</p>
+                       </div>
+                       <div className="p-6 bg-slate-50 border border-slate-200 text-center flex-1">
+                          <p className="text-[9px] font-black text-slate-400 uppercase mb-2">Burn Rate Global</p>
+                          <p className="text-xl font-black text-red-600">-{analytics.costs.toLocaleString()} DZD</p>
+                       </div>
+                       <div className="p-6 bg-slate-100 border-2 border-green-300 text-center flex-1">
+                          <p className="text-[9px] font-black text-green-700 uppercase mb-2">Marge Nette</p>
+                          <p className="text-xl font-black text-green-700">+{analytics.margin.toLocaleString()} DZD</p>
+                       </div>
+                    </div>
+                    
+                    <p className="text-[10px] font-black uppercase mb-3">Répartition des charges analytiques :</p>
+                    <table className="w-full border-collapse mb-6">
+                       <thead>
+                          <tr className="bg-slate-100">
+                             <th className="border p-2 text-left text-[10px]">Poste de Dépense</th>
+                             <th className="border p-2 text-left text-[10px]">Montant</th>
+                             <th className="border p-2 text-left text-[10px]">% du Burn Rate</th>
+                          </tr>
+                       </thead>
+                       <tbody>
+                          <tr>
+                             <td className="border p-2 text-[10px]">Capital Humain (RH & Salaires)</td>
+                             <td className="border p-2 text-[10px]">{analytics.salaryCost.toLocaleString()} DZD</td>
+                             <td className="border p-2 text-[10px]">{Math.round((analytics.salaryCost / Math.max(1, analytics.costs)) * 100)}%</td>
+                          </tr>
+                          <tr>
+                             <td className="border p-2 text-[10px]">Opérations & Freelancing</td>
+                             <td className="border p-2 text-[10px]">{analytics.opCost.toLocaleString()} DZD</td>
+                             <td className="border p-2 text-[10px]">{Math.round((analytics.opCost / Math.max(1, analytics.costs)) * 100)}%</td>
+                          </tr>
+                          <tr>
+                             <td className="border p-2 text-[10px]">Acquisition Client (ADS)</td>
+                             <td className="border p-2 text-[10px]">{analytics.adCost.toLocaleString()} DZD</td>
+                             <td className="border p-2 text-[10px]">{Math.round((analytics.adCost / Math.max(1, analytics.costs)) * 100)}%</td>
+                          </tr>
+                       </tbody>
+                    </table>
+                 </section>
+
+                 {/* 2. PERFORMANCE ÉQUIPE */}
+                 <section className="mb-14">
+                    <h3 className="section-title text-xl font-black border-b-2 border-slate-950 mb-6 pb-2">2. Rapport de Performance Humaine</h3>
+                    <table className="w-full border-collapse">
+                       <thead>
+                          <tr className="bg-slate-100">
+                             <th className="border p-2 text-left text-[10px]">Expert</th>
+                             <th className="border p-2 text-left text-[10px]">Missions Totales</th>
+                             <th className="border p-2 text-left text-[10px]">Validées</th>
+                             <th className="border p-2 text-left text-[10px]">Taux de Succès</th>
+                          </tr>
+                       </thead>
+                       <tbody>
+                          {analytics.team.map(m => (
+                             <tr key={m.id}>
+                                <td className="border p-2 text-[10px] font-bold">{m.name}</td>
+                                <td className="border p-2 text-[10px]">{m.total}</td>
+                                <td className="border p-2 text-[10px]">{m.done}</td>
+                                <td className="border p-2 text-[10px] font-black">{m.efficiency}%</td>
+                             </tr>
+                          ))}
+                       </tbody>
+                    </table>
+                 </section>
+
+                 {/* 3. DÉTAIL DES TRANSACTIONS */}
+                 <section className="mb-14">
+                    <h3 className="section-title text-xl font-black border-b-2 border-slate-950 mb-6 pb-2">3. Journal Itemisé des Flux</h3>
+                    
+                    <div className="mb-8">
+                       <p className="text-[11px] font-black uppercase mb-4">Dépenses Opérationnelles ({analytics.expenses.length})</p>
+                       <table className="w-full border-collapse">
+                          <thead>
+                             <tr className="bg-slate-100">
+                                <th className="border p-2 text-left text-[10px]">Date</th>
+                                <th className="border p-2 text-left text-[10px]">Libellé</th>
+                                <th className="border p-2 text-left text-[10px]">Catégorie</th>
+                                <th className="border p-2 text-left text-[10px]">Montant</th>
+                             </tr>
+                          </thead>
+                          <tbody>
+                             {analytics.expenses.map(e => (
+                                <tr key={e.id}>
+                                   <td className="border p-2 text-[10px]">{new Date(e.createdAt).toLocaleDateString()}</td>
+                                   <td className="border p-2 text-[10px]">{e.name}</td>
+                                   <td className="border p-2 text-[10px] uppercase">{e.type}</td>
+                                   <td className="border p-2 text-[10px] font-black">{e.amount.toLocaleString()} DZD</td>
+                                </tr>
+                             ))}
+                          </tbody>
+                       </table>
+                    </div>
+                 </section>
+
+                 {/* FOOTER PDF */}
+                 <div className="mt-20 pt-10 border-t-2 border-slate-900 text-center">
+                    <p className="text-[10px] font-black uppercase tracking-[0.8em] text-slate-400">iVISION AGENCY • CORE SYSTEM</p>
+                 </div>
+              </div>
+           </div>
+
+           <div className="flex flex-col gap-3">
+              <button 
+                onClick={handleDownloadPDF} 
+                disabled={isDownloading}
+                className="w-full py-8 bg-slate-950 text-white font-black rounded-3xl shadow-2xl flex items-center justify-center space-x-4 uppercase text-[12px] tracking-[0.2em] active-scale hover:bg-sky-500 transition-all border border-white/10"
+              >
+                {isDownloading ? <Loader2 size={24} className="animate-spin" /> : <Download size={24}/>}
+                <span>Télécharger le Rapport PDF</span>
+              </button>
+              <button 
+                onClick={() => setShowExportModal(false)}
+                className="w-full py-5 glass text-slate-500 font-black rounded-2xl uppercase text-[10px] tracking-widest border border-white/5 active-scale"
+              >
+                Quitter l'Interface d'Audit
+              </button>
            </div>
         </div>
-        
-        <div className="grid grid-cols-1 gap-8">
-          {employeePerformance.map((emp, i) => (
-            <div key={i} className="crystal-module p-10 rounded-[3.5rem] border-white/5 flex flex-col lg:flex-row gap-12 text-left shadow-xl">
-               <div className="flex flex-col items-center justify-center lg:border-r border-white/5 lg:pr-12 lg:w-64 shrink-0">
-                  <div className="relative mb-6">
-                    <img src={emp.avatar} className="w-28 h-28 rounded-[2.5rem] object-cover border-2 border-white/10 shadow-2xl" alt="" />
-                    <div className="absolute -bottom-3 -right-3 w-14 h-14 bg-slate-950 rounded-2xl flex items-center justify-center border border-white/10">
-                      <span className="text-[13px] font-black text-sky-400">{emp.efficiency}%</span>
-                    </div>
-                  </div>
-                  <div className="text-center">
-                    <h4 className="text-2xl font-black text-white uppercase tracking-tighter leading-none">{emp.name.split(' ')[0]}</h4>
-                    <p className="text-[10px] text-sky-400 font-black uppercase tracking-widest mt-2">{emp.role}</p>
-                  </div>
-               </div>
-
-               <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-10">
-                  <div className="space-y-6">
-                     <h5 className="text-[12px] font-black text-emerald-400 uppercase tracking-widest flex items-center border-b border-white/5 pb-4">
-                        <CheckCircle2 size={18} className="mr-3"/> Missions Terminées
-                     </h5>
-                     <div className="space-y-4 max-h-[250px] overflow-y-auto no-scrollbar pr-2">
-                        {emp.journalVictoires.map((t, idx) => (
-                          <div key={idx} className="p-5 bg-emerald-400/5 rounded-3xl border border-emerald-400/10 text-left">
-                             <p className="text-[14px] font-bold text-slate-100 uppercase leading-tight">{t.title}</p>
-                          </div>
-                        ))}
-                     </div>
-                  </div>
-                  <div className="space-y-6">
-                     <h5 className="text-[12px] font-black text-sky-400 uppercase tracking-widest flex items-center border-b border-white/5 pb-4">
-                        <Clock size={18} className="mr-3"/> En Cours
-                     </h5>
-                     <div className="space-y-4 max-h-[250px] overflow-y-auto no-scrollbar pr-2">
-                        {emp.journalFronts.map((t, idx) => (
-                          <div key={idx} className="p-5 bg-sky-400/5 rounded-3xl border border-sky-400/10 text-left">
-                             <p className="text-[14px] font-bold text-slate-100 uppercase leading-tight">{t.title}</p>
-                          </div>
-                        ))}
-                     </div>
-                  </div>
-               </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {showWeeklyModal && (
-        <div className="modal-overlay">
-          <div className="fixed inset-0 cursor-pointer no-print" onClick={() => setShowWeeklyModal(false)}></div>
-          <div className="modal-container max-w-4xl">
-            <div className="modal-content-glass animate-fade-in overflow-hidden">
-               <div className="flex justify-between items-center p-8 border-b border-white/5 no-print bg-slate-900">
-                  <h3 className="text-xl md:text-2xl font-black text-white uppercase tracking-tighter leading-none">Export Stratégique iV</h3>
-                  <button onClick={() => setShowWeeklyModal(false)} className="w-12 h-12 glass text-slate-500 hover:text-white rounded-xl flex items-center justify-center active-scale transition-all"><X size={24}/></button>
-               </div>
-
-               <div className="printable-report bg-white text-slate-950 p-10 md:p-16 rounded-b-[2rem] overflow-y-auto max-h-[80vh] no-scrollbar">
-                  <div className="flex justify-between items-start border-b-8 border-slate-950 pb-12 mb-14 text-left">
-                    <div>
-                      <h1 className="text-5xl font-black tracking-tighter uppercase text-slate-950 leading-none">iVISION CORE</h1>
-                      <p className="text-[12px] font-black text-sky-600 uppercase tracking-[0.4em] mt-4">BILAN OPÉRATIONNEL MENSUEL</p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-14">
-                    <section className="text-left">
-                       <h4 className="text-[12px] font-black text-slate-400 uppercase tracking-widest mb-8">RÉSUMÉ FINANCIER DU CYCLE</h4>
-                       <div className="p-10 bg-slate-50 rounded-[3rem] border border-slate-200">
-                          <div className="grid grid-cols-2 gap-8">
-                             <div><p className="text-[9px] font-bold text-slate-400 uppercase">Revenu Mensuel (MRR + One-Shot Actif)</p><p className="text-2xl font-black text-sky-600">{stats.revenue.toLocaleString()} DZD</p></div>
-                             <div><p className="text-[9px] font-bold text-slate-400 uppercase">Burn Rate Opérationnel</p><p className="text-2xl font-black text-rose-600">-{stats.costs.toLocaleString()} DZD</p></div>
-                             <div className="border-t-2 border-slate-200 pt-4 col-span-2"><p className="text-[9px] font-bold text-slate-400 uppercase">Surplus de Trésorerie Mensuel</p><p className="text-3xl font-black text-slate-950">{stats.margin.toLocaleString()} DZD</p></div>
-                          </div>
-                       </div>
-                    </section>
-                    
-                    <button onClick={handleDownloadReport} className="no-print w-full py-8 bg-slate-950 text-white rounded-[2.5rem] font-black uppercase text-[12px] tracking-[0.4em] mt-14 shadow-2xl active-scale">Télécharger le Briefing PDF</button>
-                  </div>
-               </div>
-            </div>
-          </div>
-        </div>
-      )}
+      </Modal>
     </div>
   );
 };

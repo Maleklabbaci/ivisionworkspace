@@ -62,11 +62,17 @@ const mapFromDB = (table: string, item: any) => {
     mapped.userId = item.user_id;
     mapped.projectId = item.project_id;
     mapped.lastPaidDate = item.last_paid_date;
+    mapped.createdAt = item.created_at;
   } else if (table === 'expenses') {
     mapped.projectId = item.project_id;
     mapped.createdAt = item.created_at;
   } else if (table === 'ad_campaigns') {
     mapped.projectId = item.project_id;
+    mapped.clientId = item.client_id;
+    mapped.assigneeId = item.assignee_id;
+    mapped.taskId = item.task_id;
+    mapped.durationDays = item.duration_days;
+    mapped.startDate = item.start_date;
     mapped.createdAt = item.created_at;
   }
   return mapped;
@@ -217,8 +223,29 @@ const App: React.FC = () => {
             handleSendMessage={async (c:string, ch:string) => { await supabase.from('messages').insert({ user_id: currentUser.id, channel_id: ch, content: c, read_by: [currentUser.id] }); fetchUserData(currentUser); }} 
             handleMarkAsRead={async (ids: string[]) => { for (const id of ids) await supabase.from('messages').update({ read_by: [...(messages.find(m => m.id === id)?.readBy || []), currentUser.id] }).eq('id', id); fetchUserData(currentUser); }} 
             handleDeleteMessage={async (id: string) => { await supabase.from('messages').delete().eq('id', id); fetchUserData(currentUser); }}
-            onUpdateTaskStatus={async (id: string, st: TaskStatus) => { await supabase.from('tasks').update({ status: st }).eq('id', id); fetchUserData(currentUser); }} 
-            onUpdateTaskPriority={async (id:string, p:any) => { await supabase.from('tasks').update({ priority: p }).eq('id', id); fetchUserData(currentUser); }} 
+            onUpdateTaskStatus={async (id: string, st: TaskStatus) => { 
+              const { error } = await supabase.from('tasks').update({ status: st }).eq('id', id); 
+              if (!error) {
+                // Déclencheur automatique pour les campagnes ADS
+                if (st === TaskStatus.DONE) {
+                  const currentTaskObj = tasks.find(t => t.id === id);
+                  if (currentTaskObj?.type === 'ads') {
+                    // Si c'est une mission d'advertising terminée, on lance le sponsoring lié
+                    await supabase.from('ad_campaigns')
+                      .update({ start_date: new Date().toISOString() })
+                      .eq('task_id', id);
+                    addNotification("Finance ADS", `Sponsoring activé suite à la validation de la mission "${currentTaskObj.title}".`, "success");
+                  }
+                }
+                fetchUserData(currentUser);
+              } else {
+                addNotification("Erreur", "Impossible de mettre à jour le statut.", "urgent");
+              }
+            }} 
+            onUpdateTaskPriority={async (id:string, p:any) => { 
+              const { error } = await supabase.from('tasks').update({ priority: p }).eq('id', id); 
+              if (!error) fetchUserData(currentUser);
+            }} 
             onUpdateProfile={async (up: any) => { await supabase.from('users').update(up).eq('id', currentUser.id); fetchUserData(currentUser); }}
             fetchUserData={fetchUserData} addNotification={addNotification} 
             onAddProject={async (p:any, b:any[])=> { 
@@ -269,9 +296,46 @@ const AppContent: React.FC<any> = ({ currentUser, users, tasks, clients, leads, 
       <Suspense fallback={<div className="h-full w-full flex items-center justify-center"><Loader2 className="animate-spin text-primary" size={40} /></div>}>
         <Routes>
           <Route path="/dashboard" element={<Dashboard currentUser={currentUser} tasks={tasks} clients={clients} onNavigate={(v:ViewState)=>navigate(`/${v}`)} />} />
-          <Route path="/tasks" element={<Tasks tasks={tasks} users={users} clients={clients} projects={projects} currentUser={currentUser} onUpdateStatus={onUpdateTaskStatus} onAddTask={async (t:any)=> { await supabase.from('tasks').insert({ ...t, id: generateUUID(), assignee_id: t.assigneeId, client_id: t.clientId, project_id: t.projectId, due_date: t.dueDate }); fetchUserData(currentUser); }} onUpdateTask={async (t:any)=> { await supabase.from('tasks').update({...t, assignee_id: t.assigneeId, client_id: t.clientId, project_id: t.projectId}).eq('id', t.id); fetchUserData(currentUser); }} onBulkUpdateTasks={async (ids:string[], up:any)=> { await supabase.from('tasks').update(up).in('id', ids); fetchUserData(currentUser); }} onDeleteTask={async (id:string)=> { await supabase.from('tasks').delete().eq('id',id); fetchUserData(currentUser); }} />} />
+          <Route path="/tasks" element={<Tasks tasks={tasks} users={users} clients={clients} projects={projects} currentUser={currentUser} onUpdateStatus={onUpdateTaskStatus} onAddTask={async (t:any)=> { 
+            const { error } = await supabase.from('tasks').insert({ 
+              title: t.title, description: t.description, status: t.status, priority: t.priority,
+              id: generateUUID(), assignee_id: t.assigneeId, client_id: t.clientId || null, 
+              project_id: t.projectId || null, due_date: t.dueDate, type: t.type 
+            }); 
+            if (!error) fetchUserData(currentUser);
+            else addNotification("Erreur", "Impossible de créer la mission.", "urgent");
+          }} onUpdateTask={async (t:any)=> { 
+            const { error } = await supabase.from('tasks').update({
+              title: t.title, description: t.description, status: t.status, priority: t.priority,
+              assignee_id: t.assigneeId, client_id: t.clientId || null, 
+              project_id: t.projectId || null, due_date: t.dueDate, type: t.type
+            }).eq('id', t.id); 
+            if (!error) fetchUserData(currentUser);
+            else addNotification("Erreur", "Impossible de mettre à jour la mission.", "urgent");
+          }} onBulkUpdateTasks={async (ids:string[], up:any)=> { 
+            const dbUpdates: any = {};
+            if (up.status) dbUpdates.status = up.status;
+            if (up.priority) dbUpdates.priority = up.priority;
+            if (up.assigneeId) dbUpdates.assignee_id = up.assigneeId;
+            if (up.dueDate) dbUpdates.due_date = up.dueDate;
+            if (up.type) dbUpdates.type = up.type;
+            if (up.projectId) dbUpdates.project_id = up.projectId;
+            if (up.clientId) dbUpdates.client_id = up.clientId;
+
+            const { error } = await supabase.from('tasks').update(dbUpdates).in('id', ids); 
+            if (!error) fetchUserData(currentUser);
+            else addNotification("Erreur", "Échec de la mise à jour groupée.", "urgent");
+          }} onDeleteTask={async (id:string)=> { await supabase.from('tasks').delete().eq('id',id); fetchUserData(currentUser); }} />} />
           <Route path="/chat" element={<Chat currentUser={currentUser} users={users} tasks={tasks} channels={channels} projects={projects} currentChannelId={currentChannelId} messages={messages} onChannelChange={setCurrentChannelId} onSendMessage={handleSendMessage} onMarkAsRead={handleMarkAsRead} onDeleteMessage={handleDeleteMessage} onUpdateTaskStatus={onUpdateTaskStatus} onUpdateTaskPriority={onUpdateTaskPriority} onAddChannel={async (ch:any)=> { if(ch.id) await supabase.from('channels').update(ch).eq('id', ch.id); else await supabase.from('channels').insert(ch); fetchUserData(currentUser); }} onDeleteChannel={async (id:string)=> { await supabase.from('channels').delete().eq('id',id); fetchUserData(currentUser); }} onUpdateChannelMembers={async (id:string,m:string[])=> { await supabase.from('channels').update({member_ids:m}).eq('id',id); fetchUserData(currentUser); }} />} />
-          <Route path="/finance" element={<Finances salaries={salaries} expenses={expenses} adCampaigns={adCampaigns} users={users} projects={projects} currentUser={currentUser} onAddSalary={async(s:any)=>{ await supabase.from('salaries').insert({ id: generateUUID(), user_id: s.userId, project_id: s.projectId || null, amount: s.amount, bonus: s.bonus, frequency: s.frequency, status: s.status }); fetchUserData(currentUser); }} onAddExpense={async(ex:any)=>{ await supabase.from('expenses').insert({ id: generateUUID(), name: ex.name, amount: ex.amount, type: ex.type, project_id: ex.projectId || null, status: ex.status, created_at: ex.createdAt }); fetchUserData(currentUser); }} onAddAdCampaign={async(ad:any)=>{ await supabase.from('ad_campaigns').insert({ id: generateUUID(), name: ad.name, amount: ad.amount, platform: ad.platform, project_id: ad.projectId || null, status: ad.status, created_at: ad.createdAt }); fetchUserData(currentUser); }} onUpdateSalary={async(s:any)=>{ await supabase.from('salaries').update({ amount: s.amount, bonus: s.bonus, frequency: s.frequency, status: s.status, project_id: s.projectId || null }).eq('id', s.id); fetchUserData(currentUser); }} onDeleteSalary={async(id:string)=>{ await supabase.from('salaries').delete().eq('id', id); fetchUserData(currentUser); }} onDeleteExpense={async(id:string)=>{ await supabase.from('expenses').delete().eq('id', id); fetchUserData(currentUser); }} onDeleteAdCampaign={async(id:string)=>{ await supabase.from('ad_campaigns').delete().eq('id', id); fetchUserData(currentUser); }} />} />
+          <Route path="/finance" element={<Finances salaries={salaries} expenses={expenses} adCampaigns={adCampaigns} users={users} projects={projects} clients={clients} tasks={tasks} currentUser={currentUser} onAddSalary={async(s:any)=>{ await supabase.from('salaries').insert({ id: generateUUID(), user_id: s.userId, project_id: s.projectId || null, amount: s.amount, bonus: s.bonus, frequency: s.frequency, status: s.status }); fetchUserData(currentUser); }} onAddExpense={async(ex:any)=>{ await supabase.from('expenses').insert({ id: generateUUID(), name: ex.name, amount: ex.amount, type: ex.type, project_id: ex.projectId || null, status: ex.status, created_at: ex.createdAt }); fetchUserData(currentUser); }} onAddAdCampaign={async(ad:any)=>{ 
+            await supabase.from('ad_campaigns').insert({ 
+              id: generateUUID(), name: ad.name, amount: ad.amount, platform: ad.platform, 
+              project_id: ad.projectId || null, client_id: ad.clientId || null, assignee_id: ad.assigneeId || null,
+              task_id: ad.taskId || null, duration_days: ad.durationDays || 30,
+              status: ad.status, created_at: ad.createdAt 
+            }); 
+            fetchUserData(currentUser); 
+          }} onUpdateSalary={async(s:any)=>{ await supabase.from('salaries').update({ amount: s.amount, bonus: s.bonus, frequency: s.frequency, status: s.status, project_id: s.projectId || null }).eq('id', s.id); fetchUserData(currentUser); }} onDeleteSalary={async(id:string)=>{ await supabase.from('salaries').delete().eq('id', id); fetchUserData(currentUser); }} onDeleteExpense={async(id:string)=>{ await supabase.from('expenses').delete().eq('id', id); fetchUserData(currentUser); }} onDeleteAdCampaign={async(id:string)=>{ await supabase.from('ad_campaigns').delete().eq('id', id); fetchUserData(currentUser); }} />} />
           <Route path="/team" element={<Team currentUser={currentUser} users={users} onAddUser={async (u:any)=> { const { data } = await supabase.auth.signUp({ email: u.email, password: u.password }); if (data.user) await supabase.from('users').insert({ id: data.user.id, ...u }); fetchUserData(currentUser); }} onRemoveUser={async (id:string)=> { await supabase.rpc('delete_user_completely', { target_user_id: id }); fetchUserData(currentUser); }} onUpdateMember={async (id:string, up:any) => { await supabase.from('users').update(up).eq('id',id); fetchUserData(currentUser); }} />} />
           <Route path="/projects" element={<Projects projects={projects} users={users} clients={clients} salaries={salaries} expenses={expenses} adCampaigns={adCampaigns} currentUser={currentUser} onAddProject={onAddProject} onDeleteProject={async (id:string)=> { await supabase.from('projects').delete().eq('id',id); fetchUserData(currentUser); }} onUpdateProject={async (p:Project)=> { await supabase.from('projects').update({name: p.name, description: p.description, total_budget: p.totalBudget, status: p.status, client_id: p.clientId || null, billing_type: p.billingType}).eq('id', p.id); fetchUserData(currentUser); }} />} />
           <Route path="/leads" element={<Leads leads={leads} onAddLead={async (l:any)=> { await supabase.from('leads').insert(l); fetchUserData(currentUser); }} onUpdateLead={async (l:any)=> { await supabase.from('leads').update(l).eq('id', l.id); fetchUserData(currentUser); }} onDeleteLead={async (id:string)=> { await supabase.from('leads').delete().eq('id',id); fetchUserData(currentUser); }} onConvertToClient={onConvertToClient} currentUser={currentUser} addNotification={addNotification} />} />
@@ -287,4 +351,5 @@ const AppContent: React.FC<any> = ({ currentUser, users, tasks, clients, leads, 
   );
 };
 
+// Added missing default export for App component
 export default App;
