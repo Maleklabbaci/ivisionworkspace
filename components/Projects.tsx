@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { Plus, X, Briefcase, DollarSign, Activity, Calendar, MoreVertical, Search, Layers, TrendingUp, Filter, TrendingDown, Target, Wallet, Edit3, Type, Info, User as UserIcon, Zap, Sparkles, Trash2, Receipt, Megaphone, Users, Lock, Repeat, ZapOff, UserPlus } from 'lucide-react';
+import { Plus, X, Briefcase, DollarSign, Activity, Calendar, MoreVertical, Search, Layers, TrendingUp, Filter, TrendingDown, Target, Wallet, Edit3, Type, Info, User as UserIcon, Zap, Sparkles, Trash2, Receipt, Megaphone, Users, Lock, Repeat, ZapOff, UserPlus, LayoutGrid, List } from 'lucide-react';
 import { Project, Client, UserRole, User, SalaryRecord, Expense, AdCampaignExpense, ProjectBillingType } from '../types';
 import Modal from './Modal';
 
@@ -17,6 +17,7 @@ const Projects: React.FC<any> = ({
   currentUser, onAddProject, onDeleteProject, onUpdateProject 
 }) => {
   const [viewMode, setViewMode] = useState<'list' | 'add' | 'edit'>('list');
+  const [viewType, setViewType] = useState<'grid' | 'table'>('grid');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [isCreatingNewClient, setIsCreatingNewClient] = useState(false);
@@ -51,7 +52,6 @@ const Projects: React.FC<any> = ({
     return filteredProjects.map(project => {
       const isMonthly = project.billingType === 'monthly' || !project.billingType;
 
-      // 1. Salaires (RH) - Coût mensuel projeté
       const projSalaries = salaries
         .filter((s: SalaryRecord) => s.projectId === project.id)
         .reduce((acc: number, s: SalaryRecord) => {
@@ -59,7 +59,6 @@ const Projects: React.FC<any> = ({
           return acc + (s.frequency === 'hebdo' ? total * 4 : total);
         }, 0);
 
-      // 2. Frais (Ops) 
       const projExpenses = expenses
         .filter((e: Expense) => {
           if (e.projectId !== project.id) return false;
@@ -68,7 +67,6 @@ const Projects: React.FC<any> = ({
         })
         .reduce((acc: number, e: Expense) => acc + (e.amount || 0), 0);
 
-      // 3. Budgets ADS
       const projAds = adCampaigns
         .filter((a: AdCampaignExpense) => {
           if (a.projectId !== project.id) return false;
@@ -113,7 +111,6 @@ const Projects: React.FC<any> = ({
     e.preventDefault();
     const activeConfigs = autoBatches.filter(b => b.enabled && b.count > 0);
     
-    // On capture les états locaux pour l'ajout de client
     const submissionData = { 
       ...formData,
       isCreatingNewClient,
@@ -176,7 +173,23 @@ const Projects: React.FC<any> = ({
           <p className="text-[10px] font-black uppercase text-emerald-400 mb-2 tracking-[0.4em]">PROJECT CORE ENGINE</p>
           <h2 className="text-3xl md:text-5xl font-black text-white uppercase tracking-tight leading-none">Projets</h2>
         </div>
-        <div className="flex items-center space-x-3 w-full lg:w-auto">
+        <div className="flex flex-wrap items-center gap-4 w-full lg:w-auto justify-end">
+          {/* View Toggle */}
+          <div className="flex bg-white/5 p-1.5 rounded-2xl border border-white/10">
+            <button 
+              onClick={() => setViewType('grid')}
+              className={`w-12 h-12 flex items-center justify-center rounded-xl transition-all ${viewType === 'grid' ? 'bg-white/10 text-emerald-400 shadow-inner' : 'text-slate-500 hover:text-white'}`}
+            >
+              <LayoutGrid size={20} />
+            </button>
+            <button 
+              onClick={() => setViewType('table')}
+              className={`w-12 h-12 flex items-center justify-center rounded-xl transition-all ${viewType === 'table' ? 'bg-white/10 text-emerald-400 shadow-inner' : 'text-slate-500 hover:text-white'}`}
+            >
+              <List size={20} />
+            </button>
+          </div>
+
           <div className="relative group flex-1 lg:w-72">
             <Search size={18} className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-500" />
             <input type="text" placeholder="RECHERCHER..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-14 pr-8 py-5 bg-white/5 border border-white/10 rounded-full text-[11px] font-black uppercase text-white outline-none focus:border-emerald-400 transition-all placeholder-slate-700" />
@@ -225,86 +238,144 @@ const Projects: React.FC<any> = ({
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {projectsWithFinancials.map(project => {
-          const client = clients.find(c => c.id === project.clientId);
-          const isOverBudget = project.remaining < 0;
-          const isOneShot = project.billingType === 'one-shot';
-          
-          return (
-            <div key={project.id} className="bg-slate-900/40 backdrop-blur-3xl p-8 md:p-10 rounded-[3rem] border border-white/5 relative overflow-hidden group hover:border-emerald-400/20 transition-all text-left">
-              <div className="flex justify-between items-start mb-8 relative z-10">
-                <div className="flex items-center space-x-6 min-w-0">
-                  <div className={`w-14 h-14 rounded-2xl flex items-center justify-center border flex-shrink-0 ${isOneShot ? 'bg-amber-400/10 text-amber-400 border-amber-400/10' : 'bg-emerald-400/10 text-emerald-400 border-emerald-400/10'}`}><Briefcase size={24} /></div>
-                  <div className="truncate text-left">
-                    <h3 className="text-xl font-black text-white uppercase tracking-tight truncate leading-none">{project.name}</h3>
-                    <div className="flex items-center space-x-2 mt-2">
-                       <p className="text-[9px] text-slate-500 font-bold uppercase truncate">{client?.name || 'Projet Interne'}</p>
-                       <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-md ${isOneShot ? 'bg-amber-400/10 text-amber-400' : 'bg-emerald-400/10 text-emerald-400'}`}>
-                         {isOneShot ? 'ONE-SHOT' : 'MENSUEL'}
-                       </span>
+      {viewType === 'grid' ? (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {projectsWithFinancials.map(project => {
+            const client = clients.find(c => c.id === project.clientId);
+            const isOverBudget = project.remaining < 0;
+            const isOneShot = project.billingType === 'one-shot';
+            
+            return (
+              <div key={project.id} className="bg-slate-900/40 backdrop-blur-3xl p-8 md:p-10 rounded-[3rem] border border-white/5 relative overflow-hidden group hover:border-emerald-400/20 transition-all text-left">
+                <div className="flex justify-between items-start mb-8 relative z-10">
+                  <div className="flex items-center space-x-6 min-w-0">
+                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center border flex-shrink-0 ${isOneShot ? 'bg-amber-400/10 text-amber-400 border-amber-400/10' : 'bg-emerald-400/10 text-emerald-400 border-emerald-400/10'}`}><Briefcase size={24} /></div>
+                    <div className="truncate text-left">
+                      <h3 className="text-xl font-black text-white uppercase tracking-tight truncate leading-none">{project.name}</h3>
+                      <div className="flex items-center space-x-2 mt-2">
+                        <p className="text-[9px] text-slate-500 font-bold uppercase truncate">{client?.name || 'Projet Interne'}</p>
+                        <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-md ${isOneShot ? 'bg-amber-400/10 text-amber-400' : 'bg-emerald-400/10 text-emerald-400'}`}>
+                          {isOneShot ? 'ONE-SHOT' : 'MENSUEL'}
+                        </span>
+                      </div>
                     </div>
                   </div>
+                  <div className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase glass ${project.status === 'active' ? 'text-emerald-400' : 'text-slate-500'}`}>{project.status === 'active' ? 'En Cours' : 'Clôturé'}</div>
                 </div>
-                <div className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase glass ${project.status === 'active' ? 'text-emerald-400' : 'text-slate-500'}`}>{project.status === 'active' ? 'En Cours' : 'Clôturé'}</div>
+
+                {canViewFinances && (
+                  <>
+                    <div className="grid grid-cols-2 gap-4 mb-6 relative z-10">
+                      <div className="p-6 bg-white/5 rounded-[2rem] border border-white/5 text-left">
+                        <p className="text-[8px] font-black text-slate-500 uppercase mb-1">{isOneShot ? 'Investissement' : 'Burn Rate Mensuel'}</p>
+                        <p className="text-lg font-black text-white">{project.realSpent.toLocaleString()} DZD</p>
+                      </div>
+                      <div className={`p-6 rounded-[2rem] border text-left ${isOverBudget ? 'bg-rose-400/10 border-rose-400/10' : 'bg-emerald-400/10 border-emerald-400/10'}`}>
+                        <p className="text-[8px] font-black text-slate-500 uppercase mb-1">{isOneShot ? 'Marge Projet' : 'Marge Mensuelle'}</p>
+                        <p className={`text-lg font-black ${isOverBudget ? 'text-rose-400' : 'text-emerald-400'}`}>{project.remaining.toLocaleString()} DZD</p>
+                      </div>
+                    </div>
+
+                    <div className="mb-6 px-1 space-y-4 relative z-10">
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-end">
+                          <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Consommation Budget</p>
+                          <p className={`text-[9px] font-black ${isOverBudget ? 'text-rose-400' : 'text-white'}`}>{Math.round(project.progress)}%</p>
+                        </div>
+                        <div className="h-2 bg-white/5 rounded-full overflow-hidden border border-white/5">
+                          <div 
+                            className={`h-full transition-all duration-1000 ${isOverBudget ? 'bg-rose-500 shadow-[0_0_10px_#f43f5e]' : 'bg-emerald-400 shadow-[0_0_10px_#10b981]'}`} 
+                            style={{ width: `${Math.min(project.progress, 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                <p className="text-[11px] text-slate-400 font-medium leading-relaxed line-clamp-2 mb-6 opacity-60">
+                  {project.description || "Aucune description opérationnelle renseignée."}
+                </p>
+
+                {canManage && (
+                  <div className="pt-6 border-t border-white/5 flex justify-end space-x-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => handleEditClick(project)} className="p-3 bg-white/5 rounded-xl text-amber-400 hover:bg-white/10 active-scale transition-all"><Edit3 size={18} /></button>
+                    <button onClick={() => confirm('Supprimer ce projet ?') && onDeleteProject(project.id)} className="p-3 glass rounded-xl text-slate-600 hover:text-rose-400 active-scale transition-all"><Trash2 size={18} /></button>
+                  </div>
+                )}
               </div>
-
-              {canViewFinances && (
-                <>
-                  <div className="grid grid-cols-2 gap-4 mb-6 relative z-10">
-                    <div className="p-6 bg-white/5 rounded-[2rem] border border-white/5 text-left">
-                      <p className="text-[8px] font-black text-slate-500 uppercase mb-1">{isOneShot ? 'Investissement' : 'Burn Rate Mensuel'}</p>
-                      <p className="text-lg font-black text-white">{project.realSpent.toLocaleString()} DZD</p>
-                    </div>
-                    <div className={`p-6 rounded-[2rem] border text-left ${isOverBudget ? 'bg-rose-400/10 border-rose-400/10' : 'bg-emerald-400/10 border-emerald-400/10'}`}>
-                      <p className="text-[8px] font-black text-slate-500 uppercase mb-1">{isOneShot ? 'Marge Projet' : 'Marge Mensuelle'}</p>
-                      <p className={`text-lg font-black ${isOverBudget ? 'text-rose-400' : 'text-emerald-400'}`}>{project.remaining.toLocaleString()} DZD</p>
-                    </div>
-                  </div>
-
-                  <div className="mb-6 px-1 space-y-4 relative z-10">
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-end">
-                         <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Consommation Budget</p>
-                         <p className={`text-[9px] font-black ${isOverBudget ? 'text-rose-400' : 'text-white'}`}>{Math.round(project.progress)}%</p>
-                      </div>
-                      <div className="h-2 bg-white/5 rounded-full overflow-hidden border border-white/5">
-                        <div 
-                          className={`h-full transition-all duration-1000 ${isOverBudget ? 'bg-rose-500 shadow-[0_0_10px_#f43f5e]' : 'bg-emerald-400 shadow-[0_0_10px_#10b981]'}`} 
-                          style={{ width: `${Math.min(project.progress, 100)}%` }}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-end">
-                         <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Répartition des Coûts</p>
-                         <p className="text-[9px] font-black text-slate-500 uppercase">Dépenses Réelles</p>
-                      </div>
-                      <div className="h-3 bg-white/5 rounded-full overflow-hidden flex border border-white/5">
-                        <div className="h-full bg-amber-400 transition-all duration-700" style={{ width: `${project.breakdown.percs.rh}%` }} title="RH"></div>
-                        <div className="h-full bg-sky-400 transition-all duration-700" style={{ width: `${project.breakdown.percs.ops}%` }} title="Ops"></div>
-                        <div className="h-full bg-emerald-400 transition-all duration-700" style={{ width: `${project.breakdown.percs.ads}%` }} title="Ads"></div>
-                      </div>
-                    </div>
-                  </div>
-                </>
-              )}
-
-              <p className="text-[11px] text-slate-400 font-medium leading-relaxed line-clamp-2 mb-6 opacity-60">
-                {project.description || "Aucune description opérationnelle renseignée."}
-              </p>
-
-              {canManage && (
-                <div className="pt-6 border-t border-white/5 flex justify-end space-x-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={() => handleEditClick(project)} className="p-3 bg-white/5 rounded-xl text-amber-400 hover:bg-white/10 active-scale transition-all"><Edit3 size={18} /></button>
-                  <button onClick={() => confirm('Supprimer ce projet ?') && onDeleteProject(project.id)} className="p-3 glass rounded-xl text-slate-600 hover:text-rose-400 active-scale transition-all"><Trash2 size={18} /></button>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="crystal-module rounded-[2.5rem] border-white/5 overflow-hidden shadow-2xl">
+          <div className="overflow-x-auto no-scrollbar">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-white/10 bg-white/[0.02]">
+                  <th className="px-8 py-6 text-[10px] font-black uppercase text-slate-500 tracking-widest">Projet</th>
+                  <th className="px-8 py-6 text-[10px] font-black uppercase text-slate-500 tracking-widest">Client</th>
+                  <th className="px-8 py-6 text-[10px] font-black uppercase text-slate-500 tracking-widest">Budget</th>
+                  <th className="px-8 py-6 text-[10px] font-black uppercase text-slate-500 tracking-widest">Statut</th>
+                  <th className="px-8 py-6 text-[10px] font-black uppercase text-slate-500 tracking-widest">Déploiement</th>
+                  <th className="px-8 py-6 text-[10px] font-black uppercase text-slate-500 tracking-widest"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {projectsWithFinancials.map(project => {
+                  const client = clients.find(c => c.id === project.clientId);
+                  const isOneShot = project.billingType === 'one-shot';
+                  return (
+                    <tr key={project.id} className="hover:bg-white/[0.02] transition-colors group">
+                      <td className="px-8 py-6">
+                        <div className="flex items-center space-x-4">
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center border ${isOneShot ? 'bg-amber-400/10 text-amber-400 border-amber-400/10' : 'bg-emerald-400/10 text-emerald-400 border-emerald-400/10'}`}>
+                            <Briefcase size={16} />
+                          </div>
+                          <div>
+                            <p className="text-[13px] font-bold text-white uppercase tracking-tight">{project.name}</p>
+                            <p className="text-[9px] text-slate-500 font-bold uppercase mt-1">ID: {project.id.substring(0, 8)}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-8 py-6">
+                        <span className="text-[11px] font-black text-slate-400 uppercase">{client?.name || 'Interne'}</span>
+                      </td>
+                      <td className="px-8 py-6">
+                        <div className="flex flex-col">
+                          <span className="text-[13px] font-black text-white">{project.totalBudget?.toLocaleString()} DZD</span>
+                          <span className={`text-[8px] font-black uppercase mt-1 ${isOneShot ? 'text-amber-400' : 'text-emerald-400'}`}>
+                            {isOneShot ? 'One-Shot' : 'Mensuel'}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-8 py-6">
+                        <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase ${project.status === 'active' ? 'bg-emerald-400/10 text-emerald-400' : 'bg-slate-800 text-slate-400'}`}>
+                          {project.status === 'active' ? 'En Cours' : 'Clôturé'}
+                        </span>
+                      </td>
+                      <td className="px-8 py-6 text-left">
+                        <div className="flex items-center space-x-2 text-slate-500">
+                          <Calendar size={12} />
+                          <span className="text-[10px] font-bold">{new Date(project.createdAt).toLocaleDateString()}</span>
+                        </div>
+                      </td>
+                      <td className="px-8 py-6 text-right">
+                        {canManage && (
+                          <div className="flex items-center justify-end space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onClick={() => handleEditClick(project)} className="p-2.5 bg-white/5 rounded-lg text-amber-400 hover:bg-white/10 active-scale"><Edit3 size={16} /></button>
+                            <button onClick={() => confirm('Supprimer ce projet ?') && onDeleteProject(project.id)} className="p-2.5 glass rounded-lg text-slate-600 hover:text-rose-400 active-scale"><Trash2 size={16} /></button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <Modal isOpen={viewMode === 'add' || viewMode === 'edit'} onClose={closeModal} title="Configurateur de Projet" subtitle="Système d'Indexation iVISION">
         <form onSubmit={handleSubmit} className="space-y-8 text-left">
